@@ -238,49 +238,6 @@ ships consumer ProGuard rules in its AAR
 Ensure your `release` build type references `proguard-rules.pro` when
 `isMinifyEnabled = true`.
 
-**v1.4.0+** uses Flutter external textures on all platforms (custom bridge, no
-`irondash_texture`). Android keeps the
-[GStreamer Android video tutorial](https://gstreamer.freedesktop.org/documentation/tutorials/android/video.html)
-`glimagesink` + `ANativeWindow` path via `SurfaceProducer`.
-
-**v1.0.19+** fixes Android SIGABRT by adopting the GStreamer Android tutorial
-thread model: a dedicated `gstp-gst` thread with an **owned** `GMainContext`
-(`MainContext::new()`, not `default()`), `MainLoop::run()`, and all pipeline
-operations marshalled onto that thread.
-
-**v1.0.18** (superseded by 1.0.19) attempted a default-context `GMainLoop`; do
-not use.
-
-**v1.0.17+** streams network `http(s)://` URIs directly through GStreamer
-(`playbin3` / `souphttpsrc`); the plugin does **not** download to disk first.
-
-**v1.0.16+** when `gst_is_initialized()` is already true: syncs gstreamer-rs state
-and does **not** call GLib thread-default APIs on the Flutter main thread.
-Prefer a ready `localPath` from your media layer when available.
-
-**v1.0.11+** runs the entire `create_player` path on the Android main thread (fixes
-crashes when FRB calls from a worker thread) and no longer calls
-`android_logger::init_once` (safe alongside host SDKs such as `gstplayer_sdk` that
-already own the global `log` logger). Panics are written via `__android_log_write`
-(`gstplayer` tag).
-
-**v1.0.10+** additionally hardens frame upload (no `assert!` on buffer size
-mismatch), refreshes `ANativeWindow` in `onSurfaceAvailable`, and logs Rust panic
-backtraces to logcat (`gstplayer` tag). If the app still crashes,
-build with a clean tree and symbolicate with
-[`scripts/symbolicate_android_tombstone.sh`](scripts/symbolicate_android_tombstone.sh).
-
-### Consumer integration checklist (e.g. chat / IM apps)
-
-1. **Plugin version** — use **1.4.0+** for Texture rendering; run
-   `flutter clean` / full reinstall after upgrading.
-2. **Initialization order** — kick off `GstPlayer.initialize()` (prefer
-   overlapping with first frame; under 50ms) → `controller.initialize()` (awaits
-   `ensureReady`) → wait until media is on disk → `open(...)`.
-3. **Video surface** — embed `GstVideoView` (set `showControls: false` if you
-   provide your own chrome). The widget registers a native texture automatically.
-4. **Release builds** — keep ProGuard rules that merge from this plugin's AAR.
-5. **Diagnosis** — filter logcat for `gstplayer` and `android overlay:`.
 
 ### iOS
 
@@ -735,12 +692,6 @@ After changing `native/include/gstp_player.h`:
 ```bash
 dart run ffigen --config ffigen.yaml
 ```
-
-### GStreamer upstream patches
-
-When GStreamer C itself must change, use the
-[Matkurban/gstreamer](https://github.com/Matkurban/gstreamer) fork as the patch
-source (`GSTP_GSTREAMER_SRC`). See [third_party/gstreamer.md](third_party/gstreamer.md).
 
 ## Troubleshooting
 

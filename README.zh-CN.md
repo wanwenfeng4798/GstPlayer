@@ -218,12 +218,6 @@ JNI 辅助类：
 
 在 `isMinifyEnabled = true` 时确保 `release` 构建类型引用了 `proguard-rules.pro`。
 
-**v1.4.0+** 全平台使用 Flutter 外部 `Texture`（自定义桥接，无 `irondash_texture`）。
-Android 仍遵循
-[GStreamer Android 视频教程](https://gstreamer.freedesktop.org/documentation/tutorials/android/video.html)。
-
-**v1.0.19+** 采用 GStreamer Android 教程的线程模型：专用 `gstp-gst` 线程与自有
-`GMainContext`，所有管线操作在该线程上执行。
 
 ### iOS
 
@@ -628,10 +622,6 @@ C:     native/ playbin3 ─► appsink（Apple/桌面）或 glimagesink（Androi
 ```bash
 dart run ffigen --config ffigen.yaml
 ```
-
-### GStreamer 上游补丁
-
-需要改 GStreamer C 源时，以 [Matkurban/gstreamer](https://github.com/Matkurban/gstreamer) 为补丁源（`GSTP_GSTREAMER_SRC`），见 [third_party/gstreamer.md](third_party/gstreamer.md)。
 
 ## 常见问题
 

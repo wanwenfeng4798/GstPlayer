@@ -8,6 +8,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Capture user overrides before path resolution — gstreamer_paths.sh always
+# exports GSTREAMER_FRAMEWORK_SRC (even when the framework is not installed yet).
+USER_SET_GSTREAMER_ROOT="${GSTPLAYER_GSTREAMER_ROOT:-}"
+USER_SET_FRAMEWORK_SRC="${GSTREAMER_FRAMEWORK_SRC:-}"
+
 # shellcheck source=gstreamer_paths.sh
 source "${SCRIPT_DIR}/gstreamer_paths.sh"
 
@@ -143,8 +149,12 @@ if is_sdk_valid "${SYSTEM_FRAMEWORK}"; then
   exit 0
 fi
 
-if [[ -n "${GSTPLAYER_GSTREAMER_ROOT:-}" || -n "${GSTREAMER_FRAMEWORK_SRC:-}" ]]; then
+if [[ -n "${USER_SET_GSTREAMER_ROOT}" || -n "${USER_SET_FRAMEWORK_SRC}" ]]; then
   echo "error: custom GStreamer path is incomplete" >&2
+  echo "  GSTPLAYER_GSTREAMER_ROOT=${USER_SET_GSTREAMER_ROOT:-<unset>}" >&2
+  echo "  GSTREAMER_FRAMEWORK_SRC=${USER_SET_FRAMEWORK_SRC:-<unset>}" >&2
+  echo "  Expected a full SDK with Headers/gst/gst.h and Versions/1.0/lib/libgstreamer-1.0.0.dylib" >&2
+  echo "  Unset those vars to auto-download into ~/Library/Caches/gstplayer/gstreamer/${GST_VER}/" >&2
   exit 1
 fi
 

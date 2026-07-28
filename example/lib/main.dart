@@ -20,7 +20,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '雪花视频播放器',
+      title: 'GST视频播放器',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorSchemeSeed: Colors.indigo,
@@ -45,7 +45,7 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('雪花视频播放器')),
+      appBar: AppBar(title: const Text('GST视频播放器')),
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -176,7 +176,7 @@ class _PlayerPageState extends State<PlayerPage> {
           appBar: isFullscreen
               ? null
               : AppBar(
-                  title: const Text('雪花视频播放器'),
+                  title: const Text('V'),
                   toolbarHeight: 48,
                   actions: [
                     ChatContextMenuWrapper(

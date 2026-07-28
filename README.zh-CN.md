@@ -22,6 +22,7 @@
 
 - [功能特性](#功能特性)
 - [平台支持](#平台支持)
+- [何时改用 kinetic_player](#何时改用-kinetic_player)
 - [安装](#安装)
 - [快速上手](#快速上手)
 - [在应用中集成（请先阅读）](#在应用中集成请先阅读)
@@ -61,6 +62,16 @@
 > 在 Apple Silicon 的 macOS 上，Homebrew 默认安装的 GStreamer 通常只有 `arm64`
 > 切片。插件在 Homebrew 调试模式下默认构建 `arm64`；**Mac App Store / universal 发布**
 > 会在 `pod install` 时自动下载官方 universal `GStreamer.framework` 到用户缓存。
+
+## 何时改用 kinetic_player
+
+若应用主要面向 **Android / iOS / macOS / Web**，更推荐使用
+[**kinetic_player**](https://pub.dev/packages/kinetic_player)
+（[GitHub](https://github.com/wanwenfeng4798/kinetic_player)），而不是本插件：
+体积更小，也能更好利用各平台的原生解析与播放能力。
+
+需要 **GStreamer** 管线时再选 **gstplayer**（例如 **Windows / Linux**，或依赖
+GStreamer 编解码 / 协议的场景）。
 
 ## 安装
 

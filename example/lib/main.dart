@@ -176,7 +176,7 @@ class _PlayerPageState extends State<PlayerPage> {
           appBar: isFullscreen
               ? null
               : AppBar(
-                  title: const Text('V'),
+                  title: const Text('播放'),
                   toolbarHeight: 48,
                   actions: [
                     ChatContextMenuWrapper(

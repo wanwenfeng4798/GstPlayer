@@ -24,6 +24,7 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 
 - [Features](#features)
 - [Platform support](#platform-support)
+- [When to use kinetic_player instead](#when-to-use-kinetic_player-instead)
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Integrating into your app (read this first)](#integrating-into-your-app-read-this-first)
@@ -66,6 +67,17 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 > builds arm64-only in Homebrew debug mode; **Mac App Store / universal release**
 > auto-downloads the official universal `GStreamer.framework` to the user cache
 > during `pod install`.
+
+## When to use kinetic_player instead
+
+If your app targets **Android / iOS / macOS / Web**, prefer
+[**kinetic_player**](https://pub.dev/packages/kinetic_player)
+([GitHub](https://github.com/wanwenfeng4798/kinetic_player)) instead of this
+package. It ships a smaller binary footprint and uses each platform’s native
+playback stack more directly.
+
+Use **gstplayer** when you need a **GStreamer**-based pipeline (for example
+**Windows / Linux**, or codecs / protocols that benefit from GStreamer).
 
 ## Installation
 

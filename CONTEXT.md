@@ -112,7 +112,7 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (**native C c
 ## Apple packaging (CocoaPods + SwiftPM)
 
 - iOS/macOS plugin sources live under `ios|macos/gstplayer/` (`Package.swift` + `Sources/` + `NativeCore/`).
-- **`native/` is the canonical C tree.** `ios|macos/.../NativeCore/{include,src}` are **synced real copies** (not symlinks): `dart pub publish` turns directory symlinks into path-text stubs, which leaves SPM’s `gstp_player_c` empty and causes undefined `_gstp_*` at link. After editing `native/`, run [`tool/sync_native_core.sh`](tool/sync_native_core.sh); before publish run [`tool/verify_native_core.sh`](tool/verify_native_core.sh).
+- **`native/` is the canonical C tree.** `ios|macos/.../NativeCore/{include,src}` are **synced real copies** (not symlinks): `dart pub publish` turns directory symlinks into path-text stubs, which leaves SPM’s `gstp_player_c` empty and causes undefined `_gstp_*` at link. After editing `native/`, run [`tool/native_core.sh sync`](tool/native_core.sh); before publish run [`tool/native_core.sh verify`](tool/native_core.sh).
 - Plugin podspecs remain for host apps that still use CocoaPods (`build_pod.sh` + `-force_load`); CocoaPods still compiles from `native/` directly.
 - CocoaPods injects `STRIP_STYLE=non-global` and Runner `-force_load` via `user_target_xcconfig` so Dart `DynamicLibrary.process()` / `dlsym` can resolve `gstp_*` in Release/Archive.
 - SPM hosts (including this repo’s **example**) must set Runner Strip Style to **Non-Global Symbols** themselves; see README “Apple Release / FFI symbols”.

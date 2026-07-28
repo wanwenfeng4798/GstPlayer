@@ -35,6 +35,7 @@
 - [Windows / Linux 本机 SDK](#windows--linux-本机-sdk)
 - [API 说明](#api-说明)
 - [架构](#架构)
+- [NativeCore 同步与校验](#nativecore-同步与校验)
 - [常见问题](#常见问题)
 - [仓库](#仓库)
 - [许可证](#许可证)
@@ -365,6 +366,19 @@ C:     native/ playbin3 ─► appsink（Apple/桌面）或 glimagesink（Androi
 dart run ffigen --config ffigen.yaml
 ```
 
+## NativeCore 同步与校验
+
+`native/` 是 C 源码主目录。iOS/macOS 的 SPM target 实际编译
+`ios/gstplayer/NativeCore` 与 `macos/gstplayer/NativeCore`，因此在构建/发布前请执行：
+
+```bash
+# 修改 native/{include,src} 后
+./tool/native_core.sh sync
+
+# 发布前 / 发版检查
+./tool/native_core.sh verify
+```
+
 ## 常见问题
 
 - **首次构建很慢 / 需要联网（Android / iOS / macOS）：** 正常。官方 GStreamer SDK
@@ -380,6 +394,10 @@ dart run ffigen --config ffigen.yaml
   resolve/编译前把 SDK 下载到 `~/Library/Caches/gstplayer/gstreamer/<ver>/ios/iPhone.sdk`。
   首次构建需要联网。若头文件仍缺失：执行 `sh ios/scripts/ensure_gstreamer_ios.sh`，再
   `flutter clean && flutter pub get` 后重编。
+- **macOS 报 `'gst/app/gstappsink.h' file not found`：** 与 iOS 相同，走 SPM 时由
+  `EnsureGStreamerMacOS` 构建插件在编译前执行 `ensure_gstreamer_macos.sh`（首次约
+  870MB，缓存于 `~/Library/Caches/gstplayer/gstreamer/<ver>/`）。可手动执行
+  `sh macos/scripts/ensure_gstreamer_macos.sh` 后重编。
 - **macOS `Library not loaded: ...GStreamer.framework`：** SPM 宿主需在 `macos/Podfile`
   中接入 `install_gstreamer_embed_script!(installer)`（见 [安装](#安装)），再
   `pod install` 并重新构建。确认 `.app/Contents/Frameworks/GStreamer.framework` 存在。
@@ -387,7 +405,7 @@ dart run ffigen --config ffigen.yaml
   **Strip Style** 设为 **Non-Global Symbols**。CocoaPods 一般在 `pod install` 后注入；
   SPM 请在 Xcode 中设置。参见
   [Flutter C interop — Stripping symbols](https://docs.flutter.dev/platform-integration/ios/c-interop)。
-- **链接报 `undefined symbol: _gstp_*`：** 执行 `./tool/sync_native_core.sh`，再
+- **链接报 `undefined symbol: _gstp_*`：** 执行 `./tool/native_core.sh sync`，再
   `flutter clean` 后重建。
 - **APK 体积过大：** 收窄 `abiFilters` 或使用 App Bundle（每个 ABI 都带较大的 GStreamer 运行时）。
 - **Android 开启 minify / R8：** 保留 `org.freedesktop.gstreamer.**`（插件 AAR 已带

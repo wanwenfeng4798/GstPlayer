@@ -75,8 +75,8 @@ A Flutter video player plugin that decodes local/network video with GStreamer
 
     Pod::UI.puts "[gstplayer] Using GStreamer.framework at #{framework_path}"
 
-    link_script = File.join(__dir__, 'scripts', 'link_vendored_gstreamer.sh')
-    unless system({ 'GST_VER' => gst_ver }, 'sh', link_script)
+    link_script = File.join(__dir__, 'scripts', 'prepare_vendored_gstreamer.sh')
+    unless system({ 'GST_VER' => gst_ver }, 'sh', link_script, '--link-vendored')
       raise 'GStreamer vendored link failed; see log above'
     end
     s.vendored_frameworks = 'Vendored/GStreamer.framework'

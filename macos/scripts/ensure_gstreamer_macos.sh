@@ -2,6 +2,8 @@
 # Downloads and extracts the official universal GStreamer macOS SDK into the user
 # cache. No sudo / installer — uses pkgutil --expand-full.
 #
+# Optional arg: SPM prebuild output directory (SwiftPM build plugin).
+#
 # Cache layout:
 #   GStreamer.framework        — full SDK (runtime + devel) for build/link
 #   GStreamerRuntime.framework — runtime-only snapshot for embed into .app
@@ -9,11 +11,25 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+SPM_PREBUILD_OUT="${1:-}"
 
 # Capture user overrides before path resolution — gstreamer_paths.sh always
 # exports GSTREAMER_FRAMEWORK_SRC (even when the framework is not installed yet).
 USER_SET_GSTREAMER_ROOT="${GSTPLAYER_GSTREAMER_ROOT:-}"
-USER_SET_FRAMEWORK_SRC="${GSTREAMER_FRAMEWORK_SRC:-}"
+USER_SET_FRAMEWORK_SRC=""
+if [[ -n "${GSTREAMER_FRAMEWORK_SRC:-}" ]]; then
+  if [[ -z "${HOME:-}" ]]; then
+    if command -v python3 >/dev/null 2>&1; then
+      HOME="$(python3 -c 'import os, pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
+    else
+      HOME="$(eval echo "~$(id -un)")"
+    fi
+  fi
+  _default_framework="${HOME}/Library/Caches/gstplayer/gstreamer/${GST_VER:-1.28.5}/GStreamer.framework"
+  if [[ "${GSTREAMER_FRAMEWORK_SRC}" != "${_default_framework}" ]]; then
+    USER_SET_FRAMEWORK_SRC="${GSTREAMER_FRAMEWORK_SRC}"
+  fi
+fi
 
 # shellcheck source=gstreamer_paths.sh
 source "${SCRIPT_DIR}/gstreamer_paths.sh"
@@ -78,11 +94,31 @@ extract_pkg_to_framework() {
   rm -rf "${work}"
 }
 
+write_spm_prebuild_outputs() {
+  [[ -n "${SPM_PREBUILD_OUT}" ]] || return 0
+  # shellcheck source=gstreamer_paths.sh
+  source "${SCRIPT_DIR}/gstreamer_paths.sh"
+  local header="${GSTREAMER_FRAMEWORK_SRC}/Headers/gst/gst.h"
+  local appsink="${GSTREAMER_FRAMEWORK_SRC}/Headers/gst/app/gstappsink.h"
+  if [[ ! -f "${header}" || ! -f "${appsink}" ]]; then
+    echo "error: GStreamer macOS headers missing after ensure:" >&2
+    echo "  ${header}" >&2
+    echo "  ${appsink}" >&2
+    exit 1
+  fi
+  mkdir -p "${SPM_PREBUILD_OUT}"
+  # Avoid emitting .h files into plugin output directory.
+  # Xcode prints: "C header file generation not enabled" for those outputs.
+  rm -f "${SPM_PREBUILD_OUT}/gst.h" "${SPM_PREBUILD_OUT}/gstappsink.h"
+  echo "ok $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${SPM_PREBUILD_OUT}/ensured"
+}
+
 # Cache hit: stay quiet (SPM / pod install may call this often).
 if is_sdk_valid "${SDK_CACHE}" && is_runtime_valid "${RUNTIME_CACHE}"; then
   if [[ "${GSTPLAYER_VERBOSE:-}" == "1" ]]; then
     echo "[gstplayer] GStreamer ${GST_VER} cache OK (SDK + runtime)"
   fi
+  write_spm_prebuild_outputs
   exit 0
 fi
 
@@ -101,6 +137,7 @@ if is_sdk_valid "${USER_FRAMEWORK}"; then
   if is_sdk_valid "${SDK_CACHE}" && is_runtime_valid "${RUNTIME_CACHE}"; then
     write_stamp
     echo "[gstplayer] GStreamer ${GST_VER} ready at ${SDK_CACHE} (from ~/Library/Frameworks)"
+    write_spm_prebuild_outputs
     exit 0
   fi
 fi
@@ -112,6 +149,7 @@ if is_sdk_valid "${SYSTEM_FRAMEWORK}"; then
   if is_sdk_valid "${SDK_CACHE}" && is_runtime_valid "${RUNTIME_CACHE}"; then
     write_stamp
     echo "[gstplayer] GStreamer ${GST_VER} ready at ${SDK_CACHE} (from /Library/Frameworks)"
+    write_spm_prebuild_outputs
     exit 0
   fi
 fi
@@ -171,3 +209,4 @@ echo "[gstplayer] GStreamer ${GST_VER} ready (SDK: ${GSTREAMER_FRAMEWORK_SRC}, r
 if command -v lipo >/dev/null 2>&1; then
   lipo -info "${GSTREAMER_RUNTIME_FRAMEWORK_SRC}/Versions/1.0/lib/libgstreamer-1.0.0.dylib" || true
 fi
+write_spm_prebuild_outputs

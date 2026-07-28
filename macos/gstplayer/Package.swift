@@ -64,6 +64,11 @@ let package = Package(
         .package(name: "FlutterFramework", path: "../FlutterFramework"),
     ],
     targets: [
+        .plugin(
+            name: "EnsureGStreamerMacOS",
+            capability: .buildTool(),
+            path: "Plugins/EnsureGStreamerMacOS"
+        ),
         .target(
             name: "gstplayer",
             dependencies: [
@@ -109,6 +114,9 @@ let package = Package(
                     "-F\(gstCache)",
                     "-F/Library/Frameworks",
                 ]),
+            ],
+            plugins: [
+                .plugin(name: "EnsureGStreamerMacOS"),
             ]
         ),
     ]

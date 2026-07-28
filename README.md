@@ -38,6 +38,7 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 - [Windows & Linux host SDK](#windows--linux-host-sdk)
 - [API reference](#api-reference)
 - [Architecture](#architecture)
+- [NativeCore sync & verify](#nativecore-sync--verify)
 - [Troubleshooting](#troubleshooting)
 - [Repository](#repository)
 - [License](#license)
@@ -388,6 +389,20 @@ After changing `native/include/gstp_player.h`:
 dart run ffigen --config ffigen.yaml
 ```
 
+## NativeCore sync & verify
+
+`native/` is the canonical C source tree. iOS/macOS SPM targets compile from
+`ios/gstplayer/NativeCore` and `macos/gstplayer/NativeCore`, so keep them synced
+before build/publish:
+
+```bash
+# after editing native/{include,src}
+./tool/native_core.sh sync
+
+# before publish / release checks
+./tool/native_core.sh verify
+```
+
 ## Troubleshooting
 
 - **First build is slow / needs network (Android / iOS / macOS):** normal — the
@@ -406,6 +421,11 @@ dart run ffigen --config ffigen.yaml
   `~/Library/Caches/gstplayer/gstreamer/<ver>/ios/iPhone.sdk` on resolve/build.
   First build needs network. If headers are still missing: `sh ios/scripts/ensure_gstreamer_ios.sh`,
   then `flutter clean && flutter pub get` and rebuild.
+- **macOS `'gst/app/gstappsink.h' file not found`:** same SPM path as iOS — the
+  `EnsureGStreamerMacOS` build plugin runs `ensure_gstreamer_macos.sh` before
+  compile (first build downloads ~870MB into
+  `~/Library/Caches/gstplayer/gstreamer/<ver>/`). Manual fix:
+  `sh macos/scripts/ensure_gstreamer_macos.sh`, then rebuild.
 - **macOS `Library not loaded: ...GStreamer.framework`:** SPM hosts must wire
   `install_gstreamer_embed_script!(installer)` in `macos/Podfile` (see
   [Installation](#installation)), then `pod install` and rebuild. Confirm
@@ -415,7 +435,7 @@ dart run ffigen --config ffigen.yaml
   injects this after `pod install`; SPM hosts set it in Xcode. See
   [Flutter C interop — Stripping symbols](https://docs.flutter.dev/platform-integration/ios/c-interop).
 - **Link error: `undefined symbol: _gstp_*` (path / SPM):** run
-  `./tool/sync_native_core.sh`, then `flutter clean` and rebuild.
+  `./tool/native_core.sh sync`, then `flutter clean` and rebuild.
 - **APK too large:** narrow `abiFilters` or ship an App Bundle (each ABI carries a
   large GStreamer runtime).
 - **Android minify / R8:** keep `org.freedesktop.gstreamer.**` (plugin AAR already

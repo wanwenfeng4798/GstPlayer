@@ -83,7 +83,7 @@ void main() {
           expect(opacityChrome(tester).opacity, 1.0);
 
           await tester.pump(const Duration(milliseconds: 50));
-          await tester.pump(); // signal rebuild
+          await tester.pump(); // rebuild after notifyListeners
           await tester.pump(const Duration(milliseconds: 200)); // fade
 
           expect(opacityChrome(tester).opacity, 0.0);

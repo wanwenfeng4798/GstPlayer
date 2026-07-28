@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/gstplayer.svg" alt="gstplayer" width="520" />
+</p>
+
 # gstplayer
 
 English | [简体中文](README.zh-CN.md)
@@ -29,7 +33,7 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 - [Native GStreamer setup (per platform)](#native-gstreamer-setup-per-platform)
 - [Architecture](#architecture)
 - [Troubleshooting](#troubleshooting)
-- [Maintainers](#maintainers)
+- [Repository](#repository)
 - [License](#license)
 
 ## Features
@@ -37,8 +41,10 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 - Local files, Flutter assets, and network URLs (`http(s)://`, `rtsp://`, ...).
 - Play / pause / stop / seek / looping.
 - Volume, mute, and playback speed control.
-- Reactive state via fine-grained [`signals`]: state, position, duration, video
-  size, aspect ratio, buffering %, volume, speed, looping, muted, and errors.
+- Reactive state via [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
+  plain getters: state, position, duration, video size, aspect ratio, buffering %,
+  volume, speed, looping, muted, and errors. Rebuild with `ListenableBuilder` /
+  `addListener`.
 - A drop-in `GstVideoView` widget with a built-in, auto-hiding, themeable
   control bar (Material / Cupertino / adaptive).
 - GPU-friendly video via Flutter `Texture` (Android GL into `SurfaceProducer`; Apple/desktop pixel-buffer textures fed from GStreamer `appsink`).
@@ -158,9 +164,9 @@ Bundled assets are loaded via Dart FFI bytes into a native temp file (not AppSrc
 3. **Always `dispose()` the controller** when the surface goes away — this stops
    the pipeline, cancels the event stream, and releases native resources. Leaking
    a controller leaks a native pipeline.
-4. **Read state inside `SignalBuilder`/`Watch`.** Every state field is a
-   `ReadonlySignal`; reading `.value` outside a reactive builder will not rebuild
-   your widget when it changes.
+4. **Read state inside `ListenableBuilder` (or via `addListener`).** Every state
+   field is a plain getter on a `ChangeNotifier`; reading it outside a listener /
+   builder will not rebuild your widget when it changes.
 5. **Android builds all four ABIs by default** (`arm64-v8a`, `armeabi-v7a`, `x86`,
    `x86_64`). You may optionally narrow this with `abiFilters` to shrink your APK
    (see below). The first Android build downloads the GStreamer Android SDK and
@@ -437,7 +443,8 @@ controller. When `at` is null, native picks ~5% of duration (or 1s).
 | `queryPosition()` / `queryDuration()` | Query the pipeline directly. |
 | `dispose()` | Tear down the player and release all resources. |
 
-Reactive state (all `ReadonlySignal`s; read `.value` in a `SignalBuilder`):
+Reactive state (plain getters on `ChangeNotifier`; read inside `ListenableBuilder`
+or after `addListener`):
 `state`, `position`, `duration`, `videoSize`, `aspectRatio`, `bufferingPercent`,
 `volume`, `speed`, `looping`, `muted`, `isPlaying`, `isCompleted`, `error`,
 `playerId`, `initialized`.
@@ -508,7 +515,7 @@ Optional per-arch builds: set `GSTPLAYER_GSTREAMER_ARCH=arm64` or `x86_64` befor
 Silicon and Intel packages.
 
 Optional env vars: `GSTPLAYER_GSTREAMER_ROOT`, `GSTREAMER_FRAMEWORK_SRC` (offline /
-custom paths). Maintainers may still run `sh tool/setup_gstreamer_macos.sh
+custom paths). You may still run `sh tool/setup_gstreamer_macos.sh
 --system` to install under `/Library/Frameworks`.
 
 #### Consumers: build setup
@@ -738,5 +745,3 @@ dart run ffigen --config ffigen.yaml
 ## License
 
 See [LICENSE](LICENSE).
-
-[`signals`]: https://pub.dev/packages/signals

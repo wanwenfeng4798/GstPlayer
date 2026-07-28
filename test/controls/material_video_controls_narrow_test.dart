@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:signals/signals_flutter.dart';
 import 'package:gstplayer/src/controls/material_video_controls.dart';
 import 'package:gstplayer/src/theme/video_controls_theme.dart';
 
@@ -13,11 +12,7 @@ void main() {
     tester,
   ) async {
     final model = FakePlaybackControlsModel();
-    final landscapeLocked = signal(false);
-    addTearDown(() {
-      model.dispose();
-      landscapeLocked.dispose();
-    });
+    addTearDown(model.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -30,7 +25,7 @@ void main() {
               theme: VideoControlsTheme.material(),
               onInteract: () {},
               showFullscreenButton: true,
-              landscapeLocked: landscapeLocked,
+              landscapeLocked: false,
               onFullscreenToggle: () {},
             ),
           ),

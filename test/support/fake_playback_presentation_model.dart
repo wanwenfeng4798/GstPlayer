@@ -1,10 +1,11 @@
-import 'package:signals/signals_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:gstplayer/src/enum/video_rotation.dart';
 import 'package:gstplayer/src/presentation/playback_presentation_model.dart';
 import 'package:gstplayer/src/domain/player_events.dart';
 
 /// Test double for [PlaybackPresentationModel].
-class FakePlaybackPresentationModel implements PlaybackPresentationModel {
+class FakePlaybackPresentationModel extends ChangeNotifier
+    implements PlaybackPresentationModel {
   FakePlaybackPresentationModel({
     int? playerId = 42,
     bool initialized = true,
@@ -12,40 +13,40 @@ class FakePlaybackPresentationModel implements PlaybackPresentationModel {
     VideoRotation videoRotation = VideoRotation.deg0,
     PlayerState state = PlayerState.idle,
     int bufferingPercent = 100,
-  }) : _playerId = signal(playerId),
-       _initialized = signal(initialized),
-       _aspectRatio = signal(aspectRatio),
-       _videoRotation = signal(videoRotation),
-       _state = signal(state),
-       _bufferingPercent = signal(bufferingPercent);
+  }) : _playerId = playerId,
+       _initialized = initialized,
+       _aspectRatio = aspectRatio,
+       _videoRotation = videoRotation,
+       _state = state,
+       _bufferingPercent = bufferingPercent;
 
-  final FlutterSignal<int?> _playerId;
-  final FlutterSignal<bool> _initialized;
-  final FlutterSignal<double> _aspectRatio;
-  final FlutterSignal<VideoRotation> _videoRotation;
-  final FlutterSignal<PlayerState> _state;
-  final FlutterSignal<int> _bufferingPercent;
+  int? _playerId;
+  bool _initialized;
+  double _aspectRatio;
+  VideoRotation _videoRotation;
+  PlayerState _state;
+  int _bufferingPercent;
 
   AspectRatioMode? lastAspectRatioMode;
   int setAspectRatioModeCallCount = 0;
 
   @override
-  ReadonlySignal<bool> get initialized => _initialized;
+  bool get initialized => _initialized;
 
   @override
-  ReadonlySignal<int?> get playerId => _playerId;
+  int? get playerId => _playerId;
 
   @override
-  ReadonlySignal<double> get aspectRatio => _aspectRatio;
+  double get aspectRatio => _aspectRatio;
 
   @override
-  ReadonlySignal<VideoRotation> get videoRotation => _videoRotation;
+  VideoRotation get videoRotation => _videoRotation;
 
   @override
-  ReadonlySignal<PlayerState> get state => _state;
+  PlayerState get state => _state;
 
   @override
-  ReadonlySignal<int> get bufferingPercent => _bufferingPercent;
+  int get bufferingPercent => _bufferingPercent;
 
   @override
   Future<void> setAspectRatioMode(AspectRatioMode mode) async {
@@ -53,22 +54,28 @@ class FakePlaybackPresentationModel implements PlaybackPresentationModel {
     lastAspectRatioMode = mode;
   }
 
-  void setState(PlayerState value) => _state.value = value;
+  void setState(PlayerState value) {
+    _state = value;
+    notifyListeners();
+  }
 
-  void setBufferingPercent(int value) => _bufferingPercent.value = value;
+  void setBufferingPercent(int value) {
+    _bufferingPercent = value;
+    notifyListeners();
+  }
 
-  void setAspectRatio(double value) => _aspectRatio.value = value;
+  void setAspectRatio(double value) {
+    _aspectRatio = value;
+    notifyListeners();
+  }
 
-  void setVideoRotation(VideoRotation value) => _videoRotation.value = value;
+  void setVideoRotation(VideoRotation value) {
+    _videoRotation = value;
+    notifyListeners();
+  }
 
-  void setPlayerId(int? value) => _playerId.value = value;
-
-  void dispose() {
-    _playerId.dispose();
-    _initialized.dispose();
-    _aspectRatio.dispose();
-    _videoRotation.dispose();
-    _state.dispose();
-    _bufferingPercent.dispose();
+  void setPlayerId(int? value) {
+    _playerId = value;
+    notifyListeners();
   }
 }

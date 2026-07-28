@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:signals/signals_flutter.dart';
 
 import '../enum/video_controls_style.dart';
 import '../domain/player_events.dart';
@@ -19,14 +18,14 @@ import 'playback_controls_model.dart';
 
 /// 在视频上方绘制自适应、自动隐藏控件栏的 overlay / Overlay with adaptive, auto-hiding control bar on top of the video.
 ///
-/// 点击视频切换可见性；播放中无操作 [autoHide] 后自动隐藏。Reactive 读取均在 [SignalBuilder] 内，仅重建受影响控件。
-/// Tap toggles visibility; hides after [autoHide] while playing. Reactive reads inside [SignalBuilder] for granular rebuilds.
+/// 点击视频切换可见性；播放中无操作 [autoHide] 后自动隐藏。Reactive 读取均在 [ListenableBuilder] 内。
+/// Tap toggles visibility; hides after [autoHide] while playing. Reactive reads inside [ListenableBuilder].
 class VideoControls extends StatefulWidget {
   /// 创建控件 overlay / Creates the controls overlay.
   ///
   /// # 参数 / Parameters
   /// - `model` — [PlaybackControlsModel] 实现 / playback controls model
-  /// - `immersive` — 沉浸 signals 数据源 / immersive signals state
+  /// - `immersive` — 沉浸控件状态 / immersive controls state
   /// - `style` — Material / Cupertino / adaptive
   /// - `autoHide` — 播放中自动隐藏延迟 / auto-hide delay while playing
   const VideoControls({
@@ -47,16 +46,12 @@ class VideoControls extends StatefulWidget {
 }
 
 class _VideoControlsState extends State<VideoControls> {
-  final FlutterSignal<bool> _visible = signal(true);
+  bool _visible = true;
   final FocusNode _focusNode = FocusNode();
 
   Timer? _hideTimer;
 
-  late final void Function() _disposeStateEffect;
-
   bool _orientationLocked = false;
-
-  late final void Function() _disposeOrientationEffect;
 
   List<DeviceOrientation>? _savedOrientations;
 
@@ -64,29 +59,9 @@ class _VideoControlsState extends State<VideoControls> {
   void initState() {
     super.initState();
     _scheduleHide();
-    _disposeStateEffect = effect(() {
-      final state = widget.model.state.value;
-      if (state == PlayerState.buffering || state == PlayerState.idle) {
-        _visible.value = true;
-        _scheduleHide();
-      }
-    });
-    _disposeOrientationEffect = effect(() {
-      final locked = widget.immersive.landscapeLocked.value;
-      _orientationLocked = locked;
-      if (locked) {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      } else {
-        if (_savedOrientations != null) {
-          SystemChrome.setPreferredOrientations(_savedOrientations!);
-        }
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      }
-    });
+    widget.model.addListener(_onModelChanged);
+    widget.immersive.addListener(_onImmersiveChanged);
+    _onImmersiveChanged();
     if (isMobilePlatform) {
       // Flutter has no getter for current preferred orientations; restore all on exit.
       _savedOrientations = DeviceOrientation.values;
@@ -94,11 +69,53 @@ class _VideoControlsState extends State<VideoControls> {
   }
 
   @override
+  void didUpdateWidget(covariant VideoControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.model != widget.model) {
+      oldWidget.model.removeListener(_onModelChanged);
+      widget.model.addListener(_onModelChanged);
+    }
+    if (oldWidget.immersive != widget.immersive) {
+      oldWidget.immersive.removeListener(_onImmersiveChanged);
+      widget.immersive.addListener(_onImmersiveChanged);
+      _onImmersiveChanged();
+    }
+  }
+
+  void _onModelChanged() {
+    final state = widget.model.state;
+    if (state == PlayerState.buffering || state == PlayerState.idle) {
+      if (!_visible) {
+        setState(() => _visible = true);
+      }
+      _scheduleHide();
+    }
+  }
+
+  void _onImmersiveChanged() {
+    final locked = widget.immersive.landscapeLocked;
+    if (_orientationLocked == locked) return;
+    _orientationLocked = locked;
+    if (locked) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      if (_savedOrientations != null) {
+        SystemChrome.setPreferredOrientations(_savedOrientations!);
+      }
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
     _hideTimer?.cancel();
-    _disposeStateEffect();
-    _disposeOrientationEffect();
-    _visible.dispose();
+    widget.model.removeListener(_onModelChanged);
+    widget.immersive.removeListener(_onImmersiveChanged);
     _focusNode.dispose();
     if (_orientationLocked) {
       SystemChrome.setPreferredOrientations(
@@ -112,36 +129,35 @@ class _VideoControlsState extends State<VideoControls> {
     _hideTimer?.cancel();
     _hideTimer = Timer(widget.autoHide, () {
       if (!mounted) return;
-      if (widget.model.isPlaying.value) {
-        _visible.value = false;
+      if (widget.model.isPlaying) {
+        setState(() => _visible = false);
       }
     });
   }
 
   void _keepAlive() {
-    if (!_visible.value) {
-      _visible.value = true;
+    if (!_visible) {
+      setState(() => _visible = true);
     }
     _scheduleHide();
   }
 
   void _toggle() {
-    _visible.value = !_visible.value;
-    if (_visible.value) _scheduleHide();
+    setState(() => _visible = !_visible);
+    if (_visible) _scheduleHide();
   }
 
   void _toggleFullscreen() {
-    widget.immersive.landscapeLocked.value =
-        !widget.immersive.landscapeLocked.value;
+    widget.immersive.landscapeLocked = !widget.immersive.landscapeLocked;
     _keepAlive();
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-    final step = widget.immersive.fullscreen.value.seekStep.duration;
-    final position = widget.model.position.value;
-    final duration = widget.model.duration.value;
+    final step = widget.immersive.fullscreen.seekStep.duration;
+    final position = widget.model.position;
+    final duration = widget.model.duration;
 
     switch (event.logicalKey) {
       case LogicalKeyboardKey.space:
@@ -166,7 +182,7 @@ class _VideoControlsState extends State<VideoControls> {
   }
 
   Future<void> _togglePlayPauseWithHud() async {
-    final wasPlaying = widget.model.isPlaying.value;
+    final wasPlaying = widget.model.isPlaying;
     await widget.model.togglePlayPause();
     widget.immersive.showHud(
       ImmersiveHudSnapshot(
@@ -200,7 +216,7 @@ class _VideoControlsState extends State<VideoControls> {
   }
 
   Future<void> _adjustVolume(double delta) async {
-    final volume = (widget.model.volume.value + delta).clamp(0.0, 1.0);
+    final volume = (widget.model.volume + delta).clamp(0.0, 1.0);
     await widget.model.setVolume(volume);
     widget.immersive.showHud(
       ImmersiveHudSnapshot(kind: ImmersiveHudKind.volume, value: volume),
@@ -257,11 +273,9 @@ class _VideoControlsState extends State<VideoControls> {
           immersive: widget.immersive,
           model: widget.model,
           theme: theme,
-          slots: widget.immersive.fullscreen.value.overlaySlots,
-          orientationLabels:
-              widget.immersive.fullscreen.value.orientationLabels,
-          showOrientationMenu:
-              widget.immersive.fullscreen.value.showOrientationMenu,
+          slots: widget.immersive.fullscreen.overlaySlots,
+          orientationLabels: widget.immersive.fullscreen.orientationLabels,
+          showOrientationMenu: widget.immersive.fullscreen.showOrientationMenu,
         ),
         controls,
       ],
@@ -275,7 +289,7 @@ class _VideoControlsState extends State<VideoControls> {
             behavior: HitTestBehavior.opaque,
             onTap: _toggle,
             onDoubleTap: () async {
-              final wasPlaying = widget.model.isPlaying.value;
+              final wasPlaying = widget.model.isPlaying;
               await widget.model.togglePlayPause();
               widget.immersive.showHud(
                 ImmersiveHudSnapshot(
@@ -287,9 +301,10 @@ class _VideoControlsState extends State<VideoControls> {
             child: const SizedBox.expand(),
           ),
         ),
-        SignalBuilder(
-          builder: (context) {
-            if (!widget.immersive.immersiveActive.value) {
+        ListenableBuilder(
+          listenable: widget.immersive,
+          builder: (context, _) {
+            if (!widget.immersive.immersiveActive) {
               return const SizedBox.shrink();
             }
             return Stack(
@@ -313,15 +328,11 @@ class _VideoControlsState extends State<VideoControls> {
             // 仅捕获键盘，不阻挡点击切换控件栏 / Keys only; taps pass through.
             child: const IgnorePointer(child: SizedBox.expand()),
           ),
-        SignalBuilder(
-          builder: (context) {
-            return AnimatedOpacity(
-              key: const ValueKey('video-controls-opacity'),
-              opacity: _visible.value ? 1 : 0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(ignoring: !_visible.value, child: chrome),
-            );
-          },
+        AnimatedOpacity(
+          key: const ValueKey('video-controls-opacity'),
+          opacity: _visible ? 1 : 0,
+          duration: const Duration(milliseconds: 200),
+          child: IgnorePointer(ignoring: !_visible, child: chrome),
         ),
         ImmersiveHud(immersive: widget.immersive),
       ],

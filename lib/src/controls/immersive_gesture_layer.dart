@@ -36,7 +36,7 @@ class ImmersiveGestureLayer extends StatefulWidget {
     required this.onTap,
   });
 
-  /// 沉浸 signals / Immersive signals.
+  /// 沉浸控件状态 / Immersive controls state.
   final ImmersiveControlsState immersive;
 
   /// 播放控制 model / Playback controls model.
@@ -79,12 +79,12 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
     _horizontalDrag = 0;
     _axisResolved = false;
     _isHorizontal = false;
-    _volumeBaseline = widget.model.volume.value;
+    _volumeBaseline = widget.model.volume;
     unawaited(_ensureBrightnessBaseline());
   }
 
   void _previewHorizontalSeek(double width) {
-    final stepSeconds = widget.immersive.fullscreen.value.seekStep.seconds;
+    final stepSeconds = widget.immersive.fullscreen.seekStep.seconds;
     final seconds = seekSecondsFromDrag(
       horizontalDrag: _horizontalDrag,
       width: width,
@@ -139,7 +139,7 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
           ),
         );
       case _GestureZone.right:
-        final base = _volumeBaseline ?? widget.model.volume.value;
+        final base = _volumeBaseline ?? widget.model.volume;
         final volume = (base + deltaNorm * 0.5).clamp(0.0, 1.0);
         unawaited(widget.model.setVolume(volume));
         widget.immersive.showHud(
@@ -155,7 +155,7 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
     if (_isHorizontal &&
         _horizontalDrag.abs() >= _seekDragThreshold &&
         size != null) {
-      final stepSeconds = widget.immersive.fullscreen.value.seekStep.seconds;
+      final stepSeconds = widget.immersive.fullscreen.seekStep.seconds;
       final seconds = seekSecondsFromDrag(
         horizontalDrag: _horizontalDrag,
         width: size.width,
@@ -163,8 +163,8 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
       );
       if (seconds.abs() >= 0.5) {
         final forward = seconds > 0;
-        final position = widget.model.position.value;
-        final duration = widget.model.duration.value;
+        final position = widget.model.position;
+        final duration = widget.model.duration;
         final delta = Duration(seconds: seconds.abs().round());
         final target = forward ? position + delta : position - delta;
         final clamped = Duration(
@@ -201,7 +201,7 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
         behavior: HitTestBehavior.translucent,
         onTap: widget.onTap,
         onDoubleTap: () async {
-          final wasPlaying = widget.model.isPlaying.value;
+          final wasPlaying = widget.model.isPlaying;
           await widget.model.togglePlayPause();
           widget.immersive.showHud(
             ImmersiveHudSnapshot(

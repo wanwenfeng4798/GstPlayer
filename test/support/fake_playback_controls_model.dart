@@ -1,10 +1,11 @@
-import 'package:signals/signals_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:gstplayer/src/controls/playback_controls_model.dart';
 import 'package:gstplayer/src/enum/video_rotation.dart';
 import 'package:gstplayer/src/domain/player_events.dart';
 
 /// Test double for [PlaybackControlsModel].
-class FakePlaybackControlsModel implements PlaybackControlsModel {
+class FakePlaybackControlsModel extends ChangeNotifier
+    implements PlaybackControlsModel {
   FakePlaybackControlsModel({
     PlayerState initialState = PlayerState.idle,
     Duration initialPosition = Duration.zero,
@@ -12,87 +13,93 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
     bool initialSeekable = true,
     bool supportsOrientation = true,
     VideoRotation initialRotation = VideoRotation.deg0,
-  }) : _state = signal(initialState),
-       _position = signal(initialPosition),
-       _duration = signal(initialDuration),
-       _isSeekable = signal(initialSeekable),
-       _supportsOrientation = signal(supportsOrientation),
-       _videoRotation = signal(initialRotation);
+  }) : _state = initialState,
+       _position = initialPosition,
+       _duration = initialDuration,
+       _isSeekable = initialSeekable,
+       _supportsOrientation = supportsOrientation,
+       _videoRotation = initialRotation;
 
-  final FlutterSignal<PlayerState> _state;
-  final FlutterSignal<Duration> _position;
-  final FlutterSignal<Duration> _duration;
-  final FlutterSignal<bool> _isSeekable;
-  final FlutterSignal<bool> _supportsOrientation;
-  final FlutterSignal<VideoRotation> _videoRotation;
-  final FlutterSignal<bool> _muted = signal(false);
-  final FlutterSignal<double> _volume = signal(1.0);
-  final FlutterSignal<bool> _looping = signal(false);
-  final FlutterSignal<double> _speed = signal(1.0);
-  final FlutterSignal<int> _bufferingPercent = signal(100);
-
-  @override
-  late final ReadonlySignal<bool> isPlaying = computed(
-    () => _state.value == PlayerState.playing,
-  );
+  PlayerState _state;
+  Duration _position;
+  Duration _duration;
+  bool _isSeekable;
+  bool _supportsOrientation;
+  VideoRotation _videoRotation;
+  bool _muted = false;
+  double _volume = 1.0;
+  bool _looping = false;
+  double _speed = 1.0;
+  int _bufferingPercent = 100;
 
   Duration? lastSeek;
   int seekCallCount = 0;
   int togglePlayPauseCallCount = 0;
   VideoRotation? lastVideoRotation;
+  double? lastVolume;
+  AspectRatioMode? lastAspectRatioMode;
 
   @override
-  ReadonlySignal<PlayerState> get state => _state;
+  bool get isPlaying => _state == PlayerState.playing;
 
   @override
-  ReadonlySignal<int> get bufferingPercent => _bufferingPercent;
+  PlayerState get state => _state;
 
   @override
-  ReadonlySignal<Duration> get position => _position;
+  int get bufferingPercent => _bufferingPercent;
 
   @override
-  ReadonlySignal<Duration> get duration => _duration;
+  Duration get position => _position;
 
   @override
-  ReadonlySignal<bool> get isSeekable => _isSeekable;
+  Duration get duration => _duration;
 
   @override
-  ReadonlySignal<bool> get muted => _muted;
+  bool get isSeekable => _isSeekable;
 
   @override
-  ReadonlySignal<double> get volume => _volume;
+  bool get muted => _muted;
 
   @override
-  ReadonlySignal<bool> get looping => _looping;
+  double get volume => _volume;
 
   @override
-  ReadonlySignal<double> get speed => _speed;
+  bool get looping => _looping;
 
   @override
-  ReadonlySignal<bool> get supportsOrientation => _supportsOrientation;
+  double get speed => _speed;
 
   @override
-  ReadonlySignal<VideoRotation> get videoRotation => _videoRotation;
+  bool get supportsOrientation => _supportsOrientation;
+
+  @override
+  VideoRotation get videoRotation => _videoRotation;
 
   @override
   Future<void> togglePlayPause() async {
     togglePlayPauseCallCount++;
-    _state.value = _state.value == PlayerState.playing
+    _state = _state == PlayerState.playing
         ? PlayerState.paused
         : PlayerState.playing;
+    notifyListeners();
   }
 
   @override
-  Future<void> toggleMuted() async {}
+  Future<void> toggleMuted() async {
+    _muted = !_muted;
+    notifyListeners();
+  }
 
   @override
   Future<void> setLooping(bool looping) async {
-    _looping.value = looping;
+    _looping = looping;
+    notifyListeners();
   }
 
   @override
   Future<void> setSpeed(double speed) async {
-    _speed.value = speed;
+    _speed = speed;
+    notifyListeners();
   }
 
   @override
@@ -101,13 +108,11 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
     lastSeek = position;
   }
 
-  double? lastVolume;
-  AspectRatioMode? lastAspectRatioMode;
-
   @override
   Future<void> setVolume(double volume) async {
     lastVolume = volume;
-    _volume.value = volume;
+    _volume = volume;
+    notifyListeners();
   }
 
   @override
@@ -118,29 +123,17 @@ class FakePlaybackControlsModel implements PlaybackControlsModel {
   @override
   Future<void> setVideoRotation(VideoRotation rotation) async {
     lastVideoRotation = rotation;
-    _videoRotation.value = rotation;
+    _videoRotation = rotation;
+    notifyListeners();
   }
 
   void setPosition(Duration position) {
-    _position.value = position;
+    _position = position;
+    notifyListeners();
   }
 
   void setState(PlayerState state) {
-    _state.value = state;
-  }
-
-  void dispose() {
-    isPlaying.dispose();
-    _state.dispose();
-    _position.dispose();
-    _duration.dispose();
-    _isSeekable.dispose();
-    _supportsOrientation.dispose();
-    _videoRotation.dispose();
-    _muted.dispose();
-    _volume.dispose();
-    _looping.dispose();
-    _speed.dispose();
-    _bufferingPercent.dispose();
+    _state = state;
+    notifyListeners();
   }
 }

@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:signals/signals_flutter.dart';
 import 'package:gstplayer/src/controls/buffering_indicator.dart';
 import 'package:gstplayer/src/enum/video_controls_style.dart';
 import 'package:gstplayer/src/enum/video_rotation.dart';
@@ -17,17 +16,16 @@ void main() {
 
   group('PlaybackPresentation', () {
     late FakePlaybackPresentationModel model;
-    late FlutterSignal<AspectRatioMode> aspectRatioMode;
+    late AspectRatioMode aspectRatioMode;
 
     tearDown(() {
       model.dispose();
-      aspectRatioMode.dispose();
     });
 
     testWidgets('syncs aspectRatioMode on mount', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
       model = FakePlaybackPresentationModel();
-      aspectRatioMode = signal(AspectRatioMode.fill);
+      aspectRatioMode = AspectRatioMode.fill;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -52,7 +50,7 @@ void main() {
     testWidgets('re-syncs when aspectRatioMode changes', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
       model = FakePlaybackPresentationModel();
-      aspectRatioMode = signal(AspectRatioMode.fit);
+      aspectRatioMode = AspectRatioMode.fit;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -71,7 +69,21 @@ void main() {
       await tester.pumpAndSettle();
       expect(model.lastAspectRatioMode, AspectRatioMode.fit);
 
-      aspectRatioMode.value = AspectRatioMode.stretch;
+      aspectRatioMode = AspectRatioMode.stretch;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 180,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: aspectRatioMode,
+              ),
+            ),
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(model.lastAspectRatioMode, AspectRatioMode.stretch);
@@ -84,7 +96,7 @@ void main() {
         state: PlayerState.buffering,
         bufferingPercent: 50,
       );
-      aspectRatioMode = signal(AspectRatioMode.fit);
+      aspectRatioMode = AspectRatioMode.fit;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -135,7 +147,7 @@ void main() {
         state: PlayerState.playing,
         bufferingPercent: 50,
       );
-      aspectRatioMode = signal(AspectRatioMode.fit);
+      aspectRatioMode = AspectRatioMode.fit;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -166,7 +178,7 @@ void main() {
         state: PlayerState.buffering,
         bufferingPercent: 42,
       );
-      aspectRatioMode = signal(AspectRatioMode.fit);
+      aspectRatioMode = AspectRatioMode.fit;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -199,7 +211,7 @@ void main() {
         state: PlayerState.buffering,
         bufferingPercent: 50,
       );
-      aspectRatioMode = signal(AspectRatioMode.fit);
+      aspectRatioMode = AspectRatioMode.fit;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -235,7 +247,7 @@ void main() {
         state: PlayerState.buffering,
         bufferingPercent: 50,
       );
-      aspectRatioMode = signal(AspectRatioMode.fit);
+      aspectRatioMode = AspectRatioMode.fit;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -272,7 +284,7 @@ void main() {
     testWidgets('fit mode letterboxes with AspectRatio', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
       model = FakePlaybackPresentationModel();
-      aspectRatioMode = signal(AspectRatioMode.fit);
+      aspectRatioMode = AspectRatioMode.fit;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -303,7 +315,7 @@ void main() {
     ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
       model = FakePlaybackPresentationModel();
-      aspectRatioMode = signal(AspectRatioMode.fit);
+      aspectRatioMode = AspectRatioMode.fit;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -325,14 +337,42 @@ void main() {
         BoxFit.contain,
       );
 
-      aspectRatioMode.value = AspectRatioMode.fill;
+      aspectRatioMode = AspectRatioMode.fill;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 300,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: aspectRatioMode,
+              ),
+            ),
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(
         tester.widget<FittedBox>(find.byType(FittedBox)).fit,
         BoxFit.cover,
       );
 
-      aspectRatioMode.value = AspectRatioMode.stretch;
+      aspectRatioMode = AspectRatioMode.stretch;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 300,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: aspectRatioMode,
+              ),
+            ),
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(tester.widget<FittedBox>(find.byType(FittedBox)).fit, BoxFit.fill);
 
@@ -341,7 +381,7 @@ void main() {
 
     testWidgets('hides surface when playerId is null', (tester) async {
       model = FakePlaybackPresentationModel(playerId: null);
-      aspectRatioMode = signal(AspectRatioMode.fit);
+      aspectRatioMode = AspectRatioMode.fit;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -367,7 +407,7 @@ void main() {
     ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
       model = FakePlaybackPresentationModel();
-      aspectRatioMode = signal(AspectRatioMode.fit);
+      aspectRatioMode = AspectRatioMode.fit;
 
       await tester.pumpWidget(
         MaterialApp(

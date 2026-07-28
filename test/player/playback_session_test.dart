@@ -71,15 +71,15 @@ void main() {
 
     test('initialize wires playerId and event stream', () async {
       await session.initialize();
-      expect(session.initialized.value, isTrue);
-      expect(session.playerId.value, 42);
+      expect(session.initialized, isTrue);
+      expect(session.playerId, 42);
     });
 
     test(
       'dispose releases native texture while playerId is still valid',
       () async {
         await session.initialize();
-        expect(session.playerId.value, 42);
+        expect(session.playerId, 42);
 
         await session.dispose();
 
@@ -88,7 +88,7 @@ void main() {
     );
 
     test('supportsOrientation defaults false before open', () {
-      expect(session.supportsOrientation.value, isFalse);
+      expect(session.supportsOrientation, isFalse);
     });
 
     test('open resolves source and updates capabilities', () async {
@@ -100,21 +100,21 @@ void main() {
         (port.lastLoadedSource! as MediaSourceDto_Uri).field0,
         'https://example.com/a.mp4',
       );
-      expect(session.isSeekable.value, isTrue);
-      expect(session.supportsTracks.value, isFalse);
-      expect(session.supportsOrientation.value, isTrue);
-      expect(session.videoRotation.value, VideoRotation.deg0);
+      expect(session.isSeekable, isTrue);
+      expect(session.supportsTracks, isFalse);
+      expect(session.supportsOrientation, isTrue);
+      expect(session.videoRotation, VideoRotation.deg0);
     });
 
     test('mediaGeneration increments on each open', () async {
       await session.initialize();
-      expect(session.mediaGeneration.value, 0);
+      expect(session.mediaGeneration, 0);
 
       await session.open(VideoSource.network('https://example.com/a.mp4'));
-      expect(session.mediaGeneration.value, 1);
+      expect(session.mediaGeneration, 1);
 
       await session.open(VideoSource.network('https://example.com/b.mp4'));
-      expect(session.mediaGeneration.value, 2);
+      expect(session.mediaGeneration, 2);
     });
 
     test('open failure surfaces error state', () async {
@@ -124,9 +124,9 @@ void main() {
 
       await session.open(VideoSource.network('https://x.test/v'));
 
-      expect(session.error.value, contains('load failed'));
-      expect(session.state.value, PlayerState.error);
-      expect(session.bufferingPercent.value, 100);
+      expect(session.error, contains('load failed'));
+      expect(session.state, PlayerState.error);
+      expect(session.bufferingPercent, 100);
     });
 
     test('seek applies optimistic position before port call', () async {
@@ -136,7 +136,7 @@ void main() {
 
       await session.seek(const Duration(seconds: 12));
 
-      expect(session.position.value, const Duration(seconds: 12));
+      expect(session.position, const Duration(seconds: 12));
       expect(port.lastSeekPosition, const Duration(seconds: 12));
     });
 
@@ -147,8 +147,8 @@ void main() {
 
       await session.seek(const Duration(seconds: 5));
 
-      expect(session.position.value, const Duration(seconds: 5));
-      expect(session.error.value, contains('seek failed'));
+      expect(session.position, const Duration(seconds: 5));
+      expect(session.error, contains('seek failed'));
     });
 
     test('PlayerEventKind.error applies error state', () async {
@@ -156,8 +156,8 @@ void main() {
       port.emit(PlayerEventFixtures.error(message: 'decode error'));
       await Future<void>.delayed(Duration.zero);
 
-      expect(session.error.value, 'decode error');
-      expect(session.state.value, PlayerState.error);
+      expect(session.error, 'decode error');
+      expect(session.state, PlayerState.error);
     });
 
     test('togglePlayPause pauses when playing', () async {
@@ -201,8 +201,8 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(port.getTracksCallCount, 1);
-      expect(session.tracks.value, hasLength(1));
-      expect(session.tracks.value.first.label, 'English');
+      expect(session.tracks, hasLength(1));
+      expect(session.tracks.first.label, 'English');
     });
 
     test('setVolume applies optimistic update and forwards to port', () async {
@@ -210,7 +210,7 @@ void main() {
 
       await session.setVolume(0.4);
 
-      expect(session.volume.value, 0.4);
+      expect(session.volume, 0.4);
       expect(port.lastVolume, 0.4);
     });
 
@@ -219,7 +219,7 @@ void main() {
 
       await session.setMuted(true);
 
-      expect(session.muted.value, isTrue);
+      expect(session.muted, isTrue);
       expect(port.lastMute, isTrue);
     });
 
@@ -229,14 +229,14 @@ void main() {
         await session.initialize();
         port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 42));
         await Future<void>.delayed(Duration.zero);
-        expect(session.bufferingPercent.value, 42);
+        expect(session.bufferingPercent, 42);
 
         port.emit(
           event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
         );
         await Future<void>.delayed(Duration.zero);
-        expect(session.state.value, PlayerState.playing);
-        expect(session.bufferingPercent.value, 42);
+        expect(session.state, PlayerState.playing);
+        expect(session.bufferingPercent, 42);
       },
     );
 
@@ -249,18 +249,18 @@ void main() {
       port.emit(event(kind: PlayerEventKind.eos));
       await Future<void>.delayed(Duration.zero);
 
-      expect(session.state.value, PlayerState.completed);
-      expect(session.position.value, const Duration(milliseconds: 5000));
-      expect(session.isCompleted.value, isTrue);
+      expect(session.state, PlayerState.completed);
+      expect(session.position, const Duration(milliseconds: 5000));
+      expect(session.isCompleted, isTrue);
     });
 
-    test('metadataChanged drives aspectRatio computed signal', () async {
+    test('metadataChanged drives aspectRatio', () async {
       await session.initialize();
       port.emit(
         event(kind: PlayerEventKind.metadataChanged, width: 1920, height: 1080),
       );
       await Future<void>.delayed(Duration.zero);
-      expect(session.aspectRatio.value, closeTo(16 / 9, 0.001));
+      expect(session.aspectRatio, closeTo(16 / 9, 0.001));
     });
 
     test('videoSize fallback when metadata lacks display aspect', () async {
@@ -269,7 +269,7 @@ void main() {
         event(kind: PlayerEventKind.videoSize, width: 640, height: 480),
       );
       await Future<void>.delayed(Duration.zero);
-      expect(session.aspectRatio.value, closeTo(4 / 3, 0.001));
+      expect(session.aspectRatio, closeTo(4 / 3, 0.001));
     });
 
     test('portrait videoSize drives aspectRatio below 1', () async {
@@ -278,8 +278,8 @@ void main() {
         event(kind: PlayerEventKind.videoSize, width: 1080, height: 1920),
       );
       await Future<void>.delayed(Duration.zero);
-      expect(session.videoSize.value, const Size(1080, 1920));
-      expect(session.aspectRatio.value, closeTo(9 / 16, 0.001));
+      expect(session.videoSize, const Size(1080, 1920));
+      expect(session.aspectRatio, closeTo(9 / 16, 0.001));
     });
 
     test('aspectRatio follows post-orient videoSize after rotation', () async {
@@ -288,17 +288,17 @@ void main() {
         event(kind: PlayerEventKind.videoSize, width: 1920, height: 1080),
       );
       await Future<void>.delayed(Duration.zero);
-      expect(session.aspectRatio.value, closeTo(16 / 9, 0.001));
+      expect(session.aspectRatio, closeTo(16 / 9, 0.001));
 
       // Native videoflip/glvideoflip emit swapped size; Dart does not invert.
       await session.setVideoRotation(VideoRotation.deg90);
-      expect(session.aspectRatio.value, closeTo(16 / 9, 0.001));
+      expect(session.aspectRatio, closeTo(16 / 9, 0.001));
 
       port.emit(
         event(kind: PlayerEventKind.videoSize, width: 1080, height: 1920),
       );
       await Future<void>.delayed(Duration.zero);
-      expect(session.aspectRatio.value, closeTo(9 / 16, 0.001));
+      expect(session.aspectRatio, closeTo(9 / 16, 0.001));
     });
 
     test(
@@ -308,7 +308,7 @@ void main() {
         session = PlaybackSession(port: port);
         await session.initialize();
         await session.open(VideoSource.network('https://example.com/asset'));
-        expect(session.isSeekable.value, isFalse);
+        expect(session.isSeekable, isFalse);
 
         port.emit(
           event(
@@ -319,7 +319,7 @@ void main() {
         );
         await Future<void>.delayed(Duration.zero);
 
-        expect(session.isSeekable.value, isFalse);
+        expect(session.isSeekable, isFalse);
       },
     );
 
@@ -338,15 +338,15 @@ void main() {
       );
       await Future<void>.delayed(Duration.zero);
 
-      expect(session.state.value, PlayerState.playing);
-      expect(session.position.value, const Duration(milliseconds: 9000));
+      expect(session.state, PlayerState.playing);
+      expect(session.position, const Duration(milliseconds: 9000));
 
       await session.open(VideoSource.network('https://example.com/b.mp4'));
 
-      expect(session.state.value, PlayerState.buffering);
-      expect(session.bufferingPercent.value, 0);
-      expect(session.position.value, Duration.zero);
-      expect(session.duration.value, Duration.zero);
+      expect(session.state, PlayerState.buffering);
+      expect(session.bufferingPercent, 0);
+      expect(session.position, Duration.zero);
+      expect(session.duration, Duration.zero);
     });
 
     test('open clears media-specific state', () async {
@@ -360,9 +360,9 @@ void main() {
 
       await session.open(VideoSource.network('https://example.com/b.mp4'));
 
-      expect(session.videoSize.value, Size.zero);
-      expect(session.tracks.value, isEmpty);
-      expect(session.error.value, isNull);
+      expect(session.videoSize, Size.zero);
+      expect(session.tracks, isEmpty);
+      expect(session.error, isNull);
     });
 
     test('seek while playing does not set buffering optimistically', () async {
@@ -372,8 +372,8 @@ void main() {
 
       await session.seek(const Duration(seconds: 30));
 
-      expect(session.position.value, const Duration(seconds: 30));
-      expect(session.state.value, PlayerState.playing);
+      expect(session.position, const Duration(seconds: 30));
+      expect(session.state, PlayerState.playing);
     });
 
     test('open resets video rotation after prior rotation', () async {
@@ -383,17 +383,17 @@ void main() {
 
       await session.open(VideoSource.network('https://example.com/b.mp4'));
 
-      expect(session.videoRotation.value, VideoRotation.deg0);
+      expect(session.videoRotation, VideoRotation.deg0);
       expect(port.lastVideoRotationDegrees, 0);
     });
 
-    test('setVideoRotation updates videoRotation signal', () async {
+    test('setVideoRotation updates videoRotation', () async {
       await session.initialize();
       const rotation = VideoRotation.deg90;
 
       await session.setVideoRotation(rotation);
 
-      expect(session.videoRotation.value, rotation);
+      expect(session.videoRotation, rotation);
       expect(port.lastVideoRotationDegrees, 90);
     });
 
@@ -412,7 +412,7 @@ void main() {
           await session.open(VideoSource.network('https://example.com/a.mp4'));
 
           // Before any playback event the player is not "playing".
-          expect(session.isPlaying.value, isFalse);
+          expect(session.isPlaying, isFalse);
 
           port.emit(
             PlayerEventFixtures.stateChanged(state: PlayerState.playing),
@@ -426,16 +426,16 @@ void main() {
           await Future<void>.delayed(Duration.zero);
 
           // Controls now reflect a live, seekable player.
-          expect(session.isPlaying.value, isTrue);
-          expect(session.duration.value, const Duration(seconds: 10));
-          expect(session.position.value, const Duration(seconds: 3));
+          expect(session.isPlaying, isTrue);
+          expect(session.duration, const Duration(seconds: 10));
+          expect(session.position, const Duration(seconds: 3));
 
           // A later position event advances the progress (not frozen at 0).
           port.emit(
             event(kind: PlayerEventKind.positionChanged, positionMs: 4000),
           );
           await Future<void>.delayed(Duration.zero);
-          expect(session.position.value, const Duration(seconds: 4));
+          expect(session.position, const Duration(seconds: 4));
         },
       );
 

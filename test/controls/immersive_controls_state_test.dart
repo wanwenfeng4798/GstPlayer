@@ -22,7 +22,7 @@ void main() {
         initialAspectRatioMode: AspectRatioMode.fit,
         fullscreen: const VideoControlsFullscreenConfig(desktopImmersive: true),
       );
-      expect(state.immersiveActive.value, isTrue);
+      expect(state.immersiveActive, isTrue);
 
       state.dispose();
       state = ImmersiveControlsState(
@@ -31,18 +31,18 @@ void main() {
           desktopImmersive: false,
         ),
       );
-      expect(state.immersiveActive.value, isFalse);
+      expect(state.immersiveActive, isFalse);
     });
 
-    test('fullscreen signal updates immersiveActive on desktop', () {
+    test('fullscreen config updates immersiveActive on desktop', () {
       state = ImmersiveControlsState(
         initialAspectRatioMode: AspectRatioMode.fit,
         fullscreen: const VideoControlsFullscreenConfig(desktopImmersive: true),
       );
-      state.fullscreen.value = const VideoControlsFullscreenConfig(
+      state.fullscreen = const VideoControlsFullscreenConfig(
         desktopImmersive: false,
       );
-      expect(state.immersiveActive.value, isFalse);
+      expect(state.immersiveActive, isFalse);
     });
 
     test('landscapeLocked toggles aspectRatioMode independently', () {
@@ -51,19 +51,19 @@ void main() {
         fullscreen: const VideoControlsFullscreenConfig(),
       );
 
-      state.landscapeLocked.value = true;
-      state.aspectRatioMode.value = AspectRatioMode.fill;
+      state.landscapeLocked = true;
+      state.aspectRatioMode = AspectRatioMode.fill;
 
-      expect(state.landscapeLocked.value, isTrue);
-      expect(state.aspectRatioMode.value, AspectRatioMode.fill);
+      expect(state.landscapeLocked, isTrue);
+      expect(state.aspectRatioMode, AspectRatioMode.fill);
     });
 
-    test('hud signal starts null', () {
+    test('hud starts null', () {
       state = ImmersiveControlsState(
         initialAspectRatioMode: AspectRatioMode.fit,
         fullscreen: const VideoControlsFullscreenConfig(),
       );
-      expect(state.hud.value, isNull);
+      expect(state.hud, isNull);
     });
   });
 

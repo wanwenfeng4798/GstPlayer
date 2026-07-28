@@ -10,7 +10,7 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (**native C c
 | `FfiPlayerCommandPort` | Dart production seam (`lib/src/player/ffi_command_port.dart`) over `dart:ffi` |
 | `FfiNativeWorker` | Long-lived isolate queue for blocking `gstp_player_*` transport (create/events stay on root) |
 | `GstPlayerController` | Dart **public facade** (thin): delegates to **`PlaybackSession`** |
-| `PlaybackSession` | Dart **deep orchestration module**: signals, events, `open()`, transport |
+| `PlaybackSession` | Dart **deep orchestration module**: ChangeNotifier state, events, `open()`, transport |
 | `PlayerCommandPort` | Dart/native seam; prod = `FfiPlayerCommandPort`; tests use `FakePlayerCommandPort` |
 | `playbin3` | GStreamer high-level playback element (URI in, A/V out) |
 | `VideoOverlay` | GStreamer interface for Android `glimagesink` → `ANativeWindow` |
@@ -67,7 +67,7 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (**native C c
 - **Texture lifetime follows the player**, not the view: `createTexture` on
   first mount; `disposeTexture` from `PlaybackSession.dispose` (or playerId
   swap). Do not release on `TextureVideoSurface` dispose — Hero /
-  SignalBuilder remounts would close the ImageReader mid-playback
+  ListenableBuilder remounts would close the ImageReader mid-playback
   (`BufferQueue has been abandoned` / `EGL_BAD_SURFACE`).
 - Bind/unbind from SurfaceProducer lifecycle (`onSurfaceAvailable` / cleanup / dispose).
   Pass producer width/height into overlay.

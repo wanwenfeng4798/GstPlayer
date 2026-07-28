@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:chat_context_menu/chat_context_menu.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:signals/signals_flutter.dart';
 
 import '../constant/constant.dart';
 import '../theme/video_controls_theme.dart';
@@ -38,7 +37,7 @@ class CupertinoVideoControls extends StatefulWidget {
   final bool showFullscreenButton;
 
   /// 横屏锁定态 / Landscape lock state.
-  final ReadonlySignal<bool>? landscapeLocked;
+  final bool? landscapeLocked;
 
   /// 全屏切换回调 / Fullscreen toggle callback.
   final VoidCallback? onFullscreenToggle;
@@ -68,202 +67,58 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
     super.dispose();
   }
 
+  Listenable get _listenable {
+    final immersive = widget.immersive;
+    if (immersive != null) {
+      return Listenable.merge([widget.model, immersive]);
+    }
+    return widget.model;
+  }
+
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
     final theme = widget.theme;
     final size = MediaQuery.sizeOf(context);
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Align(
-          alignment: Alignment.center,
-          child: CenterButton(
-            model: model,
-            theme: theme,
-            onInteract: widget.onInteract,
-            hud: widget.immersive?.hud,
-          ),
-        ),
-        Positioned(
-          left: 8,
-          right: 8,
-          bottom: 8,
-          child: SafeArea(
-            top: false,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(theme.borderRadius),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(color: theme.backgroundColor),
-                  child: SizedBox(
-                    width: size.width - 16,
-                    child: Padding(
-                      padding: theme.barPadding,
-                      child: Row(
-                        children: [
-                          SignalBuilder(
-                            builder: (context) => IconButton(
-                              onPressed: () {
-                                widget.onInteract();
-                                model.toggleMuted();
-                              },
-                              style: IconButton.styleFrom(
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: VisualDensity.compact,
-                              ),
-                              icon: Icon(
-                                model.muted.value || model.volume.value == 0
-                                    ? CupertinoIcons.volume_off
-                                    : CupertinoIcons.volume_up,
-                                size: theme.secondaryIconSize,
-                                color: theme.iconColor,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          SignalBuilder(
-                            builder: (context) => Text(
-                              formatDuration(model.position.value),
-                              style: TextStyle(
-                                color: theme.textColor,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                              child: PlaybackProgressSlider(
-                                model: model,
-                                scrub: _scrub,
-                                builder: (context, snap) => CupertinoSlider(
-                                  value: snap.displayValue,
-                                  activeColor: theme.activeTrackColor,
-                                  thumbColor: theme.thumbColor,
-                                  onChangeStart: snap.enabled
-                                      ? (_) => snap.onSeekStart?.call()
-                                      : null,
-                                  onChanged: snap.onSeekChanged,
-                                  onChangeEnd: snap.onSeekEnd,
-                                ),
-                              ),
-                            ),
-                          ),
-                          SignalBuilder(
-                            builder: (context) => Text(
-                              formatDuration(model.duration.value),
-                              style: TextStyle(
-                                color: theme.textColor,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          SignalBuilder(
-                            builder: (context) => IconButton(
-                              onPressed: () async {
-                                widget.onInteract();
-                                await model.setLooping(!model.looping.value);
-                              },
-                              style: IconButton.styleFrom(
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: VisualDensity.compact,
-                              ),
-                              icon: Icon(
-                                CupertinoIcons.repeat,
-                                size: theme.secondaryIconSize,
-                                color: model.looping.value
-                                    ? theme.iconColor
-                                    : theme.iconColor.withValues(alpha: 0.5),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          ChatContextMenuWrapper(
-                            topPadding: 0,
-                            backgroundColor: theme.backgroundColor,
-                            borderRadius: BorderRadius.circular(
-                              theme.borderRadius,
-                            ),
-                            padding: EdgeInsets.zero,
-                            menuBuilder: (context, hideMenu) {
-                              return SignalBuilder(
-                                builder: (context) {
-                                  final current = model.speed.value;
-                                  return Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      for (final s in speeds)
-                                        InkWell(
-                                          onTap: () {
-                                            widget.onInteract();
-                                            model.setSpeed(s);
-                                            hideMenu();
-                                          },
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 10,
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                SizedBox(
-                                                  width: 20,
-                                                  child: s == current
-                                                      ? Icon(
-                                                          Icons.check,
-                                                          size: 16,
-                                                          color:
-                                                              theme.textColor,
-                                                        )
-                                                      : null,
-                                                ),
-                                                Text(
-                                                  '${s}x',
-                                                  style: TextStyle(
-                                                    color: theme.textColor,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  );
-                                },
-                              );
-                            },
-                            widgetBuilder: (context, showMenu, _) {
-                              return GestureDetector(
-                                onTap: showMenu,
-                                child: SignalBuilder(
-                                  builder: (context) => Text(
-                                    '${model.speed.value}x',
-                                    style: TextStyle(
-                                      color: theme.iconColor,
-                                      fontSize: theme.secondaryIconSize * 0.7,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          if (widget.showFullscreenButton &&
-                              widget.landscapeLocked != null &&
-                              widget.onFullscreenToggle != null) ...[
-                            const SizedBox(width: 10),
-                            SignalBuilder(
-                              builder: (context) => IconButton(
+    return ListenableBuilder(
+      listenable: _listenable,
+      builder: (context, _) {
+        final landscapeLocked =
+            widget.immersive?.landscapeLocked ?? widget.landscapeLocked;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: CenterButton(
+                model: model,
+                theme: theme,
+                onInteract: widget.onInteract,
+                hud: widget.immersive?.hud,
+              ),
+            ),
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: 8,
+              child: SafeArea(
+                top: false,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(theme.borderRadius),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(color: theme.backgroundColor),
+                      child: SizedBox(
+                        width: size.width - 16,
+                        child: Padding(
+                          padding: theme.barPadding,
+                          child: Row(
+                            children: [
+                              IconButton(
                                 onPressed: () {
                                   widget.onInteract();
-                                  widget.onFullscreenToggle!();
+                                  model.toggleMuted();
                                 },
                                 style: IconButton.styleFrom(
                                   tapTargetSize:
@@ -271,27 +126,180 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
                                   visualDensity: VisualDensity.compact,
                                 ),
                                 icon: Icon(
-                                  widget.landscapeLocked!.value
-                                      ? CupertinoIcons
-                                            .arrow_down_right_arrow_up_left
-                                      : CupertinoIcons
-                                            .arrow_up_left_arrow_down_right,
+                                  model.muted || model.volume == 0
+                                      ? CupertinoIcons.volume_off
+                                      : CupertinoIcons.volume_up,
                                   size: theme.secondaryIconSize,
                                   color: theme.iconColor,
                                 ),
                               ),
-                            ),
-                          ],
-                        ],
+                              const SizedBox(width: 10),
+                              Text(
+                                formatDuration(model.position),
+                                style: TextStyle(
+                                  color: theme.textColor,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  child: PlaybackProgressSlider(
+                                    model: model,
+                                    scrub: _scrub,
+                                    builder: (context, snap) => CupertinoSlider(
+                                      value: snap.displayValue,
+                                      activeColor: theme.activeTrackColor,
+                                      thumbColor: theme.thumbColor,
+                                      onChangeStart: snap.enabled
+                                          ? (_) => snap.onSeekStart?.call()
+                                          : null,
+                                      onChanged: snap.onSeekChanged,
+                                      onChangeEnd: snap.onSeekEnd,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                formatDuration(model.duration),
+                                style: TextStyle(
+                                  color: theme.textColor,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              IconButton(
+                                onPressed: () async {
+                                  widget.onInteract();
+                                  await model.setLooping(!model.looping);
+                                },
+                                style: IconButton.styleFrom(
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                icon: Icon(
+                                  CupertinoIcons.repeat,
+                                  size: theme.secondaryIconSize,
+                                  color: model.looping
+                                      ? theme.iconColor
+                                      : theme.iconColor.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              ChatContextMenuWrapper(
+                                topPadding: 0,
+                                backgroundColor: theme.backgroundColor,
+                                borderRadius: BorderRadius.circular(
+                                  theme.borderRadius,
+                                ),
+                                padding: EdgeInsets.zero,
+                                menuBuilder: (context, hideMenu) {
+                                  return ListenableBuilder(
+                                    listenable: model,
+                                    builder: (context, _) {
+                                      final current = model.speed;
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          for (final s in speeds)
+                                            InkWell(
+                                              onTap: () {
+                                                widget.onInteract();
+                                                model.setSpeed(s);
+                                                hideMenu();
+                                              },
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 10,
+                                                    ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    SizedBox(
+                                                      width: 20,
+                                                      child: s == current
+                                                          ? Icon(
+                                                              Icons.check,
+                                                              size: 16,
+                                                              color: theme
+                                                                  .textColor,
+                                                            )
+                                                          : null,
+                                                    ),
+                                                    Text(
+                                                      '${s}x',
+                                                      style: TextStyle(
+                                                        color: theme.textColor,
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  );
+                                },
+                                widgetBuilder: (context, showMenu, _) {
+                                  return GestureDetector(
+                                    onTap: showMenu,
+                                    child: Text(
+                                      '${model.speed}x',
+                                      style: TextStyle(
+                                        color: theme.iconColor,
+                                        fontSize:
+                                            theme.secondaryIconSize * 0.7,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              if (widget.showFullscreenButton &&
+                                  landscapeLocked != null &&
+                                  widget.onFullscreenToggle != null) ...[
+                                const SizedBox(width: 10),
+                                IconButton(
+                                  onPressed: () {
+                                    widget.onInteract();
+                                    widget.onFullscreenToggle!();
+                                  },
+                                  style: IconButton.styleFrom(
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  icon: Icon(
+                                    landscapeLocked
+                                        ? CupertinoIcons
+                                              .arrow_down_right_arrow_up_left
+                                        : CupertinoIcons
+                                              .arrow_up_left_arrow_down_right,
+                                    size: theme.secondaryIconSize,
+                                    color: theme.iconColor,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

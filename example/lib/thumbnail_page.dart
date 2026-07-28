@@ -1,10 +1,9 @@
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:gstplayer/gstplayer.dart';
 
-/// Demo page: pick a video source, then call [GstPlayer.captureThumbnail].
+/// Demo page: open a sample source, then call [GstPlayer.captureThumbnail].
 class ThumbnailPage extends StatefulWidget {
   const ThumbnailPage({super.key});
 
@@ -50,13 +49,6 @@ class _ThumbnailPageState extends State<ThumbnailPage> {
     }
   }
 
-  Future<void> _pickLocalVideo() async {
-    final result = await FilePicker.pickFiles(type: FileType.video);
-    final path = result?.files.single.path;
-    if (path == null || path.isEmpty) return;
-    await _capture(VideoSource.file(path), path);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,12 +57,6 @@ class _ThumbnailPageState extends State<ThumbnailPage> {
         padding: const EdgeInsets.all(16),
         children: [
           FilledButton.icon(
-            onPressed: _busy ? null : _pickLocalVideo,
-            icon: const Icon(Icons.folder_open),
-            label: const Text('选择本地视频'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
             onPressed: _busy
                 ? null
                 : () => _capture(

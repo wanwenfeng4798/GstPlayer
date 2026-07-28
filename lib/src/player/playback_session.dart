@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
-import 'package:signals/signals_flutter.dart';
 
 import '../controls/playback_controls_model.dart';
 import '../domain/player_events.dart';
@@ -15,16 +14,17 @@ import '../presentation/playback_presentation_model.dart';
 import '../surface/texture_surface.dart';
 import 'command_port.dart';
 
-/// 深度编排模块：signals、事件分发、open 生命周期与 transport / Deep orchestration: signals, event dispatch, open lifecycle, transport.
+/// 深度编排模块：ChangeNotifier 状态、事件分发、open 生命周期与 transport /
+/// Deep orchestration: ChangeNotifier state, event dispatch, open lifecycle, transport.
 ///
-/// [GstPlayerController] 的核心实现。维护 reactive 状态，订阅 [PlayerCommandPort.events]，
-/// 将 [PlayerEvent] 映射到 signals；命令经 `_guard` 捕获异常并写入 [error]。
-/// Core of [GstPlayerController]. Maintains reactive state, listens to [PlayerCommandPort.events],
-/// maps [PlayerEvent] to signals; commands run through `_guard` to capture errors into [error].
+/// [GstPlayerController] 的核心实现。维护可监听状态，订阅 [PlayerCommandPort.events]，
+/// 将 [PlayerEvent] 映射到字段；命令经 `_guard` 捕获异常并写入 [error]。
+/// Core of [GstPlayerController]. Maintains listenable state, listens to [PlayerCommandPort.events],
+/// maps [PlayerEvent] to fields; commands run through `_guard` to capture errors into [error].
 ///
 /// Seek/volume 等命令会先乐观更新 UI（`_preview*`），再异步调用 Rust。
 /// Seek/volume and similar commands optimistically update UI (`_preview*`) before async Rust calls.
-class PlaybackSession
+class PlaybackSession extends ChangeNotifier
     implements PlaybackControlsModel, PlaybackPresentationModel {
   /// 创建会话；可注入测试用 [port] 与 [mediaSourceResolver] / Creates a session with optional test doubles.
   PlaybackSession({
@@ -38,120 +38,97 @@ class PlaybackSession
 
   final MediaSourceResolver _mediaSourceResolver;
 
-  final FlutterSignal<PlayerState> _state = signal(PlayerState.idle);
+  PlayerState _state = PlayerState.idle;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  Size _videoSize = Size.zero;
+  int _bufferingPercent = 100;
+  double _volume = 1.0;
+  double _speed = 1.0;
+  bool _looping = false;
+  bool _muted = false;
+  String? _error;
+  int? _playerId;
+  bool _initialized = false;
+  List<MediaTrack> _tracks = const [];
+  VideoMetadata? _videoMetadata;
+  bool _isSeekable = true;
+  bool _supportsTracks = true;
+  bool _supportsOrientation = false;
+  int _mediaGeneration = 0;
+  VideoRotation _videoRotation = VideoRotation.deg0;
 
-  final FlutterSignal<Duration> _position = signal(Duration.zero);
-
-  final FlutterSignal<Duration> _duration = signal(Duration.zero);
-
-  final FlutterSignal<Size> _videoSize = signal(Size.zero);
-
-  final FlutterSignal<int> _bufferingPercent = signal(100);
-
-  final FlutterSignal<double> _volume = signal(1.0);
-
-  final FlutterSignal<double> _speed = signal(1.0);
-
-  final FlutterSignal<bool> _looping = signal(false);
-
-  final FlutterSignal<bool> _muted = signal(false);
-
-  final FlutterSignal<String?> _error = signal<String?>(null);
-
-  final FlutterSignal<int?> _playerId = signal<int?>(null);
-
-  final FlutterSignal<bool> _initialized = signal(false);
-
-  final FlutterSignal<List<MediaTrack>> _tracks = signal(const []);
-
-  final FlutterSignal<VideoMetadata?> _videoMetadata = signal(null);
-
-  final FlutterSignal<bool> _isSeekable = signal(true);
-
-  final FlutterSignal<bool> _supportsTracks = signal(true);
-
-  final FlutterSignal<bool> _supportsOrientation = signal(false);
-
-  final FlutterSignal<int> _mediaGeneration = signal(0);
-
-  final FlutterSignal<VideoRotation> _videoRotation = signal(
-    VideoRotation.deg0,
-  );
+  StreamSubscription<PlayerEvent>? _sub;
+  bool _disposed = false;
 
   /// 每次 [open] 递增；供 View 在切换媒体时重置 UI 状态 / Increments on each [open]; lets views reset UI state on media switch.
-  late final ReadonlySignal<int> mediaGeneration = _mediaGeneration;
+  int get mediaGeneration => _mediaGeneration;
 
   /// 是否正在播放 / Whether `state == playing`.
   @override
-  late final ReadonlySignal<bool> isPlaying = computed(
-    () => _state.value == PlayerState.playing,
-  );
+  bool get isPlaying => _state == PlayerState.playing;
 
   /// 是否已 EOS / Whether playback completed.
-  late final ReadonlySignal<bool> isCompleted = computed(
-    () => _state.value == PlayerState.completed,
-  );
+  bool get isCompleted => _state == PlayerState.completed;
 
   /// 显示宽高比；优先 DAR，否则由 [videoSize] 推算（均为 post-orient 尺寸）。
   /// Display aspect from DAR or [videoSize] (post-orient pipeline size).
   @override
-  late final ReadonlySignal<double> aspectRatio = computed(() {
-    final meta = _videoMetadata.value;
+  double get aspectRatio {
+    final meta = _videoMetadata;
     if (meta != null &&
         meta.displayAspectWidth > 0 &&
         meta.displayAspectHeight > 0) {
       return meta.displayAspectWidth / meta.displayAspectHeight;
     }
-    final s = _videoSize.value;
+    final s = _videoSize;
     return (s.width > 0 && s.height > 0) ? s.width / s.height : 16 / 9;
-  });
-
-  StreamSubscription<PlayerEvent>? _sub;
-  bool _disposed = false;
+  }
 
   @override
-  ReadonlySignal<bool> get initialized => _initialized;
+  bool get initialized => _initialized;
   @override
-  ReadonlySignal<int?> get playerId => _playerId;
+  int? get playerId => _playerId;
   @override
-  ReadonlySignal<PlayerState> get state => _state;
+  PlayerState get state => _state;
   @override
-  ReadonlySignal<Duration> get position => _position;
+  Duration get position => _position;
   @override
-  ReadonlySignal<Duration> get duration => _duration;
-  ReadonlySignal<Size> get videoSize => _videoSize;
+  Duration get duration => _duration;
+  Size get videoSize => _videoSize;
   @override
-  ReadonlySignal<int> get bufferingPercent => _bufferingPercent;
+  int get bufferingPercent => _bufferingPercent;
   @override
-  ReadonlySignal<double> get volume => _volume;
+  double get volume => _volume;
   @override
-  ReadonlySignal<double> get speed => _speed;
+  double get speed => _speed;
   @override
-  ReadonlySignal<bool> get looping => _looping;
+  bool get looping => _looping;
   @override
-  ReadonlySignal<bool> get muted => _muted;
-  ReadonlySignal<String?> get error => _error;
-  ReadonlySignal<List<MediaTrack>> get tracks => _tracks;
-  ReadonlySignal<VideoMetadata?> get videoMetadata => _videoMetadata;
+  bool get muted => _muted;
+  String? get error => _error;
+  List<MediaTrack> get tracks => _tracks;
+  VideoMetadata? get videoMetadata => _videoMetadata;
   @override
-  ReadonlySignal<bool> get isSeekable => _isSeekable;
-  ReadonlySignal<bool> get supportsTracks => _supportsTracks;
+  bool get isSeekable => _isSeekable;
+  bool get supportsTracks => _supportsTracks;
   @override
-  ReadonlySignal<bool> get supportsOrientation => _supportsOrientation;
+  bool get supportsOrientation => _supportsOrientation;
   @override
-  ReadonlySignal<VideoRotation> get videoRotation => _videoRotation;
+  VideoRotation get videoRotation => _videoRotation;
 
   /// 创建原生 player 并订阅事件流 / Creates native player and subscribes to events.
   Future<void> initialize() async {
-    if (_initialized.value) return;
+    if (_initialized) return;
     final total = Stopwatch()..start();
     await _port.create();
     final id = _port.playerId;
     if (id == null) {
       throw StateError('PlayerCommandPort.create() did not assign playerId');
     }
-    _playerId.value = id;
-    _initialized.value = true;
+    _playerId = id;
+    _initialized = true;
+    notifyListeners();
     _sub = _port.events.listen(
       _onEvent,
       onError: (Object e) => _applyError(e.toString()),
@@ -198,9 +175,10 @@ class PlaybackSession
   Future<void> play() {
     // Manual replay after EOS resets speed to 1x (engine resets its rate too);
     // keep the UI in sync. Normal pause->resume (not completed) keeps the speed.
-    if (_state.value == PlayerState.completed) {
-      _speed.value = 1.0;
-      _position.value = Duration.zero;
+    if (_state == PlayerState.completed) {
+      _speed = 1.0;
+      _position = Duration.zero;
+      notifyListeners();
     }
     return _guard(_port.play);
   }
@@ -210,7 +188,7 @@ class PlaybackSession
   Future<void> stop() => _guard(_port.stop);
 
   @override
-  Future<void> togglePlayPause() => isPlaying.value ? pause() : play();
+  Future<void> togglePlayPause() => isPlaying ? pause() : play();
 
   /// 跳转；仅更新位置预览，缓冲态由 native BUFFERING 事件驱动 / Seeks; position preview only — buffering from native events.
   @override
@@ -222,7 +200,7 @@ class PlaybackSession
   @override
   Future<void> setVolume(double volume) async {
     _previewVolume(volume);
-    await _guard(() => _port.setVolume(_volume.value));
+    await _guard(() => _port.setVolume(_volume));
   }
 
   Future<void> setMuted(bool muted) async {
@@ -231,12 +209,12 @@ class PlaybackSession
   }
 
   @override
-  Future<void> toggleMuted() => setMuted(!_muted.value);
+  Future<void> toggleMuted() => setMuted(!_muted);
 
   @override
   Future<void> setSpeed(double speed) async {
     _previewSpeed(speed);
-    await _guard(() => _port.setSpeed(_speed.value));
+    await _guard(() => _port.setSpeed(_speed));
   }
 
   @override
@@ -253,7 +231,8 @@ class PlaybackSession
 
   @override
   Future<void> setVideoRotation(VideoRotation rotation) async {
-    _videoRotation.value = rotation;
+    _videoRotation = rotation;
+    notifyListeners();
     await _guard(() => _port.setVideoRotation(rotation.degrees));
   }
 
@@ -267,87 +246,67 @@ class PlaybackSession
     return CapturedBgraFrame.fromMap(map).toPng();
   }
 
-  /// 取消订阅、销毁 player 并释放全部 signals / Cancels subscription, disposes player and all signals.
+  /// 取消订阅、销毁 player 并释放监听 / Cancels subscription, disposes player and listeners.
   ///
   /// Releases the native Flutter texture while [playerId] is still valid, then
-  /// nulls signals before awaiting port dispose so late events cannot race.
+  /// clears ids before awaiting port dispose so late events cannot race.
+  @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    final id = _playerId.value;
+    final id = _playerId;
     if (id != null) {
       await disposeNativePlayerTexture(id);
     }
-    _playerId.value = null;
-    _initialized.value = false;
+    _playerId = null;
+    _initialized = false;
     await _sub?.cancel();
     await _port.dispose();
-    isPlaying.dispose();
-    isCompleted.dispose();
-    aspectRatio.dispose();
-    _state.dispose();
-    _position.dispose();
-    _duration.dispose();
-    _videoSize.dispose();
-    _bufferingPercent.dispose();
-    _volume.dispose();
-    _speed.dispose();
-    _looping.dispose();
-    _muted.dispose();
-    _error.dispose();
-    _playerId.dispose();
-    _initialized.dispose();
-    _tracks.dispose();
-    _videoMetadata.dispose();
-    _isSeekable.dispose();
-    _supportsTracks.dispose();
-    _supportsOrientation.dispose();
-    _videoRotation.dispose();
-    _mediaGeneration.dispose();
+    super.dispose();
   }
 
   Future<void> _refreshTracksFromPort() async {
     try {
-      _tracks.value = await _port.getTracks();
+      _tracks = await _port.getTracks();
+      notifyListeners();
     } catch (e) {
       _applyError(e.toString());
     }
   }
 
   void _resetForOpen() {
-    batch(() {
-      _error.value = null;
-      // Optimistic loading UI until native BUFFERING / READY / PLAYING events.
-      _bufferingPercent.value = 0;
-      _videoSize.value = Size.zero;
-      _videoMetadata.value = null;
-      _tracks.value = const [];
-      _speed.value = 1.0;
-      _state.value = PlayerState.buffering;
-      _position.value = Duration.zero;
-      _duration.value = Duration.zero;
-      _isSeekable.value = true;
-      _volume.value = 1.0;
-      _muted.value = false;
-      _looping.value = false;
-      _videoRotation.value = VideoRotation.deg0;
-      _mediaGeneration.value++;
-    });
+    _error = null;
+    // Optimistic loading UI until native BUFFERING / READY / PLAYING events.
+    _bufferingPercent = 0;
+    _videoSize = Size.zero;
+    _videoMetadata = null;
+    _tracks = const [];
+    _speed = 1.0;
+    _state = PlayerState.buffering;
+    _position = Duration.zero;
+    _duration = Duration.zero;
+    _isSeekable = true;
+    _volume = 1.0;
+    _muted = false;
+    _looping = false;
+    _videoRotation = VideoRotation.deg0;
+    _mediaGeneration++;
+    notifyListeners();
   }
 
   void _applyEvent(PlayerEvent event) {
     switch (event.kind) {
       case PlayerEventKind.durationChanged:
-        _duration.value = Duration(milliseconds: event.durationMs);
+        _duration = Duration(milliseconds: event.durationMs);
       case PlayerEventKind.positionChanged:
-        _position.value = Duration(milliseconds: event.positionMs);
+        _position = Duration(milliseconds: event.positionMs);
       case PlayerEventKind.videoSize:
-        _videoSize.value = Size(
+        _videoSize = Size(
           event.width.toDouble(),
           event.height.toDouble(),
         );
       case PlayerEventKind.metadataChanged:
-        _videoMetadata.value = VideoMetadata(
+        _videoMetadata = VideoMetadata(
           width: event.width,
           height: event.height,
           fps: event.fps,
@@ -361,73 +320,77 @@ class PlaybackSession
           hdrFormat: event.hdrFormat,
         );
       case PlayerEventKind.stateChanged:
-        _state.value = event.state;
+        _state = event.state;
       case PlayerEventKind.buffering:
-        _bufferingPercent.value = event.bufferingPercent;
+        _bufferingPercent = event.bufferingPercent;
         // Native may pause during rebuffer; restore transport state from the event.
         if (event.bufferingPercent < 100) {
-          _state.value = PlayerState.buffering;
+          _state = PlayerState.buffering;
         } else {
           // Buffering finished but native may still be waiting for surface /
           // deferred play — do not fake playing (masks "not actually playing").
-          _state.value = event.state == PlayerState.buffering
+          _state = event.state == PlayerState.buffering
               ? PlayerState.ready
               : event.state;
         }
       case PlayerEventKind.eos:
-        batch(() {
-          _state.value = PlayerState.completed;
-          _position.value = _duration.value;
-        });
+        _state = PlayerState.completed;
+        _position = _duration;
       case PlayerEventKind.error:
-        batch(() {
-          _error.value = event.message;
-          _state.value = PlayerState.error;
-          _bufferingPercent.value = 100;
-        });
+        _error = event.message;
+        _state = PlayerState.error;
+        _bufferingPercent = 100;
       case PlayerEventKind.tracksChanged:
         break;
+    }
+    if (event.kind != PlayerEventKind.tracksChanged) {
+      notifyListeners();
     }
   }
 
   void _applyError(String message) {
-    batch(() {
-      _error.value = message;
-      _state.value = PlayerState.error;
-      _bufferingPercent.value = 100;
-    });
+    _error = message;
+    _state = PlayerState.error;
+    _bufferingPercent = 100;
+    notifyListeners();
   }
 
   void _setPipelineCapabilities(PipelineCapabilitiesDto caps) {
-    _isSeekable.value = caps.seek;
-    _supportsTracks.value = caps.tracks;
-    _supportsOrientation.value = caps.orientation;
+    _isSeekable = caps.seek;
+    _supportsTracks = caps.tracks;
+    _supportsOrientation = caps.orientation;
+    notifyListeners();
   }
 
   void _previewSeek(Duration position, {required bool showBuffering}) {
-    _position.value = position;
+    _position = position;
     if (showBuffering) {
-      _state.value = PlayerState.buffering;
+      _state = PlayerState.buffering;
     }
+    notifyListeners();
   }
 
   void _previewVolume(double volume) {
     final v = volume.clamp(0.0, 1.0);
-    _volume.value = v;
-    if (v > 0 && _muted.value) {
-      _muted.value = false;
+    _volume = v;
+    if (v > 0 && _muted) {
+      _muted = false;
     }
+    notifyListeners();
   }
 
   void _previewMuted(bool muted) {
-    _muted.value = muted;
+    _muted = muted;
+    notifyListeners();
   }
 
   void _previewSpeed(double speed) {
-    _speed.value = speed <= 0 ? 1.0 : speed;
+    _speed = speed <= 0 ? 1.0 : speed;
+    notifyListeners();
   }
 
   void _previewLooping(bool looping) {
-    _looping.value = looping;
+    _looping = looping;
+    notifyListeners();
   }
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:signals/signals_flutter.dart';
 
 import 'controls/fullscreen_config.dart';
 import 'controls/immersive_controls_state.dart';
@@ -59,7 +58,6 @@ class GstVideoView extends StatefulWidget {
 
 class _GstVideoViewState extends State<GstVideoView> {
   late final ImmersiveControlsState _immersive;
-  late final void Function() _disposeOpenEffect;
   int _lastMediaGeneration = -1;
 
   @override
@@ -70,30 +68,40 @@ class _GstVideoViewState extends State<GstVideoView> {
       fullscreen: widget.fullscreen,
     );
     widget.controller.attachImmersive(_immersive);
-    _disposeOpenEffect = effect(() {
-      final generation = widget.controller.mediaGeneration.value;
-      if (generation == _lastMediaGeneration) return;
-      _lastMediaGeneration = generation;
-      if (generation > 0) {
-        _immersive.aspectRatioMode.value = AspectRatioMode.fit;
-      }
-    });
+    widget.controller.addListener(_onControllerChanged);
+    _onControllerChanged();
+  }
+
+  void _onControllerChanged() {
+    final generation = widget.controller.mediaGeneration;
+    if (generation == _lastMediaGeneration) return;
+    _lastMediaGeneration = generation;
+    if (generation > 0) {
+      _immersive.aspectRatioMode = AspectRatioMode.fit;
+    }
   }
 
   @override
   void didUpdateWidget(covariant GstVideoView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onControllerChanged);
+      oldWidget.controller.detachImmersive();
+      widget.controller.attachImmersive(_immersive);
+      widget.controller.addListener(_onControllerChanged);
+      _onControllerChanged();
+    }
     if (oldWidget.aspectRatioMode != widget.aspectRatioMode) {
-      _immersive.aspectRatioMode.value = widget.aspectRatioMode;
+      _immersive.aspectRatioMode = widget.aspectRatioMode;
     }
     if (oldWidget.fullscreen != widget.fullscreen) {
-      _immersive.fullscreen.value = widget.fullscreen;
+      _immersive.fullscreen = widget.fullscreen;
     }
   }
 
   @override
   void dispose() {
-    _disposeOpenEffect();
+    widget.controller.removeListener(_onControllerChanged);
     widget.controller.detachImmersive();
     _immersive.dispose();
     super.dispose();
@@ -109,10 +117,15 @@ class _GstVideoViewState extends State<GstVideoView> {
           fit: StackFit.expand,
           alignment: Alignment.center,
           children: [
-            PlaybackPresentation(
-              model: widget.controller,
-              aspectRatioMode: _immersive.aspectRatioMode,
-              controlsStyle: widget.controlsStyle,
+            ListenableBuilder(
+              listenable: _immersive,
+              builder: (context, _) {
+                return PlaybackPresentation(
+                  model: widget.controller,
+                  aspectRatioMode: _immersive.aspectRatioMode,
+                  controlsStyle: widget.controlsStyle,
+                );
+              },
             ),
             if (widget.showControls)
               VideoControls(

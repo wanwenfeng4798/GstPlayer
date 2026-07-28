@@ -30,7 +30,7 @@ void main() {
     });
 
     tearDown(() {
-      immersive.hud.value = null;
+      immersive.hud = null;
       model.dispose();
       immersive.dispose();
     });
@@ -105,13 +105,13 @@ void main() {
 
         await tester.sendKeyEvent(LogicalKeyboardKey.space);
         await tester.pump();
-        for (var i = 0; i < 10 && immersive.hud.value == null; i++) {
+        for (var i = 0; i < 10 && immersive.hud == null; i++) {
           await tester.pump(const Duration(milliseconds: 20));
         }
 
         expect(model.togglePlayPauseCallCount, 1);
-        expect(immersive.hud.value?.kind, ImmersiveHudKind.playPause);
-        expect(immersive.hud.value?.value, 1.0);
+        expect(immersive.hud?.kind, ImmersiveHudKind.playPause);
+        expect(immersive.hud?.value, 1.0);
         await tester.pump(const Duration(seconds: 1));
       } finally {
         debugDefaultTargetPlatformOverride = null;

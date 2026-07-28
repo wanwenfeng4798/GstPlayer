@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/gstplayer.svg" alt="gstplayer" width="520" />
+</p>
+
 # gstplayer
 
 [English](README.md) | 简体中文
@@ -27,7 +31,7 @@
 - [各平台的 GStreamer 原生环境配置](#各平台的-gstreamer-原生环境配置)
 - [架构](#架构)
 - [常见问题](#常见问题)
-- [维护者](#维护者)
+- [仓库](#仓库)
 - [许可证](#许可证)
 
 ## 功能特性
@@ -35,8 +39,9 @@
 - 支持本地文件、Flutter 资源（asset）以及网络地址（`http(s)://`、`rtsp://` 等）。
 - 播放 / 暂停 / 停止 / 跳转 / 循环。
 - 音量、静音、倍速控制。
-- 基于细粒度 [`signals`] 的响应式状态：播放状态、进度、时长、视频尺寸、宽高比、
-  缓冲百分比、音量、倍速、循环、静音、错误等。
+- 基于 [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
+  普通 getter 的响应式状态：播放状态、进度、时长、视频尺寸、宽高比、缓冲百分比、
+  音量、倍速、循环、静音、错误等。用 `ListenableBuilder` / `addListener` 订阅重建。
 - 开箱即用的 `GstVideoView` 组件，内置可自动隐藏、可主题化的控制条
   （Material / Cupertino / 自适应）。
 - 通过 Flutter `Texture` 渲染（Android GL 写入 `SurfaceProducer`；Apple/桌面由 `appsink` 供帧）。
@@ -149,8 +154,9 @@ await controller.open(const VideoSource.asset('assets/sample.mp4'));
    播放器，在 `initialize()` 时创建。
 3. **画面销毁时务必调用 `dispose()`** —— 它会停止管线、取消事件流并释放原生资源。忘记
    释放会泄漏原生管线。
-4. **在 `SignalBuilder`/`Watch` 内读取状态。** 所有状态字段都是 `ReadonlySignal`；在响应式
-   builder 之外读取 `.value` 不会在其变化时触发重建。
+4. **在 `ListenableBuilder` 内（或通过 `addListener`）读取状态。** 所有状态字段都是
+   `ChangeNotifier` 上的普通 getter；在 listener / builder 之外读取不会在其变化时
+   触发重建。
 5. **Android 默认构建全部四种 ABI**（`arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`）。可按需用
    `abiFilters` 收窄以减小 APK 体积（见下文）。首次 Android 构建会下载 GStreamer Android
    SDK 并运行 ndk-build（需要网络）。
@@ -397,7 +403,8 @@ issue）。
 | `queryPosition()` / `queryDuration()` | 直接向管线查询。 |
 | `dispose()` | 拆除播放器并释放全部资源。 |
 
-响应式状态（均为 `ReadonlySignal`，请在 `SignalBuilder` 中读取 `.value`）：
+响应式状态（`ChangeNotifier` 普通 getter，请在 `ListenableBuilder` 中读取或
+`addListener`）：
 `state`、`position`、`duration`、`videoSize`、`aspectRatio`、`bufferingPercent`、
 `volume`、`speed`、`looping`、`muted`、`isPlaying`、`isCompleted`、`error`、
 `playerId`、`initialized`。
@@ -459,7 +466,7 @@ Rust 核心在构建时链接 GStreamer，所以构建时必须能找到 GStream
 可分别产出 Apple Silicon / Intel 安装包以减小体积。
 
 可选环境变量：`GSTPLAYER_GSTREAMER_ROOT`、`GSTREAMER_FRAMEWORK_SRC`（离线/自定义路径）；
-维护者仍可用 `sh tool/setup_gstreamer_macos.sh --system` 安装到 `/Library/Frameworks`。
+维护场景仍可用 `sh tool/setup_gstreamer_macos.sh --system` 安装到 `/Library/Frameworks`。
 
 #### 消费方：构建配置
 
@@ -661,5 +668,3 @@ dart run ffigen --config ffigen.yaml
 ## 许可证
 
 见 [LICENSE](LICENSE)。
-
-[`signals`]: https://pub.dev/packages/signals

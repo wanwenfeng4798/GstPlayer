@@ -23,7 +23,7 @@ void main() {
     });
 
     test('isFullscreen is false before attachImmersive', () {
-      expect(controller.isFullscreen.value, isFalse);
+      expect(controller.isFullscreen, isFalse);
     });
 
     test('enter and exit fullscreen toggle landscapeLocked on mobile', () {
@@ -31,15 +31,15 @@ void main() {
       try {
         controller.attachImmersive(immersive);
 
-        expect(controller.isFullscreen.value, isFalse);
+        expect(controller.isFullscreen, isFalse);
 
         controller.enterFullscreen();
-        expect(controller.isFullscreen.value, isTrue);
-        expect(immersive.landscapeLocked.value, isTrue);
+        expect(controller.isFullscreen, isTrue);
+        expect(immersive.landscapeLocked, isTrue);
 
         controller.exitFullscreen();
-        expect(controller.isFullscreen.value, isFalse);
-        expect(immersive.landscapeLocked.value, isFalse);
+        expect(controller.isFullscreen, isFalse);
+        expect(immersive.landscapeLocked, isFalse);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -51,8 +51,8 @@ void main() {
         controller.attachImmersive(immersive);
         controller.enterFullscreen();
 
-        expect(controller.isFullscreen.value, isFalse);
-        expect(immersive.landscapeLocked.value, isFalse);
+        expect(controller.isFullscreen, isFalse);
+        expect(immersive.landscapeLocked, isFalse);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
@@ -65,7 +65,7 @@ void main() {
         controller.enterFullscreen();
         controller.detachImmersive();
 
-        expect(controller.isFullscreen.value, isFalse);
+        expect(controller.isFullscreen, isFalse);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

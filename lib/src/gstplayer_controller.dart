@@ -1,5 +1,4 @@
 import 'package:flutter/widgets.dart';
-import 'package:signals/signals_flutter.dart';
 import 'dart:typed_data';
 
 import 'enum/video_rotation.dart';
@@ -33,13 +32,15 @@ export 'model/video_source.dart';
 /// Delegates orchestration to [PlaybackSession]; implements [PlaybackControlsModel] and
 /// [PlaybackPresentationModel] for built-in view and controls.
 ///
-/// Reactive 状态均为 [ReadonlySignal]，请在 [SignalBuilder] 或 `effect` 内读取 `.value`。
-/// All reactive state is exposed as [ReadonlySignal]s; read `.value` inside [SignalBuilder] or `effect`.
+/// Reactive 状态经 [ChangeNotifier] 暴露为普通 getter；请用 [ListenableBuilder] /
+/// [AnimatedBuilder] 或 `addListener` 订阅重建。
+/// Reactive state is exposed as plain getters via [ChangeNotifier]; rebuild with
+/// [ListenableBuilder] / [AnimatedBuilder] or `addListener`.
 ///
 /// 全屏 API（[isFullscreen]、[enterFullscreen]、[exitFullscreen]）须在 [GstVideoView] 内
 /// 通过 [attachImmersive] 绑定后生效，供顶栏插槽返回按钮先退出全屏再导航。
 /// Fullscreen API requires [attachImmersive] from [GstVideoView] before use.
-class GstPlayerController
+class GstPlayerController extends ChangeNotifier
     implements PlaybackControlsModel, PlaybackPresentationModel {
   /// 创建控制器；可注入测试用 [port]、[mediaSourceResolver] 或 [session] / Creates a controller with optional test doubles.
   GstPlayerController({
@@ -51,132 +52,141 @@ class GstPlayerController
            PlaybackSession(
              port: port,
              mediaSourceResolver: mediaSourceResolver,
-           );
+           ) {
+    _session.addListener(_onSessionChanged);
+  }
 
   final PlaybackSession _session;
 
   ImmersiveControlsState? _immersive;
 
-  final FlutterSignal<bool> _isFullscreen = signal(false);
+  bool _isFullscreen = false;
 
-  void Function()? _disposeFullscreenEffect;
+  void _onSessionChanged() => notifyListeners();
+
+  void _syncFullscreenFromImmersive() {
+    final next =
+        isMobilePlatform && (_immersive?.landscapeLocked ?? false);
+    if (_isFullscreen == next) return;
+    _isFullscreen = next;
+    notifyListeners();
+  }
 
   /// 是否已完成 [initialize]（原生 player 已创建且事件流已订阅）/ Whether [initialize] completed.
   @override
-  ReadonlySignal<bool> get initialized => _session.initialized;
+  bool get initialized => _session.initialized;
 
   /// 原生播放器 ID；[initialize] 后非 null，供 Texture 表面绑定 / Native player id; non-null after [initialize].
   @override
-  ReadonlySignal<int?> get playerId => _session.playerId;
+  int? get playerId => _session.playerId;
 
   /// 当前 [PlayerState] / Current [PlayerState].
   @override
-  ReadonlySignal<PlayerState> get state => _session.state;
+  PlayerState get state => _session.state;
 
   /// 播放位置 / Playback position.
   @override
-  ReadonlySignal<Duration> get position => _session.position;
+  Duration get position => _session.position;
 
   /// 媒体总时长 / Media duration.
   @override
-  ReadonlySignal<Duration> get duration => _session.duration;
+  Duration get duration => _session.duration;
 
   /// 视频帧像素尺寸 / Video frame size in pixels.
-  ReadonlySignal<Size> get videoSize => _session.videoSize;
+  Size get videoSize => _session.videoSize;
 
   /// 缓冲进度 0–100 / Buffering progress 0–100.
   @override
-  ReadonlySignal<int> get bufferingPercent => _session.bufferingPercent;
+  int get bufferingPercent => _session.bufferingPercent;
 
   /// 音量 0.0–1.0 / Volume 0.0–1.0.
   @override
-  ReadonlySignal<double> get volume => _session.volume;
+  double get volume => _session.volume;
 
   /// 播放倍速 / Playback speed multiplier.
   @override
-  ReadonlySignal<double> get speed => _session.speed;
+  double get speed => _session.speed;
 
   /// 是否循环播放 / Whether looping is enabled.
   @override
-  ReadonlySignal<bool> get looping => _session.looping;
+  bool get looping => _session.looping;
 
   /// 是否静音 / Whether audio is muted.
   @override
-  ReadonlySignal<bool> get muted => _session.muted;
+  bool get muted => _session.muted;
 
   /// 最近一次错误信息；无错误时为 null / Last error message, or null.
-  ReadonlySignal<String?> get error => _session.error;
+  String? get error => _session.error;
 
   /// 当前媒体音轨/视频轨/字幕轨列表 / Audio, video, and subtitle tracks for current media.
-  ReadonlySignal<List<MediaTrack>> get tracks => _session.tracks;
+  List<MediaTrack> get tracks => _session.tracks;
 
   /// 视频元数据（含 DAR）；无视频轨时可能为 null / Video metadata including DAR; null when no video track.
-  ReadonlySignal<VideoMetadata?> get videoMetadata => _session.videoMetadata;
+  VideoMetadata? get videoMetadata => _session.videoMetadata;
 
   /// 当前 pipeline 是否支持 seek / Whether the active pipeline supports seeking.
   @override
-  ReadonlySignal<bool> get isSeekable => _session.isSeekable;
+  bool get isSeekable => _session.isSeekable;
 
   /// 当前 pipeline 是否支持多轨选择 / Whether multi-track selection is supported.
-  ReadonlySignal<bool> get supportsTracks => _session.supportsTracks;
+  bool get supportsTracks => _session.supportsTracks;
 
   /// 当前 pipeline 是否支持视频方向变换 / Whether video orientation transforms are supported.
   @override
-  ReadonlySignal<bool> get supportsOrientation => _session.supportsOrientation;
+  bool get supportsOrientation => _session.supportsOrientation;
 
   /// 当前视频顺时针旋转角度 / Current clockwise video rotation.
   @override
-  ReadonlySignal<VideoRotation> get videoRotation => _session.videoRotation;
+  VideoRotation get videoRotation => _session.videoRotation;
 
   /// 是否处于移动端全屏（横屏锁定）/ Whether mobile landscape fullscreen is active.
   ///
   /// 未 [attachImmersive] 或桌面端恒为 `false`。
   /// Always `false` on desktop or before [attachImmersive].
-  ReadonlySignal<bool> get isFullscreen => _isFullscreen;
+  bool get isFullscreen => _isFullscreen;
 
   /// 是否正在播放（`state == playing`）/ Whether playback is active.
   @override
-  ReadonlySignal<bool> get isPlaying => _session.isPlaying;
+  bool get isPlaying => _session.isPlaying;
 
   /// 是否已播放到结尾 / Whether playback reached end-of-stream.
-  ReadonlySignal<bool> get isCompleted => _session.isCompleted;
+  bool get isCompleted => _session.isCompleted;
 
   /// 显示宽高比；优先 DAR，否则由 [videoSize] 推算 / Display aspect ratio from metadata or [videoSize].
   @override
-  ReadonlySignal<double> get aspectRatio => _session.aspectRatio;
+  double get aspectRatio => _session.aspectRatio;
 
   /// 媒体打开代数；每次 [open] 递增 / Media open generation; increments on each [open].
-  ReadonlySignal<int> get mediaGeneration => _session.mediaGeneration;
+  int get mediaGeneration => _session.mediaGeneration;
 
   /// 绑定 [GstVideoView] 的沉浸状态，供全屏 API 读写横屏锁定 / Binds immersive state for fullscreen API.
   void attachImmersive(ImmersiveControlsState immersive) {
     detachImmersive();
     _immersive = immersive;
-    _disposeFullscreenEffect = effect(() {
-      _isFullscreen.value = isMobilePlatform
-          ? immersive.landscapeLocked.value
-          : false;
-    });
+    immersive.addListener(_syncFullscreenFromImmersive);
+    _syncFullscreenFromImmersive();
   }
 
   /// 解除沉浸绑定 / Detaches immersive state.
   void detachImmersive() {
-    _disposeFullscreenEffect?.call();
-    _disposeFullscreenEffect = null;
+    _immersive?.removeListener(_syncFullscreenFromImmersive);
     _immersive = null;
-    _isFullscreen.value = false;
+    if (_isFullscreen) {
+      _isFullscreen = false;
+      notifyListeners();
+    }
   }
 
   /// 进入移动端全屏（横屏锁定）/ Enters mobile landscape fullscreen.
   void enterFullscreen() {
     if (!isMobilePlatform) return;
-    _immersive?.landscapeLocked.value = true;
+    _immersive?.landscapeLocked = true;
   }
 
   /// 退出移动端全屏 / Exits mobile landscape fullscreen.
   void exitFullscreen() {
     if (!isMobilePlatform) return;
-    _immersive?.landscapeLocked.value = false;
+    _immersive?.landscapeLocked = false;
   }
 
   /// 创建原生 player 并订阅 Rust 事件流 / Creates the native player and subscribes to the Rust event stream.
@@ -243,9 +253,11 @@ class GstPlayerController
   Future<Uint8List> captureCurrentFrame() => _session.captureCurrentFrame();
 
   /// 释放 player 与事件订阅 / Disposes the player and event subscription.
+  @override
   Future<void> dispose() async {
     detachImmersive();
-    _isFullscreen.dispose();
+    _session.removeListener(_onSessionChanged);
     await _session.dispose();
+    super.dispose();
   }
 }

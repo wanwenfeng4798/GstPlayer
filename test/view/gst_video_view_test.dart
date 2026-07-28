@@ -110,7 +110,7 @@ void main() {
       await controller.open(VideoSource.network('https://example.com/b.mp4'));
       await tester.pumpAndSettle();
 
-      expect(controller.mediaGeneration.value, 1);
+      expect(controller.mediaGeneration, 1);
       expect(port.lastAspectRatioMode, AspectRatioMode.fit);
       debugDefaultTargetPlatformOverride = null;
     });

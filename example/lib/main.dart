@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:chat_context_menu/chat_context_menu.dart';
 import 'package:flutter/material.dart';
-import 'package:signals/signals_flutter.dart';
 import 'package:gstplayer/gstplayer.dart';
 
 import 'thumbnail_page.dart';
@@ -102,7 +101,7 @@ class _PlayerPageState extends State<PlayerPage> {
           debugPrint(
             '[gstp-init-timing] example_controller_init='
             '${sw.elapsedMilliseconds}ms '
-            'playerId=${_controller.playerId.value}',
+            'playerId=${_controller.playerId}',
           );
           if (mounted) setState(() => _ready = true);
         })
@@ -169,9 +168,10 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SignalBuilder(
-      builder: (context) {
-        final isFullscreen = _controller.isFullscreen.value;
+    return ListenableBuilder(
+      listenable: _controller,
+      builder: (context, _) {
+        final isFullscreen = _controller.isFullscreen;
         return Scaffold(
           appBar: isFullscreen
               ? null

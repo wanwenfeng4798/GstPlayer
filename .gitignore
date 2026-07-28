@@ -32,7 +32,6 @@ migrate_working_dir/
 /build/
 /native/build/
 /coverage/
-signals.md
 devtools_options.yaml
 
 # macOS GStreamer vendored framework symlink (created by link_vendored_gstreamer.sh)

@@ -15,8 +15,8 @@ void main() {
 
       await controller.initialize();
 
-      expect(controller.initialized.value, isTrue);
-      expect(controller.playerId.value, 42);
+      expect(controller.initialized, isTrue);
+      expect(controller.playerId, 42);
 
       await controller.dispose();
     });

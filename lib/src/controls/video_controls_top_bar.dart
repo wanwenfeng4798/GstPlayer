@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:signals/signals_flutter.dart';
 
 import '../domain/player_events.dart';
 import '../enum/video_rotation.dart';
@@ -25,7 +24,7 @@ class VideoControlsTopBar extends StatelessWidget {
     required this.showOrientationMenu,
   });
 
-  /// 沉浸 signals / Immersive signals.
+  /// 沉浸控件状态 / Immersive controls state.
   final ImmersiveControlsState immersive;
 
   /// 播放控件 model / Playback controls model.
@@ -45,9 +44,10 @@ class VideoControlsTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SignalBuilder(
-      builder: (context) {
-        final immersiveActive = immersive.immersiveActive.value;
+    return ListenableBuilder(
+      listenable: Listenable.merge([immersive, model]),
+      builder: (context, _) {
+        final immersiveActive = immersive.immersiveActive;
         final hasCustomSlots =
             slots.leading != null ||
             slots.title != null ||
@@ -59,9 +59,9 @@ class VideoControlsTopBar extends StatelessWidget {
 
         final showOrientationButton =
             showOrientationMenu &&
-            model.supportsOrientation.value &&
+            model.supportsOrientation &&
             (isMobilePlatform
-                ? immersive.landscapeLocked.value
+                ? immersive.landscapeLocked
                 : immersiveActive || hasCustomSlots);
 
         final actions = <Widget>[
@@ -71,9 +71,10 @@ class VideoControlsTopBar extends StatelessWidget {
               theme: theme,
               icon: Icons.screen_rotation,
               menuBuilder: (context, hideMenu) {
-                return SignalBuilder(
-                  builder: (context) {
-                    final rotation = model.videoRotation.value;
+                return ListenableBuilder(
+                  listenable: model,
+                  builder: (context, _) {
+                    final rotation = model.videoRotation;
                     return SizedBox(
                       width: 280,
                       child: Padding(
@@ -108,9 +109,9 @@ class VideoControlsTopBar extends StatelessWidget {
               },
             ),
           if (slots.showAspectRatioMenu && immersiveActive)
-            SignalBuilder(
+            Builder(
               builder: (context) {
-                final mode = immersive.aspectRatioMode.value;
+                final mode = immersive.aspectRatioMode;
                 final icon = switch (mode) {
                   AspectRatioMode.fit => theme.fitScreenIcon,
                   AspectRatioMode.fill => theme.fillScreenIcon,
@@ -120,18 +121,18 @@ class VideoControlsTopBar extends StatelessWidget {
                   theme: theme,
                   icon: icon,
                   menuBuilder: (context, hideMenu) {
-                    return SignalBuilder(
-                      builder: (context) {
-                        final current = immersive.aspectRatioMode.value;
-                        final labels =
-                            immersive.fullscreen.value.aspectRatioLabels;
+                    return ListenableBuilder(
+                      listenable: immersive,
+                      builder: (context, _) {
+                        final current = immersive.aspectRatioMode;
+                        final labels = immersive.fullscreen.aspectRatioLabels;
                         return Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             for (final mode in AspectRatioMode.values)
                               InkWell(
                                 onTap: () {
-                                  immersive.aspectRatioMode.value = mode;
+                                  immersive.aspectRatioMode = mode;
                                   hideMenu();
                                 },
                                 child: Padding(

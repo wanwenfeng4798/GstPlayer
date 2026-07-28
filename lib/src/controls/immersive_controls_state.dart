@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:signals/signals_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 import '../domain/player_events.dart';
 import '../utils/platform_util.dart';
@@ -44,60 +44,77 @@ class ImmersiveHudSnapshot {
   final bool gesture;
 }
 
-/// 沉浸控件 signals 单一数据源 / Single source of truth for immersive control signals.
+/// 沉浸控件状态单一数据源 / Single source of truth for immersive control state.
 ///
 /// 由 [GstVideoView] 创建并 [dispose]；[VideoControls] 与子组件读取/写入。
 /// Created and disposed by [GstVideoView]; read/written by [VideoControls] and children.
-class ImmersiveControlsState {
+class ImmersiveControlsState extends ChangeNotifier {
   /// 创建沉浸状态 / Creates immersive state.
   ImmersiveControlsState({
     required AspectRatioMode initialAspectRatioMode,
     required VideoControlsFullscreenConfig fullscreen,
-  }) {
-    landscapeLocked = signal(false);
-    aspectRatioMode = signal(initialAspectRatioMode);
-    hud = signal<ImmersiveHudSnapshot?>(null);
-    this.fullscreen = signal(fullscreen);
-    immersiveActive = computed(
-      () => isMobilePlatform
-          ? landscapeLocked.value
-          : this.fullscreen.value.desktopImmersive,
-    );
-  }
+  }) : _aspectRatioMode = initialAspectRatioMode,
+       _fullscreen = fullscreen;
+
+  VideoControlsFullscreenConfig _fullscreen;
+  bool _landscapeLocked = false;
+  AspectRatioMode _aspectRatioMode;
+  ImmersiveHudSnapshot? _hud;
 
   /// 沉浸配置 / Immersive configuration (updatable at runtime).
-  late final FlutterSignal<VideoControlsFullscreenConfig> fullscreen;
+  VideoControlsFullscreenConfig get fullscreen => _fullscreen;
+  set fullscreen(VideoControlsFullscreenConfig value) {
+    if (_fullscreen == value) return;
+    _fullscreen = value;
+    notifyListeners();
+  }
 
   /// 移动端横屏锁定 / Mobile landscape lock (fullscreen).
-  late final FlutterSignal<bool> landscapeLocked;
+  bool get landscapeLocked => _landscapeLocked;
+  set landscapeLocked(bool value) {
+    if (_landscapeLocked == value) return;
+    _landscapeLocked = value;
+    notifyListeners();
+  }
 
   /// 当前铺满模式 / Current aspect ratio mode.
-  late final FlutterSignal<AspectRatioMode> aspectRatioMode;
+  AspectRatioMode get aspectRatioMode => _aspectRatioMode;
+  set aspectRatioMode(AspectRatioMode value) {
+    if (_aspectRatioMode == value) return;
+    _aspectRatioMode = value;
+    notifyListeners();
+  }
 
   /// 瞬时 HUD；`null` 为隐藏 / Transient HUD; null when hidden.
-  late final FlutterSignal<ImmersiveHudSnapshot?> hud;
+  ImmersiveHudSnapshot? get hud => _hud;
+  set hud(ImmersiveHudSnapshot? value) {
+    if (_hud == value) return;
+    _hud = value;
+    notifyListeners();
+  }
 
   /// 沉浸能力是否激活 / Whether immersive features are active.
-  late final ReadonlySignal<bool> immersiveActive;
+  bool get immersiveActive => isMobilePlatform
+      ? _landscapeLocked
+      : _fullscreen.desktopImmersive;
 
   Timer? _hudTimer;
 
   /// 显示 HUD 并在 1 秒后自动隐藏 / Shows HUD and auto-hides after 1 second.
   void showHud(ImmersiveHudSnapshot snap) {
-    hud.value = snap;
+    _hud = snap;
+    notifyListeners();
     _hudTimer?.cancel();
     _hudTimer = Timer(const Duration(seconds: 1), () {
-      hud.value = null;
+      _hud = null;
+      notifyListeners();
     });
   }
 
-  /// 释放全部 signals / Disposes all signals.
+  /// 释放定时器与监听 / Disposes timer and listeners.
+  @override
   void dispose() {
     _hudTimer?.cancel();
-    immersiveActive.dispose();
-    fullscreen.dispose();
-    hud.dispose();
-    aspectRatioMode.dispose();
-    landscapeLocked.dispose();
+    super.dispose();
   }
 }

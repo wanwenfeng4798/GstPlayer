@@ -49,7 +49,7 @@ void main() {
     ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       try {
-        immersive.landscapeLocked.value = true;
+        immersive.landscapeLocked = true;
         await pumpControls(tester);
 
         expect(find.byIcon(Icons.screen_rotation), findsOneWidget);
@@ -70,7 +70,7 @@ void main() {
             showOrientationMenu: false,
           ),
         );
-        immersive.landscapeLocked.value = true;
+        immersive.landscapeLocked = true;
         await pumpControls(tester);
 
         expect(find.byIcon(Icons.screen_rotation), findsNothing);

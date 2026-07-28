@@ -15,7 +15,7 @@ const MethodChannel _textureChannel = MethodChannel(
 ///
 /// Texture lifetime follows the **player**, not the view: call from
 /// [PlaybackSession.dispose] (or when swapping player ids). Do **not** call
-/// from [TextureVideoSurface] dispose — Hero / SignalBuilder remounts would
+/// from [TextureVideoSurface] dispose — Hero / ListenableBuilder remounts would
 /// tear down a still-playing SurfaceProducer (abandoned BufferQueue).
 Future<void> disposeNativePlayerTexture(int playerId) async {
   try {
@@ -181,7 +181,7 @@ class _TextureVideoSurfaceState extends State<TextureVideoSurface> {
   @override
   void dispose() {
     // Texture is owned by the player session — do not disposeTexture here.
-    // View remounts (Hero / SignalBuilder) must keep the SurfaceProducer alive.
+    // View remounts (Hero / ListenableBuilder) must keep the SurfaceProducer alive.
     super.dispose();
   }
 
@@ -207,7 +207,7 @@ class _TextureVideoSurfaceState extends State<TextureVideoSurface> {
     }
 
     // When androidLayoutSize is provided, sync only from create / didUpdateWidget
-    // (not every rebuild) so SignalBuilder ticks cannot thrash SurfaceProducer.setSize
+    // (not every rebuild) so ListenableBuilder ticks cannot thrash SurfaceProducer.setSize
     // mid-playback and clear ANativeWindow while playbin is PLAYING.
     if (widget.androidLayoutSize != null) {
       return texture;

@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
 
-import 'package:signals/signals_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 import 'playback_controls_model.dart';
 
@@ -12,10 +11,10 @@ import 'playback_controls_model.dart';
 /// 避免异步 seek 期间 thumb 弹回旧位置。
 /// While dragging the slider pins to the finger; on release it stays pinned until
 /// [PlaybackControlsModel.position] catches up (or safety timeout), preventing thumb bounce during async seek.
-class ScrubController {
+class ScrubController extends ChangeNotifier {
   /// 创建 scrub 控制器 / Creates a scrub controller.
   ScrubController({required this.model, required this.onInteract}) {
-    _seekWatch = effect(_checkSeekSettled);
+    model.addListener(_checkSeekSettled);
   }
 
   /// 拖拽安全超时（毫秒）/ Drag safety timeout in milliseconds.
@@ -27,11 +26,10 @@ class ScrubController {
   final PlaybackControlsModel model;
   final VoidCallback onInteract;
 
-  final FlutterSignal<double?> _dragValue = signal(null);
+  double? _dragValue;
   bool _dragging = false;
   bool _seeking = false;
   Timer? _seekTimeout;
-  late final void Function() _seekWatch;
 
   double _seekToleranceMs(double durMs) => math.max(400.0, durMs * 0.01);
 
@@ -41,9 +39,9 @@ class ScrubController {
   }
 
   void _checkSeekSettled() {
-    final target = _dragValue.value;
-    final dur = model.duration.value.inMilliseconds.toDouble();
-    final pos = model.position.value.inMilliseconds.toDouble();
+    final target = _dragValue;
+    final dur = model.duration.inMilliseconds.toDouble();
+    final pos = model.position.inMilliseconds.toDouble();
     if (target == null || dur <= 0) return;
     if (!_isNearPosition(target, dur, pos)) return;
     if (_seeking || !_dragging) {
@@ -56,7 +54,10 @@ class ScrubController {
     _seekTimeout = null;
     _dragging = false;
     _seeking = false;
-    _dragValue.value = null;
+    if (_dragValue != null) {
+      _dragValue = null;
+      notifyListeners();
+    }
   }
 
   void _armDragSafetyTimeout() {
@@ -76,13 +77,13 @@ class ScrubController {
 
   /// 滑块当前应显示的 0.0–1.0 分数 / Fraction 0.0–1.0 the slider should display.
   double sliderValue(double durMs, double posMs) {
-    final target = _dragValue.value;
+    final target = _dragValue;
     if (target != null) return target;
     return durMs > 0 ? (posMs / durMs).clamp(0.0, 1.0) : 0.0;
   }
 
   /// 用户是否在拖拽或异步 seek 尚未落定 / Whether user is dragging or async seek is settling.
-  bool get isScrubbing => _dragValue.value != null;
+  bool get isScrubbing => _dragValue != null;
 
   /// 开始拖拽 / Seek drag started.
   void onSeekStart() {
@@ -96,7 +97,8 @@ class ScrubController {
     if (durMs <= 0) return;
     _dragging = true;
     onInteract();
-    _dragValue.value = v;
+    _dragValue = v;
+    notifyListeners();
     _armDragSafetyTimeout();
   }
 
@@ -104,8 +106,9 @@ class ScrubController {
   void onSeekEnd(double v, double durMs) {
     if (durMs <= 0) return;
     _dragging = false;
-    _dragValue.value = v;
-    final pos = model.position.value.inMilliseconds.toDouble();
+    _dragValue = v;
+    notifyListeners();
+    final pos = model.position.inMilliseconds.toDouble();
     if (_isNearPosition(v, durMs, pos)) {
       _clearSeek();
       return;
@@ -115,10 +118,11 @@ class ScrubController {
     _armSeekSettleTimeout();
   }
 
-  /// 释放 effect 与 signal / Disposes effect and signal.
+  /// 解除 model 监听并释放 / Removes model listener and disposes.
+  @override
   void dispose() {
     _seekTimeout?.cancel();
-    _seekWatch();
-    _dragValue.dispose();
+    model.removeListener(_checkSeekSettled);
+    super.dispose();
   }
 }

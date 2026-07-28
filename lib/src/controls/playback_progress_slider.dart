@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:signals/signals_flutter.dart';
 
 import 'playback_controls_model.dart';
 import 'scrub_controller.dart';
@@ -31,7 +30,7 @@ class PlaybackSliderSnapshot {
 typedef PlaybackProgressSliderBuilder =
     Widget Function(BuildContext context, PlaybackSliderSnapshot snapshot);
 
-/// 共享进度条接线：signals、[ScrubController] 钉住与落定动画 / Shared progress slider wiring: signals, scrub pinning, settle animation.
+/// 共享进度条接线：[Listenable]、[ScrubController] 钉住与落定动画 / Shared progress slider wiring: listenables, scrub pinning, settle animation.
 class PlaybackProgressSlider extends StatelessWidget {
   const PlaybackProgressSlider({
     super.key,
@@ -46,11 +45,12 @@ class PlaybackProgressSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SignalBuilder(
-      builder: (context) {
-        final dur = model.duration.value.inMilliseconds.toDouble();
-        final pos = model.position.value.inMilliseconds.toDouble();
-        final seekable = model.isSeekable.value;
+    return ListenableBuilder(
+      listenable: Listenable.merge([model, scrub]),
+      builder: (context, _) {
+        final dur = model.duration.inMilliseconds.toDouble();
+        final pos = model.position.inMilliseconds.toDouble();
+        final seekable = model.isSeekable;
         final enabled = seekable && dur > 0;
         final value = scrub.sliderValue(dur, pos);
 

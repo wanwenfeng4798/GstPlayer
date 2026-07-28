@@ -2,7 +2,6 @@ import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:signals/signals_flutter.dart';
 
 import '../domain/player_events.dart';
 import '../theme/video_controls_theme.dart';
@@ -28,24 +27,25 @@ class CenterButton extends StatelessWidget {
   final VoidCallback onInteract;
 
   /// 沉浸 HUD；非空时隐藏中央按钮避免与正中 HUD 重叠 / Hides button while center HUD is shown.
-  final ReadonlySignal<ImmersiveHudSnapshot?>? hud;
+  final ImmersiveHudSnapshot? hud;
 
   static bool _hideForHud(ImmersiveHudSnapshot snap) =>
       isMobilePlatform || snap.kind == ImmersiveHudKind.playPause;
 
   @override
   Widget build(BuildContext context) {
-    return SignalBuilder(
-      builder: (context) {
-        final snap = hud?.value;
+    return ListenableBuilder(
+      listenable: model,
+      builder: (context, _) {
+        final snap = hud;
         if (snap != null && _hideForHud(snap)) {
           return SizedBox(
             width: theme.centerButtonSize,
             height: theme.centerButtonSize,
           );
         }
-        final PlayerState state = model.state.value;
-        final buffering = model.bufferingPercent.value;
+        final PlayerState state = model.state;
+        final buffering = model.bufferingPercent;
         if (buffering < 100 || state == PlayerState.buffering) {
           return SizedBox(
             width: theme.centerButtonSize,

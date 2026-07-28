@@ -207,7 +207,7 @@ void main() {
       try {
         await pumpControls(tester);
 
-        immersive.aspectRatioMode.value = AspectRatioMode.fill;
+        immersive.aspectRatioMode = AspectRatioMode.fill;
         await tester.pump();
 
         expect(find.byIcon(Icons.crop_free), findsOneWidget);
@@ -220,7 +220,7 @@ void main() {
     testWidgets('mobile tap toggles controls while immersive', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       try {
-        immersive.landscapeLocked.value = true;
+        immersive.landscapeLocked = true;
         await pumpControls(tester);
 
         final controlsOpacity = tester.widget<AnimatedOpacity>(
@@ -251,7 +251,7 @@ void main() {
         await tester.pump();
 
         expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
-        expect(immersive.landscapeLocked.value, isTrue);
+        expect(immersive.landscapeLocked, isTrue);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

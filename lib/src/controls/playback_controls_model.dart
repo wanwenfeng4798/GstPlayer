@@ -1,4 +1,4 @@
-import 'package:signals/signals_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 import '../enum/video_rotation.dart';
 import '../domain/player_events.dart';
@@ -7,23 +7,23 @@ import '../domain/player_events.dart';
 ///
 /// 由 [GstPlayerController] 实现；[VideoControls] 及其子组件依赖此接口。
 /// Implemented by [GstPlayerController]; [VideoControls] and child widgets depend on it.
-abstract class PlaybackControlsModel {
-  ReadonlySignal<PlayerState> get state;
-  ReadonlySignal<int> get bufferingPercent;
-  ReadonlySignal<bool> get isPlaying;
-  ReadonlySignal<Duration> get position;
-  ReadonlySignal<Duration> get duration;
-  ReadonlySignal<bool> get isSeekable;
-  ReadonlySignal<bool> get muted;
-  ReadonlySignal<double> get volume;
-  ReadonlySignal<bool> get looping;
-  ReadonlySignal<double> get speed;
+abstract class PlaybackControlsModel implements Listenable {
+  PlayerState get state;
+  int get bufferingPercent;
+  bool get isPlaying;
+  Duration get position;
+  Duration get duration;
+  bool get isSeekable;
+  bool get muted;
+  double get volume;
+  bool get looping;
+  double get speed;
 
   /// 当前 pipeline 是否支持视频旋转 / Whether rotation is supported.
-  ReadonlySignal<bool> get supportsOrientation;
+  bool get supportsOrientation;
 
   /// 当前视频顺时针旋转角度 / Current clockwise video rotation.
-  ReadonlySignal<VideoRotation> get videoRotation;
+  VideoRotation get videoRotation;
 
   Future<void> togglePlayPause();
   Future<void> toggleMuted();

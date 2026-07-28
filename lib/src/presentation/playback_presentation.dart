@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:signals/signals_flutter.dart';
 
 import '../controls/buffering_indicator.dart';
 import '../enum/video_controls_style.dart';
@@ -13,8 +12,8 @@ import 'playback_presentation_model.dart';
 
 /// 深度呈现模块：平台表面嵌入、宽高比布局、缓冲 UI / Deep presentation: platform surface embed, aspect layout, buffering chrome.
 ///
-/// 根据 [model.playerId] 路由至 [TextureVideoSurface]，并用 [SignalBuilder] 响应 [aspectRatio] 变化。
-/// Routes to [TextureVideoSurface] from [model.playerId] and reacts to [aspectRatio] via [SignalBuilder].
+/// 根据 [model.playerId] 路由至 [TextureVideoSurface]，并用 [ListenableBuilder] 响应 [aspectRatio] 变化。
+/// Routes to [TextureVideoSurface] from [model.playerId] and reacts to [aspectRatio] via [ListenableBuilder].
 ///
 /// 画面旋转由 native GStreamer（`videoflip` / `glvideoflip`）完成，此处不变换 Texture。
 /// Video rotation is applied in the native GStreamer sink bin; this layer does not transform Texture.
@@ -23,7 +22,7 @@ class PlaybackPresentation extends StatelessWidget {
   ///
   /// # 参数 / Parameters
   /// - `model` — 实现 [PlaybackPresentationModel] 的控制器 / controller implementing the model
-  /// - `aspectRatioMode` — fit / fill / stretch 布局策略 signal / layout strategy signal
+  /// - `aspectRatioMode` — fit / fill / stretch 布局策略 / layout strategy
   /// - `controlsStyle` — 缓冲指示器 Material/Cupertino 风格 / buffering indicator style
   const PlaybackPresentation({
     super.key,
@@ -35,62 +34,59 @@ class PlaybackPresentation extends StatelessWidget {
   final PlaybackPresentationModel model;
 
   /// letterbox / 裁剪 / 拉伸；Texture 在 Dart 布局；Android 亦转发至 `glimagesink` / Letterbox, crop, or stretch; Dart layout plus Android sink forward.
-  final ReadonlySignal<AspectRatioMode> aspectRatioMode;
+  final AspectRatioMode aspectRatioMode;
 
   /// 缓冲指示器视觉风格 / Visual style for the buffering indicator.
   final VideoControlsStyle controlsStyle;
 
   @override
   Widget build(BuildContext context) {
-    return SignalBuilder(
-      builder: (context) {
-        final playerId = model.playerId.value;
+    return ListenableBuilder(
+      listenable: model,
+      builder: (context, _) {
+        final playerId = model.playerId;
         if (playerId == null) return const SizedBox.shrink();
         final handle = VideoSurfaceHandle.fromPlayerId(playerId);
-        final ratio = model.aspectRatio.value;
+        final ratio = model.aspectRatio;
+        final mode = aspectRatioMode;
 
-        return SignalBuilder(
-          builder: (context) {
-            final mode = aspectRatioMode.value;
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                _AspectRatioModeSync(
-                  model: model,
-                  aspectRatioMode: mode,
-                  // LayoutBuilder for viewport; buffer size = fitted video rect
-                  // (video aspect), not raw viewport (portrait would squash).
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final viewport = Size(
-                        constraints.maxWidth,
-                        constraints.maxHeight,
-                      );
-                      final bufferLogical = androidBufferLogicalSize(
-                        aspectRatio: ratio,
-                        mode: mode,
-                        viewport: viewport,
-                      );
-                      // Size.zero → null so TextureVideoSurface can MediaQuery-fallback.
-                      final androidLayout =
-                          bufferLogical.width > 1 && bufferLogical.height > 1
-                          ? bufferLogical
-                          : null;
-                      return _VideoAspectLayout(
-                        aspectRatio: ratio,
-                        mode: mode,
-                        child: TextureVideoSurface(
-                          handle: handle,
-                          androidLayoutSize: androidLayout,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                _BufferingOverlay(model: model, controlsStyle: controlsStyle),
-              ],
-            );
-          },
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            _AspectRatioModeSync(
+              model: model,
+              aspectRatioMode: mode,
+              // LayoutBuilder for viewport; buffer size = fitted video rect
+              // (video aspect), not raw viewport (portrait would squash).
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final viewport = Size(
+                    constraints.maxWidth,
+                    constraints.maxHeight,
+                  );
+                  final bufferLogical = androidBufferLogicalSize(
+                    aspectRatio: ratio,
+                    mode: mode,
+                    viewport: viewport,
+                  );
+                  // Size.zero → null so TextureVideoSurface can MediaQuery-fallback.
+                  final androidLayout =
+                      bufferLogical.width > 1 && bufferLogical.height > 1
+                      ? bufferLogical
+                      : null;
+                  return _VideoAspectLayout(
+                    aspectRatio: ratio,
+                    mode: mode,
+                    child: TextureVideoSurface(
+                      handle: handle,
+                      androidLayoutSize: androidLayout,
+                    ),
+                  );
+                },
+              ),
+            ),
+            _BufferingOverlay(model: model, controlsStyle: controlsStyle),
+          ],
         );
       },
     );
@@ -198,10 +194,11 @@ class _BufferingOverlay extends StatelessWidget {
             ? VideoControlsTheme.cupertino()
             : VideoControlsTheme.material());
 
-    return SignalBuilder(
-      builder: (context) {
-        final buffering = model.bufferingPercent.value;
-        final state = model.state.value;
+    return ListenableBuilder(
+      listenable: model,
+      builder: (context, _) {
+        final buffering = model.bufferingPercent;
+        final state = model.state;
         if (buffering >= 100 && state != PlayerState.buffering) {
           return const SizedBox.shrink();
         }
@@ -248,8 +245,8 @@ class _AspectRatioModeSyncState extends State<_AspectRatioModeSync> {
   }
 
   void _sync() {
-    if (widget.model.playerId.value == null) return;
-    if (!widget.model.initialized.value) return;
+    if (widget.model.playerId == null) return;
+    if (!widget.model.initialized) return;
     widget.model.setAspectRatioMode(widget.aspectRatioMode);
   }
 

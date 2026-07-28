@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:signals/signals_flutter.dart';
 import 'package:gstplayer/src/presentation/playback_presentation.dart';
 import 'package:gstplayer/src/domain/player_events.dart';
 import 'package:gstplayer/src/surface/texture_surface.dart';
@@ -16,7 +15,7 @@ void main() {
     const textureChannel = MethodChannel('gstplayer/texture');
 
     late FakePlaybackPresentationModel model;
-    late FlutterSignal<AspectRatioMode> aspectRatioMode;
+    late AspectRatioMode aspectRatioMode;
     var createTextureCount = 0;
     var disposeTextureCount = 0;
 
@@ -55,12 +54,11 @@ void main() {
             }
           });
       model = FakePlaybackPresentationModel();
-      aspectRatioMode = signal(AspectRatioMode.fit);
+      aspectRatioMode = AspectRatioMode.fit;
     });
 
     tearDown(() {
       model.dispose();
-      aspectRatioMode.dispose();
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(textureChannel, null);
     });
@@ -76,13 +74,13 @@ void main() {
         expect(createTextureCount, 1);
         expect(disposeTextureCount, 0);
 
-        aspectRatioMode.value = AspectRatioMode.fill;
-        await tester.pumpAndSettle();
+        aspectRatioMode = AspectRatioMode.fill;
+        await pumpPresentation(tester);
         expect(createTextureCount, 1);
         expect(disposeTextureCount, 0);
 
-        aspectRatioMode.value = AspectRatioMode.stretch;
-        await tester.pumpAndSettle();
+        aspectRatioMode = AspectRatioMode.stretch;
+        await pumpPresentation(tester);
         expect(createTextureCount, 1);
         expect(disposeTextureCount, 0);
       } finally {
@@ -103,8 +101,8 @@ void main() {
         expect(createTextureCount, 1);
         expect(disposeTextureCount, 0);
 
-        aspectRatioMode.value = AspectRatioMode.fill;
-        await tester.pumpAndSettle();
+        aspectRatioMode = AspectRatioMode.fill;
+        await pumpPresentation(tester);
         expect(createTextureCount, 1);
         expect(disposeTextureCount, 0);
       } finally {

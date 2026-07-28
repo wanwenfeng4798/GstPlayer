@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:signals/signals_flutter.dart';
 
 import '../utils/platform_util.dart';
 import 'immersive_controls_state.dart';
@@ -21,15 +20,16 @@ class ImmersiveHud extends StatelessWidget {
   /// 创建 HUD overlay / Creates the HUD overlay.
   const ImmersiveHud({super.key, required this.immersive});
 
-  /// 沉浸 signals / Immersive signals.
+  /// 沉浸控件状态 / Immersive controls state.
   final ImmersiveControlsState immersive;
 
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: SignalBuilder(
-        builder: (context) {
-          final snap = immersive.hud.value;
+      child: ListenableBuilder(
+        listenable: immersive,
+        builder: (context, _) {
+          final snap = immersive.hud;
           return AnimatedOpacity(
             opacity: snap == null ? 0 : 1,
             duration: const Duration(milliseconds: 150),

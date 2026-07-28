@@ -1,0 +1,47 @@
+name: gstplayer
+description: "Cross-platform Flutter video player plugin decoding local/network video with GStreamer (native C core + Dart FFI) and rendering into Flutter external Texture widgets."
+version: 0.0.1
+homepage: https://github.com/wanwenfeng4798/GstPlayer
+repository: https://github.com/wanwenfeng4798/GstPlayer
+issue_tracker: https://github.com/wanwenfeng4798/GstPlayer/issues
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+dependencies:
+  chat_context_menu: ^3.0.1
+  flutter:
+    sdk: flutter
+  ffi: ^2.2.0
+  screen_brightness: ^2.1.11
+  signals: ^7.1.0
+  theme_extensions_builder_annotation: ^7.4.0
+
+dev_dependencies:
+  ffigen: ^21.0.0
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  integration_test:
+    sdk: flutter
+  build_runner: ^2.15.0
+  theme_extensions_builder: ^7.4.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.gstplayer
+        pluginClass: GstPlayerPlugin
+        ffiPlugin: true
+      ios:
+        pluginClass: GstPlayerPlugin
+        ffiPlugin: true
+      macos:
+        pluginClass: GstPlayerPlugin
+        ffiPlugin: true
+      windows:
+        pluginClass: GstPlayerPluginCApi
+      linux:
+        pluginClass: GstPlayerPlugin

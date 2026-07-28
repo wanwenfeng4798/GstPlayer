@@ -1,0 +1,21 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+        package="com.gstplayer">
+    <!-- GStreamer loads native code (the umbrella libgstreamer_android.so) that
+         must be present on the filesystem for the dynamic loader / GStreamer's
+         runtime. Request uncompressed, extracted native libs so this propagates
+         to any consuming app via manifest merging. -->
+    <application android:extractNativeLibs="true">
+        <!-- Runs at process startup (before Application.onCreate and the Flutter
+             engine) to load libgstreamer_android.so via System.loadLibrary (so
+             its JNI_OnLoad captures the JavaVM) and call GStreamer.init(context)
+             (which sets the app Context/ClassLoader that the androidmedia
+             MediaCodec decoders need). Without this the only bundled decoders
+             never register and playback fails with not-linked / No streams to
+             output. authorities uses ${applicationId} to stay unique per app. -->
+        <provider
+            android:name="com.gstplayer.GStreamerInitProvider"
+            android:authorities="${applicationId}.gstp.gstreamer-init"
+            android:exported="false"
+            android:initOrder="199" />
+    </application>
+</manifest>

@@ -2,6 +2,16 @@
 # Shared path resolution for macOS GStreamer integration.
 # Source this file from other scripts; do not execute directly.
 
+if [[ -z "${HOME:-}" ]]; then
+  if command -v python3 >/dev/null 2>&1; then
+    HOME="$(python3 -c 'import os, pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
+  else
+    user="$(id -un)"
+    HOME="$(eval echo "~${user}")"
+  fi
+  export HOME
+fi
+
 GST_VER="${GST_VER:-1.28.5}"
 
 _default_cache_root="${HOME}/Library/Caches/gstplayer/gstreamer/${GST_VER}"

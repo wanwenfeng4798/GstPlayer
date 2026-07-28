@@ -14,7 +14,7 @@ void main() {
     setUp(() {
       interactCount = 0;
       model = FakePlaybackControlsModel(
-        initialDuration: const Duration(seconds: 100),
+        duration: const Duration(seconds: 100),
         initialPosition: const Duration(seconds: 10),
       );
       scrub = ScrubController(model: model, onInteract: () => interactCount++);

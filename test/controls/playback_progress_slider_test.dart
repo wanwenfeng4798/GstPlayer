@@ -14,7 +14,7 @@ void main() {
 
     setUp(() {
       model = FakePlaybackControlsModel(
-        initialDuration: const Duration(seconds: 60),
+        duration: const Duration(seconds: 60),
         initialPosition: const Duration(seconds: 15),
       );
       scrub = ScrubController(model: model, onInteract: () {});
@@ -60,7 +60,7 @@ void main() {
     });
 
     testWidgets('disables callbacks when not seekable', (tester) async {
-      final nonSeekable = FakePlaybackControlsModel(initialSeekable: false);
+      final nonSeekable = FakePlaybackControlsModel(isSeekable: false);
       final localScrub = ScrubController(model: nonSeekable, onInteract: () {});
       addTearDown(() {
         localScrub.dispose();

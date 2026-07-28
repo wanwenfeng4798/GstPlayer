@@ -15,6 +15,11 @@ Flutter external **`Texture`** widgets via a custom native bridge (GStreamer
 
 Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 
+> **Android / iOS / macOS:** GStreamer SDK is downloaded automatically on the
+> first build. **Android** also needs a local [Rust](#prerequisites) toolchain
+> (for HTTPS / reqwest). **Windows / Linux:** install GStreamer once on the
+> machine (see below).
+
 > Scope: video playback only — open / play / pause / stop / seek / volume /
 > mute / speed / looping, plus state / position / duration / resolution /
 > buffering / EOS / error reporting. It does **not** do recording, streaming
@@ -25,13 +30,13 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 - [Features](#features)
 - [Platform support](#platform-support)
 - [When to use kinetic_player instead](#when-to-use-kinetic_player-instead)
+- [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Quick start](#quick-start)
-- [Integrating into your app (read this first)](#integrating-into-your-app-read-this-first)
-- [Permissions & platform configuration](#permissions--platform-configuration)
-- [Apple Release / FFI symbols (iOS & macOS)](#apple-release--ffi-symbols-ios--macos)
+- [Usage notes](#usage-notes)
+- [Network permissions](#network-permissions)
+- [Windows & Linux host SDK](#windows--linux-host-sdk)
 - [API reference](#api-reference)
-- [Native GStreamer setup (per platform)](#native-gstreamer-setup-per-platform)
 - [Architecture](#architecture)
 - [Troubleshooting](#troubleshooting)
 - [Repository](#repository)
@@ -52,55 +57,133 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 
 ## Platform support
 
-| Platform | Min version | Architectures | GStreamer runtime |
+| Platform | Min version | Architectures | GStreamer |
 | --- | --- | --- | --- |
-| Android | API 24 (7.0) | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` | Auto-downloaded Android SDK + ndk-build at compile time |
-| iOS | 13.0 | Physical `arm64` device (no Simulator) | GStreamer iOS SDK (static framework) |
-| macOS | 10.13 | x86_64 / arm64 | Homebrew or `GStreamer.framework` |
-| Windows | 10+ | x86_64 | GStreamer MSVC runtime |
-| Linux | — | x86_64 | System GStreamer + GTK 3 |
+| Android | API 24 (7.0) | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` | **Auto** on first build |
+| iOS | 13.0 | Physical `arm64` device (**no Simulator**) | **Auto** on first SPM resolve / build |
+| macOS | 10.13 | x86_64 / arm64 | **Auto** on first `pod install` / SPM resolve |
+| Windows | 10+ | x86_64 | Install once on the machine ([below](#windows--linux-host-sdk)) |
+| Linux | — | x86_64 | Install once on the machine ([below](#windows--linux-host-sdk)) |
 
-> The Apple-Silicon iOS **Simulator** is not supported because the prebuilt iOS
-> SDK does not ship an arm64 simulator slice.
->
-> On Apple-Silicon macOS, the default Homebrew install is arm64-only. The plugin
-> builds arm64-only in Homebrew debug mode; **Mac App Store / universal release**
-> auto-downloads the official universal `GStreamer.framework` to the user cache
-> during `pod install`.
+> Apple Silicon iOS **Simulator** is not supported (no arm64 simulator slice in the
+> official iOS SDK).
 
 ## When to use kinetic_player instead
 
-If your app targets **Android / iOS / macOS / Web**, prefer
+If your app targets **Android / iOS / macOS / Web** and you want a **smaller**
+binary that leans on each platform’s native player, prefer
 [**kinetic_player**](https://pub.dev/packages/kinetic_player)
-([GitHub](https://github.com/wanwenfeng4798/kinetic_player)) instead of this
-package. It ships a smaller binary footprint and uses each platform’s native
-playback stack more directly.
+([GitHub](https://github.com/wanwenfeng4798/kinetic_player)).
 
-Use **gstplayer** when you need a **GStreamer**-based pipeline (for example
+Use **gstplayer** when you need a **GStreamer** pipeline (especially
 **Windows / Linux**, or codecs / protocols that benefit from GStreamer).
+
+## Prerequisites
+
+Install these **once** on the machine that builds the app. The GStreamer SDK
+itself is still auto-downloaded for Android / iOS / macOS on first build.
+
+### All platforms
+
+- [Flutter](https://docs.flutter.dev/get-started/install) matching this plugin
+  (`sdk: ^3.12.2`, `flutter: ">=3.44.0"` in `pubspec.yaml`)
+- Network access on the **first** Android / iOS / macOS build (GStreamer cache)
+
+### Android
+
+HTTPS (`reqwesthttpsrc`) is built from Rust during the umbrella native build:
+
+```bash
+# Rust toolchain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup default stable
+
+# Android targets used by this plugin
+rustup target add \
+  aarch64-linux-android \
+  armv7-linux-androideabi \
+  i686-linux-android \
+  x86_64-linux-android
+```
+
+Also required:
+
+- Android SDK + NDK (normal Flutter Android setup; NDK is used by Gradle)
+- `pkg-config` on `PATH` (Cargo reads GStreamer `.pc` files from the SDK cache)
+
+  - macOS: `brew install pkgconf`
+  - Linux: `sudo apt install pkg-config`
+  - Windows: e.g. `choco install pkgconfiglite`
+
+### iOS
+
+- macOS with [Xcode](https://developer.apple.com/xcode/) (Command Line Tools)
+- A **physical** iPhone / iPad (Simulator is not supported)
+- First build downloads the GStreamer iOS SDK automatically (~500MB)
+
+### macOS
+
+- [Xcode](https://developer.apple.com/xcode/)
+- First build downloads the official universal `GStreamer.framework` automatically
+- If Flutter uses SPM for plugins: one-time Podfile embed helper (see
+  [Installation](#installation))
+
+### Windows / Linux
+
+Host GStreamer + `pkg-config` — see [Windows & Linux host SDK](#windows--linux-host-sdk).
 
 ## Installation
 
-Add the package from [pub.dev](https://pub.dev/packages/gstplayer)
-to your app's `pubspec.yaml`:
+### 1. Add the dependency
 
 ```yaml
 dependencies:
   gstplayer: ^0.0.1
 ```
 
-Then:
-
 ```bash
 flutter pub get
 ```
 
-The native player core (`native/`) is **compiled from C** during your app build
-(CMake / CocoaPods / NDK). No Rust toolchain is required. Each platform needs the
-GStreamer SDK at build time (and its runtime libraries at run time where
-applicable). On Android the official GStreamer Android SDK is **downloaded
-automatically** on the first build and the umbrella `libgstreamer_android.so` is
-produced via ndk-build (see [Android](#android-all-abis) below).
+### 2. Run your app
+
+```bash
+flutter run
+```
+
+That is enough for **Android / iOS / macOS** (after [Prerequisites](#prerequisites)):
+
+- The first build downloads the official GStreamer SDK into
+  `~/Library/Caches/gstplayer/...` (needs network once; no sudo).
+- Later builds reuse the cache.
+- No manual GStreamer **installer** for those platforms; Android still needs
+  Rust / `pkg-config` as listed above.
+
+**iOS:** use a physical device (`flutter run -d <device>`). Simulator is not supported.
+
+**macOS (one-time, only if Flutter uses SPM for plugins):** add this to
+`macos/Podfile` `post_install` so the slim runtime is copied into the `.app`:
+
+```ruby
+require 'json'
+plugins = JSON.parse(File.read(File.expand_path('../.flutter-plugins-dependencies', __dir__)))
+gstp = plugins.dig('plugins', 'macos')&.find { |p| p['name'] == 'gstplayer' }
+raise 'gstplayer not found; run flutter pub get first' unless gstp
+require File.expand_path('macos/gstreamer_podfile_helper.rb', gstp['path'])
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_macos_build_settings(target)
+  end
+  install_gstreamer_embed_script!(installer)
+end
+```
+
+Then `cd macos && pod install` once. CocoaPods-only hosts already get the framework
+via `vendored_frameworks` and can skip this.
+
+**Windows / Linux:** install the host GStreamer SDK once — see
+[Windows & Linux host SDK](#windows--linux-host-sdk).
 
 ## Quick start
 
@@ -113,7 +196,6 @@ import 'package:gstplayer/gstplayer.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Kickoff only (under 50ms); gst_init continues in the background.
-  // create / open / captureThumbnail await ensureReady() for you.
   unawaited(GstPlayer.initialize());
   runApp(const MyApp());
 }
@@ -140,7 +222,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   void dispose() {
-    controller.dispose(); // always dispose to release the native player
+    controller.dispose();
     super.dispose();
   }
 
@@ -153,269 +235,55 @@ class _PlayerPageState extends State<PlayerPage> {
 }
 ```
 
-Sources can also be a local file or a bundled asset:
+Other sources:
 
 ```dart
 await controller.open(const VideoSource.file('/path/to/video.mp4'));
 await controller.open(const VideoSource.asset('assets/sample.mp4'));
 ```
 
-Bundled assets are loaded via Dart FFI bytes into a native temp file (not AppSrc).
+## Usage notes
 
-## Integrating into your app (read this first)
+1. Call `GstPlayer.initialize()` once early (`unawaited` before `runApp` is fine).
+2. One `GstPlayerController` per surface; always `dispose()` it.
+3. Read playback state inside `ListenableBuilder` / `addListener`.
+4. First Android / iOS / macOS build needs network for the SDK cache.
 
-1. **Start `GstPlayer.initialize()` once** early (typically in `main()`
-   after `WidgetsFlutterBinding.ensureInitialized()`). Prefer
-   `unawaited(GstPlayer.initialize()); runApp(...);` — kickoff is
-   under 50ms and does not wait for `gst_init`. Use
-   `GstPlayer.ensureReady()` only if you need a hard wait; controller
-   `create` / `captureThumbnail` already await it. Idempotent and safe after a
-   hot restart.
-2. **Create and `initialize()` a `GstPlayerController` per video surface.** The
-   controller owns a native player; it is created during `initialize()`.
-3. **Always `dispose()` the controller** when the surface goes away — this stops
-   the pipeline, cancels the event stream, and releases native resources. Leaking
-   a controller leaks a native pipeline.
-4. **Read state inside `ListenableBuilder` (or via `addListener`).** Every state
-   field is a plain getter on a `ChangeNotifier`; reading it outside a listener /
-   builder will not rebuild your widget when it changes.
-5. **Android builds all four ABIs by default** (`arm64-v8a`, `armeabi-v7a`, `x86`,
-   `x86_64`). You may optionally narrow this with `abiFilters` to shrink your APK
-   (see below). The first Android build downloads the GStreamer Android SDK and
-   runs ndk-build (requires network).
-6. **All platforms require the GStreamer SDK at build time** (and its runtime
-   libraries at run time where applicable). See
-   [Native GStreamer setup](#native-gstreamer-setup-per-platform).
+## Network permissions
 
-## Permissions & platform configuration
+Local files and Flutter assets need no extra setup.
 
-Playback of **network** video requires per-platform configuration. Local files
-and assets work with no extra permissions (aside from normal file access).
-
-### Android
-
-Add the internet permission to your app's
-`android/app/src/main/AndroidManifest.xml` (outside `<application>`):
-
-```xml
-<uses-permission android:name="android.permission.INTERNET"/>
-```
-
-To allow plaintext `http://` (Android blocks cleartext by default on API 28+),
-set `usesCleartextTraffic` on `<application>`:
-
-```xml
-<application
-    android:usesCleartextTraffic="true"
-    ...>
-```
-
-The plugin ships all four ABIs (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`), so
-no `abiFilters` are required. If you want to shrink your APK to only the ABIs you
-ship, narrow the set in `android/app/build.gradle(.kts)`:
-
-```kotlin
-android {
-    defaultConfig {
-        ndk {
-            // Optional: keep only the ABIs you need (arm64-v8a covers most
-            // modern phones; x86_64 is useful for emulators).
-            abiFilters += listOf("arm64-v8a", "x86_64")
-        }
-    }
-}
-```
-
-Prefer per-ABI APKs or an Android App Bundle so each device only downloads its
-own ABI — the GStreamer runtime packaged per ABI is large (~13–18 MB each).
-
-> The plugin ships `x86` (32-bit) libraries for completeness, but current Flutter
-> no longer builds 32-bit x86 apps, so in practice `arm64-v8a`, `armeabi-v7a`,
-> and `x86_64` are what a Flutter app will actually package.
-
-Notes:
-
-- The plugin's `AndroidManifest.xml` already sets
-  `android:extractNativeLibs="true"`; it merges into your app so
-  `libgstreamer_android.so` is extracted to disk for the dynamic loader.
-- Some transitive plugins require a recent `compileSdk`. If AAR metadata checks
-  fail, force `compileSdk = 36` across subprojects (the example does this in its
-  `android/build.gradle.kts`).
-
-#### Release builds (R8 / ProGuard)
-
-Video renders into a Flutter **`Texture`** backed by `SurfaceProducer`; GStreamer
-`glimagesink` binds via `VideoOverlay` to the producer's `Surface`. The plugin
-ships consumer ProGuard rules in its AAR
-(`android/proguard-rules.pro`). Keep GStreamer JNI helpers:
-
-```proguard
--keep class org.freedesktop.gstreamer.** { *; }
-```
-
-Ensure your `release` build type references `proguard-rules.pro` when
-`isMinifyEnabled = true`.
-
-
-### iOS
-
-- **Minimum deployment target: iOS 13.0.** Physical `arm64` device only (no
-  Simulator).
-- GStreamer performs networking with its own sockets + OpenSSL, **not** through
-  `NSURLSession`, so App Transport Security (ATS) does **not** block playback and
-  no `NSAppTransportSecurity` entry is required for GStreamer streams (both
-  `http://` and `https://` work).
-- The static iOS framework's plugins and TLS backend are registered in the C
-  core (`native/src/ios_plugins.c`, `native/src/ios_tls.c`, called from
-  `native/src/runtime.c`). HTTPS certificate
-  verification is intentionally relaxed (`ssl-strict = false`) so streams from
-  hosts without a bundled CA chain still play — see the
-  [security note](#security-note-on-https).
-
-### macOS
-
-The Mac App Store requires **App Sandbox**. At runtime the C core configures
-`GST_PLUGIN_SYSTEM_PATH` and `GIO_MODULE_DIR` for the embedded framework.
-
-**Important:** when Flutter integrates this plugin via **Swift Package Manager**
-(SPM — default when `Package.swift` is present), CocoaPods
-`vendored_frameworks` does **not** run, so GStreamer is **not** copied into the
-`.app` automatically. Without an embed step you get:
-
-```text
-dyld: Library not loaded: @rpath/GStreamer.framework/Versions/1.0/lib/GStreamer
-```
-
-#### Embed GStreamer (required for SPM hosts with a Podfile)
-
-In `macos/Podfile`, resolve the plugin and call the helper from `post_install`:
-
-```ruby
-require 'json'
-plugins = JSON.parse(File.read(File.expand_path('../.flutter-plugins-dependencies', __dir__)))
-gstp = plugins.dig('plugins', 'macos')&.find { |p| p['name'] == 'gstplayer' }
-raise 'gstplayer not found; run flutter pub get first' unless gstp
-require File.expand_path('macos/gstreamer_podfile_helper.rb', gstp['path'])
-
-# ...
-
-post_install do |installer|
-  installer.pods_project.targets.each do |target|
-    flutter_additional_macos_build_settings(target)
-  end
-  install_gstreamer_embed_script!(installer)
-end
-```
-
-Then `cd macos && pod install`. This adds an Xcode Run Script that copies the
-slim runtime into `YourApp.app/Contents/Frameworks/GStreamer.framework`.
-
-Pure-SPM apps without a Podfile (this repo’s `example`): keep the existing
-Runner Run Script that calls `macos/scripts/embed_gstreamer_framework.sh`.
-
-Add at minimum to `macos/Runner/DebugProfile.entitlements` and
-`Release.entitlements`:
-
-```xml
-<key>com.apple.security.app-sandbox</key>
-<true/>
-<key>com.apple.security.network.client</key>
-<true/>
-```
-
-See [Mac App Store release (macOS)](#mac-app-store-release-macos) for the full
-checklist.
-
-For local dev without the official framework, set
-`GSTPLAYER_ALLOW_HOMEBREW_GSTREAMER=1` (not suitable for store submission).
-
-### Apple Release / FFI symbols (iOS & macOS)
-
-On Apple platforms Dart loads the C player via `DynamicLibrary.process()` and
-resolves `gstp_*` with `dlsym`. Release / Archive builds can strip those global
-symbols, which surfaces as:
-
-```text
-Failed to lookup symbol 'gstp_init': dlsym(RTLD_DEFAULT, gstp_init): symbol not found
-```
-
-The plugin already:
-
-- Marks ABI exports `__attribute__((used))` and calls `gstp_ffi_retain_symbols()`
-  from plugin registration (keeps symbols past dead-code strip).
-- CocoaPods: injects Runner `-force_load` of `libgstplayer.a` and
-  `STRIP_STYLE=non-global` via `user_target_xcconfig`.
-
-Host apps still need **Strip Style = Non-Global Symbols** so `dlsym` can see
-global names after Archive. See also
-[Flutter C interop — Stripping symbols](https://docs.flutter.dev/platform-integration/ios/c-interop).
-
-| Integration | Do you need to set Strip Style manually? |
+| Platform | For `http(s)://` / `rtsp://` |
 | --- | --- |
-| **CocoaPods** (typical Flutter apps with a `Podfile`) | Usually **no**. After upgrading this plugin, run `cd ios && pod install` and/or `cd macos && pod install`. Confirm Runner → Build Settings → Strip Style is **Non-Global Symbols** for Release/Profile. |
-| **Swift Package Manager (SPM)** | **Yes.** Podspec settings do not apply. Configure Xcode as below. This repo’s `example` already sets `STRIP_STYLE = non-global`. |
+| **Android** | Ensure `INTERNET` in `AndroidManifest.xml` (Flutter templates usually already have it). Optional: `android:usesCleartextTraffic="true"` for plain `http://`. |
+| **iOS** | Nothing. GStreamer does not use ATS / `NSURLSession`. Device only. |
+| **macOS** | With App Sandbox, keep `com.apple.security.network.client` in Runner entitlements (Flutter templates usually already have it). |
+| **Windows / Linux** | No app permission; host GStreamer must be installed ([below](#windows--linux-host-sdk)). |
 
-#### SPM / manual Xcode steps
+> HTTPS note: for maximum compatibility the pipeline sets `ssl-strict = false` on
+> the HTTP source (skips server cert verification). Open an issue if you need
+> strict TLS made configurable.
 
-1. Open `ios/Runner.xcworkspace` or `macos/Runner.xcworkspace`.
-2. Select target **Runner** → **Build Settings**.
-3. Search **Strip Style** (or `STRIP_STYLE`).
-4. For **Release** and **Profile**, change **All Symbols** → **Non-Global Symbols**.
-5. Clean and rebuild: `flutter build ios --release` / `flutter build macos --release`
-   (or Archive).
+## Windows & Linux host SDK
 
-Or add to the Release/Profile blocks in `project.pbxproj`:
-
-```
-STRIP_STYLE = non-global;
-```
-
-#### Verify symbols are present
-
-```bash
-# macOS Release .app
-nm -gU YourApp.app/Contents/MacOS/YourApp | grep gstp_init
-
-# iOS (Runner binary inside the .app)
-nm -gU Runner.app/Runner | grep gstp_init
-```
-
-You should see `_gstp_init`. An empty result means symbols were still stripped.
-
-#### SPM NativeCore (C sources)
-
-SPM builds the C core from `ios|macos/gstplayer/NativeCore/`, which
-must be a **real copy** of `native/` (not a directory symlink). Publishing with
-symlinks produced path-text stubs on pub.dev and linker errors
-(`undefined symbol: _gstp_*`). After changing C code:
-
-```bash
-./tool/sync_native_core.sh
-./tool/verify_native_core.sh
-```
+Only these platforms need a **one-time machine install**. Android / iOS / macOS
+do **not**.
 
 ### Windows
 
-- Install the GStreamer **MSVC** package (development files + runtime) from
-  <https://gstreamer.freedesktop.org/download/>.
-- Ensure the runtime DLLs are discoverable at run time — add
-  `...\1.0\msvc_x86_64\bin` to `PATH` or bundle the DLLs next to your `.exe`.
-- Plugin DLLs live under `lib\gstreamer-1.0`; when packaging, point
-  `GST_PLUGIN_SYSTEM_PATH` at the bundled copy at startup.
+1. Install `gstreamer-1.0-msvc-x86_64-<version>.exe` from
+   <https://gstreamer.freedesktop.org/download/> with **“Runtime and development
+   headers”**.
+2. Put `pkg-config` on `PATH` (e.g. `choco install pkgconfiglite`).
+3. GUI install sets `GSTREAMER_1_0_ROOT_MSVC_X86_64`; set it yourself for silent installs.
 
 ### Linux
 
-- No app permission is required. Install the system GStreamer development and
-  plugin packages plus GTK 3 (see [Native setup](#linux-1)).
-
-### Security note on HTTPS
-
-To maximize compatibility with hosts whose certificate chains are not present in
-the (minimal) bundled trust store, the pipeline sets `ssl-strict = false` on the
-HTTP source, which **skips server-certificate verification**. This removes
-protection against man-in-the-middle attacks. If you need strict verification,
-bundle a CA certificate database and configure GLib's default `GTlsDatabase`
-(open an issue if you want this made configurable).
+```bash
+sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+  gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav \
+  libgtk-3-dev
+```
 
 ## API reference
 
@@ -497,198 +365,6 @@ MaterialApp(
 );
 ```
 
-## Native GStreamer setup (per platform)
-
-The Rust core links GStreamer at build time, so a GStreamer **development**
-install must be discoverable while building, and the runtime libraries must be
-available (bundled or system-installed) when running.
-
-### macOS
-
-**Mac App Store / sandboxed release** requires the official universal
-`GStreamer.framework` (x86_64 + arm64). Homebrew dylibs cannot be loaded from
-`/opt/homebrew` inside the sandbox.
-
-On first `pod install`, runtime + devel are **downloaded automatically** into the
-user cache (~**800MB–1GB** download, no sudo):
-
-`~/Library/Caches/gstplayer/gstreamer/1.28.5/`
-  - `GStreamer.framework` — full SDK (for build/link)
-  - `GStreamerRuntime.framework` — runtime snapshot (embedded into `.app`; consumers
-    do not need to configure this)
-
-The final `.app` embeds a trimmed **Slim Runtime** (v1.0.5+, ~**350–450MB**
-universal, or ~**175–280MB** per-arch) with only the plugins needed for playbin3,
-HTTPS/HLS/RTSP, and applemedia hardware decode. Multiple Flutter projects share
-the same download cache.
-
-Optional per-arch builds: set `GSTPLAYER_GSTREAMER_ARCH=arm64` or `x86_64` before
-`pod install` / `flutter build macos` (default `universal`) to ship separate Apple
-Silicon and Intel packages.
-
-Optional env vars: `GSTPLAYER_GSTREAMER_ROOT`, `GSTREAMER_FRAMEWORK_SRC` (offline /
-custom paths). You may still run `sh tool/setup_gstreamer_macos.sh
---system` to install under `/Library/Frameworks`.
-
-#### Consumers: build setup
-
-1. Enable App Sandbox + `com.apple.security.network.client` (see
-   [Permissions](#permissions--platform-configuration)).
-2. Run `flutter pub get`.
-3. Wire the GStreamer embed helper into `macos/Podfile` `post_install` (see
-   [macOS](#macos) — **required under SPM**), then `cd macos && pod install`
-   (first run downloads the GStreamer cache if needed).
-4. Run `flutter build macos --release` and verify
-   `YourApp.app/Contents/Frameworks/GStreamer.framework` exists:
-
-```bash
-ls YourApp.app/Contents/Frameworks/GStreamer.framework/Versions/1.0/lib/GStreamer
-```
-
-If that path is missing, dyld will fail at launch with
-`Library not loaded: @rpath/GStreamer.framework/...`.
-
-The C core sets `GST_PLUGIN_SYSTEM_PATH`, `GIO_MODULE_DIR`, and a writable
-`GST_REGISTRY` before `gst_init()` (`gstp_setup_macos_env()` in
-`native/src/apple_env.c`).
-
-#### Local Homebrew dev (not for MAS)
-
-```bash
-export GSTPLAYER_ALLOW_HOMEBREW_GSTREAMER=1
-brew install pkg-config gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-libav
-```
-
-### Mac App Store release (macOS)
-
-1. Enable sandbox + `network.client` in `macos/Runner/*entitlements`.
-2. `flutter build macos --release` or Archive in Xcode (first build downloads
-   the GStreamer cache automatically).
-3. Verify:
-   - `YourApp.app/Contents/Frameworks/GStreamer.framework` is present
-   - `codesign -vvv --deep --strict YourApp.app` passes
-   - Network playback works with sandbox enabled
-4. Validate App → Upload to App Store Connect.
-
-### Linux
-
-```bash
-sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-  gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav \
-  libgtk-3-dev
-```
-
-Runtime uses the system GStreamer libraries. `libgtk-3-dev` is required for
-Flutter Linux texture registration (GTK/GL interop in the engine).
-
-### Windows
-
-> GStreamer 1.28+ ships a single **Inno Setup `.exe`** installer (the older
-> `.msi` packages, including the separate `-devel` package, were removed). One
-> installer bundles both runtime and development files.
-
-1. Download `gstreamer-1.0-msvc-x86_64-<version>.exe` (the MSVC build) from
-   <https://gstreamer.freedesktop.org/download/> and run it. Choose the
-   **"Runtime and development headers"** setup type so the headers/`.lib`/`.pc`
-   files are installed.
-2. The GUI installer sets `GSTREAMER_1_0_ROOT_MSVC_X86_64`, which
-   `windows/CMakeLists.txt` uses to locate headers/libs and to bundle the runtime
-   DLLs next to the app. (In headless/silent installs this variable may not be
-   set reliably — set it manually if needed.)
-3. A `pkg-config` must be on `PATH` (e.g. `choco install pkgconfiglite`).
-4. Plugin DLLs live under `lib/gstreamer-1.0`; set `GST_PLUGIN_SYSTEM_PATH` to
-   the bundled copy at startup when packaging.
-
-### iOS (physical device)
-
-Targets a physical arm64 iPhone. The prebuilt SDK does not ship an arm64
-Simulator slice, so the Apple-Silicon iOS Simulator is not supported.
-
-1. Download and install the **GStreamer iOS SDK** (`devel`), matching your
-   desktop GStreamer major/minor version:
-
-   ```bash
-   curl -fLO https://gstreamer.freedesktop.org/data/pkg/ios/1.28.5/gstreamer-1.0-devel-1.28.5-ios-universal.pkg
-   # user-domain install (no sudo); double-clicking the .pkg also works
-   installer -pkg gstreamer-1.0-devel-1.28.5-ios-universal.pkg -target CurrentUserHomeDirectory
-   ```
-
-   This installs `GStreamer.framework` under
-   `~/Library/Developer/GStreamer/iPhone.sdk` (override with `GSTREAMER_ROOT_IOS`).
-2. `ios/gstplayer.podspec` already exports the `system-deps` overrides
-   and `PKG_CONFIG_ALLOW_CROSS=1` for the Rust cross-build, injects `RUSTFLAGS` via
-   `ios/scripts/ios_rust_link_flags.sh` (UIKit/OpenGLES/QuartzCore, etc. for the
-   Cargokit staticlib link step), and links the umbrella `-framework GStreamer`
-   in `OTHER_LDFLAGS` for the final Xcode link.
-3. Build/run on a connected device: `flutter run -d <device>` (or
-   `flutter build ios --no-codesign` to verify the build).
-
-Because the iOS `GStreamer.framework` is static, its plugins are not
-auto-discovered. The C core registers the ones needed for playback and the
-OpenSSL TLS backend (`gstp_register_ios_static_plugins()` /
-`gstp_register_ios_tls_backend()` in `native/src/runtime.c`, iOS-only), and
-prepares the runtime environment before `gst_init()`. Add to the plugin list in
-`native/src/ios_plugins.c` if you need an element that isn't registered yet.
-
-### Android (all ABIs)
-
-Supports `arm64-v8a`, `armeabi-v7a`, `x86`, and `x86_64`. On every Android
-build the plugin:
-
-1. Downloads the official GStreamer Android universal SDK (if not already cached)
-2. Runs ndk-build to produce the umbrella `libgstreamer_android.so` per ABI
-3. Compiles the C `libgstplayer.so` via NDK CMake (`native/` + JNI)
-
-The umbrella library (all of GStreamer + its plugins, linked statically) and
-`libc++_shared.so` land in `android/build/gstreamer/jniLibs/<abi>/` and are
-packaged into the plugin AAR. **The first build needs network access**; later
-builds reuse the cache at
-`~/Library/Caches/gstplayer/gstreamer/android/<version>/`.
-
-Environment variables:
-
-| Variable | Purpose |
-| --- | --- |
-| `GST_VER` | GStreamer version (default `1.28.5`) |
-| `GSTREAMER_ROOT_ANDROID` | SDK root (skip auto-download when pre-populated) |
-| `GSTPLAYER_GSTREAMER_ROOT` | Alias for custom SDK/cache root |
-
-The GStreamer Android runtime is initialized automatically at process startup by
-`GStreamerInitProvider` (a `ContentProvider` in the plugin's
-`android/src/main/java/`), which runs `System.loadLibrary("gstreamer_android")`
-(so the library's `JNI_OnLoad` captures the JavaVM) and `GStreamer.init(context)`
-(so the app `Context`/`ClassLoader` are set). This is required so the
-`androidmedia` MediaCodec decoders can enumerate/register - without it playback
-fails with `not-linked` / `No streams to output`. The Rust core does NOT register
-plugins on Android (it would run before the Java init and without the JavaVM).
-
-A consuming app builds for all four ABIs by default. To reduce APK size, narrow
-`abiFilters` (see [Permissions & platform configuration](#android)) or ship an
-App Bundle.
-
-#### Customizing the plugin set
-
-Edit `GSTREAMER_PLUGINS` in
-[`android/gstreamer_build/jni/Android.mk`](android/gstreamer_build/jni/Android.mk)
-to add codecs, then rebuild. The next Android build regenerates the umbrella
-libraries automatically.
-
-#### Manual SDK / umbrella rebuild (optional)
-
-Gradle runs
-[`android/scripts/ensure_gstreamer_android.sh`](android/scripts/ensure_gstreamer_android.sh)
-and
-[`android/scripts/build_gstreamer_umbrella.sh`](android/scripts/build_gstreamer_umbrella.sh)
-for you. To run them by hand:
-
-```bash
-sh android/scripts/ensure_gstreamer_android.sh
-sh android/scripts/build_gstreamer_umbrella.sh \
-  "$HOME/Library/Android/sdk/ndk/<ndk-version>" \
-  /tmp/gstreamer-jniLibs \
-  arm64-v8a armeabi-v7a x86 x86_64
-```
-
 ## Architecture
 
 ```
@@ -714,40 +390,38 @@ dart run ffigen --config ffigen.yaml
 
 ## Troubleshooting
 
-- **Release crash: `Failed to lookup symbol 'gstp_init'` (iOS/macOS only):**
-  global FFI symbols were stripped. See
-  [Apple Release / FFI symbols](#apple-release--ffi-symbols-ios--macos)
-  (Strip Style = Non-Global Symbols; CocoaPods usually injects this after
-  `pod install`).
-- **Link error: `undefined symbol: _gstp_*` (SPM macOS/iOS):**
-  `NativeCore` C tree missing or corrupted (pub symlink stubs). For a path
-  dependency run `./tool/sync_native_core.sh` then `flutter clean` and rebuild.
-  See [SPM NativeCore](#spm-nativecore-c-sources).
-- **iOS launch `g_dir_open_with_errno` / `g_filename_to_utf8` / ORC mmap errors:**
-  GLib/GStreamer need writable `HOME`/`XDG_*`/`GST_REGISTRY`, ORC JIT is blocked
-  by the Hardened Runtime, and static iOS builds must not scan a NULL plugin
-  path. The C core sets these before `gst_init` (`native/src/apple_env.c`:
-  `ORC_CODE=backup`, empty `GST_PLUGIN_SYSTEM_PATH`). Do not add `allow-jit`.
-- **`Can't typefind stream` / `Stream doesn't contain enough data` on network
-  video (iOS):** usually a failed TLS handshake when no CA database is
-  configured. The C core registers the OpenSSL TLS backend
-  (`native/src/ios_tls.c`) and relaxes `ssl-strict` on `souphttpsrc` via
-  playbin `source-setup`.
-- **APK too large:** all four Android ABIs each carry a large GStreamer runtime.
-  Narrow `abiFilters` or ship per-ABI APKs / an App Bundle.
-- **Android first build fails / no network:** the GStreamer Android SDK is
-  downloaded on first build. Pre-populate `GSTREAMER_ROOT_ANDROID` for offline
-  CI, or cache `~/Library/Caches/gstplayer/gstreamer/android/`.
-- **Windows `pkg-config` cannot find `glib-2.0`:** confirm the **development**
-  files were installed and `PKG_CONFIG_PATH` points at
-  `...\1.0\msvc_x86_64\lib\pkgconfig`.
-- **macOS black screen / dyld cannot load GStreamer:** confirm
-  `.app/Contents/Frameworks/GStreamer.framework` exists. Under SPM this requires
-  `install_gstreamer_embed_script!(installer)` in `macos/Podfile` `post_install`
-  (see [macOS](#macos)), then `pod install` and rebuild. Enable sandbox
-  `network.client`; for Homebrew-only dev set
-  `GSTPLAYER_ALLOW_HOMEBREW_GSTREAMER=1` (store builds require the official
-  framework).
+- **First build is slow / needs network (Android / iOS / macOS):** normal — the
+  official GStreamer SDK is downloaded once into `~/Library/Caches/gstplayer/`.
+  Offline CI: pre-seed that cache or set `GSTREAMER_ROOT_ANDROID` /
+  `GSTREAMER_ROOT_IOS` / `GSTPLAYER_GSTREAMER_ROOT`.
+- **Android `cargo: command not found` / missing Android targets:** install Rust
+  and `rustup target add` the four Android triples — see
+  [Prerequisites](#prerequisites).
+- **Android / macOS `pkg-config` errors while building reqwest:** install
+  `pkgconf` / `pkg-config` (e.g. `brew install pkgconf`).
+- **iOS Simulator:** not supported. Use a physical device.
+- **iOS `'gst/app/gstappsink.h' file not found`:** the example uses Swift Package
+  Manager, which does not run the CocoaPods podspec. `Package.swift` /
+  the `EnsureGStreamerIOS` build plugin download the SDK into
+  `~/Library/Caches/gstplayer/gstreamer/<ver>/ios/iPhone.sdk` on resolve/build.
+  First build needs network. If headers are still missing: `sh ios/scripts/ensure_gstreamer_ios.sh`,
+  then `flutter clean && flutter pub get` and rebuild.
+- **macOS `Library not loaded: ...GStreamer.framework`:** SPM hosts must wire
+  `install_gstreamer_embed_script!(installer)` in `macos/Podfile` (see
+  [Installation](#installation)), then `pod install` and rebuild. Confirm
+  `YourApp.app/Contents/Frameworks/GStreamer.framework` exists.
+- **Release crash: `Failed to lookup symbol 'gstp_init'` (iOS/macOS):** set Runner
+  **Strip Style = Non-Global Symbols** for Release/Profile. CocoaPods usually
+  injects this after `pod install`; SPM hosts set it in Xcode. See
+  [Flutter C interop — Stripping symbols](https://docs.flutter.dev/platform-integration/ios/c-interop).
+- **Link error: `undefined symbol: _gstp_*` (path / SPM):** run
+  `./tool/sync_native_core.sh`, then `flutter clean` and rebuild.
+- **APK too large:** narrow `abiFilters` or ship an App Bundle (each ABI carries a
+  large GStreamer runtime).
+- **Android minify / R8:** keep `org.freedesktop.gstreamer.**` (plugin AAR already
+  ships consumer ProGuard rules).
+- **Windows `pkg-config` / missing glib:** install the **development** GStreamer
+  MSVC package and point `PKG_CONFIG_PATH` at `...\lib\pkgconfig`.
 
 ## Repository
 

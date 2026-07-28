@@ -21,7 +21,7 @@ void main() {
     setUp(() {
       model = FakePlaybackControlsModel(
         initialState: PlayerState.paused,
-        initialDuration: const Duration(seconds: 100),
+        duration: const Duration(seconds: 100),
       );
       immersive = ImmersiveControlsState(
         initialAspectRatioMode: AspectRatioMode.fit,

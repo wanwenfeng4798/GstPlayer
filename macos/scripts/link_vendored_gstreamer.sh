@@ -27,10 +27,7 @@ mkdir -p "${VENDORED_DIR}"
 rm -rf "${VENDORED_FW}"
 cp -Rc "${RUNTIME_SRC}" "${VENDORED_FW}"
 
-bash "${SCRIPT_DIR}/strip_gstreamer_runtime.sh" "${VENDORED_FW}"
-bash "${SCRIPT_DIR}/prune_gstreamer_plugins.sh" "${VENDORED_FW}"
-bash "${SCRIPT_DIR}/prune_gstreamer_orphan_dylibs.sh" "${VENDORED_FW}"
-bash "${SCRIPT_DIR}/thin_gstreamer_framework.sh" "${VENDORED_FW}"
+bash "${SCRIPT_DIR}/prepare_vendored_gstreamer.sh" "${VENDORED_FW}"
 
 size="$(du -sh "${VENDORED_FW}" | awk '{print $1}')"
 echo "[gstplayer] Vendored slim GStreamer.framework (${size}) from ${RUNTIME_SRC}"

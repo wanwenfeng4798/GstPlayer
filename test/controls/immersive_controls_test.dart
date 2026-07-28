@@ -18,7 +18,7 @@ void main() {
 
     setUp(() {
       model = FakePlaybackControlsModel(
-        initialDuration: const Duration(seconds: 100),
+        duration: const Duration(seconds: 100),
         initialPosition: const Duration(seconds: 30),
       );
       immersive = ImmersiveControlsState(

@@ -19,10 +19,28 @@ A Flutter video player plugin that decodes local/network video with GStreamer
   s.platform = :ios, '13.0'
   s.swift_version = '5.0'
 
+  gst_ver = ENV.fetch('GST_VER', '1.28.5')
+  cache_ios = File.expand_path("~/Library/Caches/gstplayer/gstreamer/#{gst_ver}/ios/iPhone.sdk")
+
   gst_root = ENV['GSTREAMER_ROOT_IOS']
   if gst_root.nil? || gst_root.empty?
-    gst_root = "#{ENV['HOME']}/Library/Developer/GStreamer/iPhone.sdk"
+    ensure_script = File.join(__dir__, 'scripts', 'ensure_gstreamer_ios.sh')
+    unless system({ 'GST_VER' => gst_ver }, 'sh', ensure_script)
+      raise 'GStreamer iOS ensure failed; check network or set GSTREAMER_ROOT_IOS'
+    end
+    gst_root = cache_ios
   end
+
+  unless File.file?("#{gst_root}/GStreamer.framework/Headers/gst/gst.h")
+    raise <<~MSG
+      GStreamer iOS SDK not found at #{gst_root}.
+      Expected GStreamer.framework/Headers/gst/gst.h
+      Set GSTREAMER_ROOT_IOS or allow ensure_gstreamer_ios.sh to download the cache.
+    MSG
+  end
+
+  Pod::UI.puts "[gstplayer] Using GStreamer iOS SDK at #{gst_root}"
+
   gst_framework_parent = gst_root
   gst_headers = "#{gst_root}/GStreamer.framework/Headers"
 

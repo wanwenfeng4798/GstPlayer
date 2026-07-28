@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Downloads and installs the official universal GStreamer macOS SDK into the user
-# cache. No sudo — uses installer -target CurrentUserHomeDirectory.
+# Downloads and extracts the official universal GStreamer macOS SDK into the user
+# cache. No sudo / installer — uses pkgutil --expand-full.
 #
 # Cache layout:
 #   GStreamer.framework        — full SDK (runtime + devel) for build/link
-#   GStreamerRuntime.framework — runtime snapshot for embed into .app
+#   GStreamerRuntime.framework — runtime-only snapshot for embed into .app
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # Capture user overrides before path resolution — gstreamer_paths.sh always
 # exports GSTREAMER_FRAMEWORK_SRC (even when the framework is not installed yet).
@@ -16,10 +17,13 @@ USER_SET_FRAMEWORK_SRC="${GSTREAMER_FRAMEWORK_SRC:-}"
 
 # shellcheck source=gstreamer_paths.sh
 source "${SCRIPT_DIR}/gstreamer_paths.sh"
+# shellcheck source=../../tool/gstreamer_pkg_expand.sh
+source "${ROOT}/tool/gstreamer_pkg_expand.sh"
 
 BASE="https://gstreamer.freedesktop.org/data/pkg/osx/${GST_VER}"
 RUNTIME_PKG="gstreamer-1.0-${GST_VER}-universal.pkg"
 DEVEL_PKG="gstreamer-1.0-devel-${GST_VER}-universal.pkg"
+PKG_DIR="${GSTPLAYER_GSTREAMER_CACHE}/pkgs"
 
 USER_FRAMEWORK="${HOME}/Library/Frameworks/GStreamer.framework"
 SYSTEM_FRAMEWORK="/Library/Frameworks/GStreamer.framework"
@@ -63,90 +67,53 @@ snapshot_framework() {
   clean_framework_root "${dest}"
 }
 
-copy_runtime_snapshot() {
-  local src="$1"
-  echo "[gstplayer] Snapshotting runtime GStreamer.framework from ${src}..."
-  snapshot_framework "${src}" "${RUNTIME_CACHE}"
+extract_pkg_to_framework() {
+  local pkg="$1"
+  local framework_dest="$2"
+  local work expand
+  work="$(mktemp -d)"
+  expand="${work}/expand"
+  gst_pkg_expand_full "${pkg}" "${expand}"
+  gst_pkg_merge_into_framework "${expand}" "${framework_dest}"
+  rm -rf "${work}"
 }
 
-copy_sdk_snapshot() {
-  local src="$1"
-  echo "[gstplayer] Snapshotting full SDK GStreamer.framework from ${src}..."
-  snapshot_framework "${src}" "${SDK_CACHE}"
-  write_stamp
-}
-
-migrate_runtime_snapshot() {
-  local work_dir="$1"
-  local runtime_pkg="${work_dir}/${RUNTIME_PKG}"
-  local backup
-  backup="$(mktemp -d)"
-
-  echo "[gstplayer] Migrating: creating runtime snapshot from existing SDK cache..."
-  mv "${SDK_CACHE}" "${backup}/GStreamer.framework"
-
-  if [[ -f "${runtime_pkg}" ]]; then
-    installer -pkg "${runtime_pkg}" -target CurrentUserHomeDirectory -allowUntrusted
-  else
-    echo "[gstplayer] Downloading runtime package for migration..."
-    curl -fL --retry 3 --retry-delay 2 "${BASE}/${RUNTIME_PKG}" -o "${runtime_pkg}"
-    installer -pkg "${runtime_pkg}" -target CurrentUserHomeDirectory -allowUntrusted
-  fi
-
-  if ! is_runtime_valid "${USER_FRAMEWORK}"; then
-    mv "${backup}/GStreamer.framework" "${SDK_CACHE}"
-    rm -rf "${backup}"
-    echo "error: runtime install failed during migration" >&2
-    exit 1
-  fi
-
-  copy_runtime_snapshot "${USER_FRAMEWORK}"
-  mv "${backup}/GStreamer.framework" "${SDK_CACHE}"
-  rm -rf "${backup}"
-
-  if ! is_sdk_valid "${SDK_CACHE}"; then
-    echo "[gstplayer] SDK cache missing headers after migration; reinstalling devel..."
-    local devel_pkg="${work_dir}/${DEVEL_PKG}"
-    if [[ ! -f "${devel_pkg}" ]]; then
-      curl -fL --retry 3 --retry-delay 2 "${BASE}/${DEVEL_PKG}" -o "${devel_pkg}"
-    fi
-    installer -pkg "${devel_pkg}" -target CurrentUserHomeDirectory -allowUntrusted
-    copy_sdk_snapshot "${USER_FRAMEWORK}"
-  fi
-
-  write_stamp
-}
-
+# Cache hit: stay quiet (SPM / pod install may call this often).
 if is_sdk_valid "${SDK_CACHE}" && is_runtime_valid "${RUNTIME_CACHE}"; then
-  echo "[gstplayer] GStreamer ${GST_VER} cache OK (SDK + runtime)"
-  exit 0
-fi
-
-if is_sdk_valid "${SDK_CACHE}" && ! is_runtime_valid "${RUNTIME_CACHE}"; then
-  WORK_DIR="$(mktemp -d)"
-  cleanup() { rm -rf "${WORK_DIR}"; }
-  trap cleanup EXIT
-  migrate_runtime_snapshot "${WORK_DIR}"
-  echo "[gstplayer] GStreamer ${GST_VER} migration complete"
-  exit 0
-fi
-
-if is_sdk_valid "${USER_FRAMEWORK}" && is_runtime_valid "${USER_FRAMEWORK}"; then
-  copy_runtime_snapshot "${USER_FRAMEWORK}"
-  if is_sdk_valid "${USER_FRAMEWORK}"; then
-    copy_sdk_snapshot "${USER_FRAMEWORK}"
+  if [[ "${GSTPLAYER_VERBOSE:-}" == "1" ]]; then
+    echo "[gstplayer] GStreamer ${GST_VER} cache OK (SDK + runtime)"
   fi
-  echo "[gstplayer] GStreamer ${GST_VER} ready at ${SDK_CACHE}"
   exit 0
+fi
+
+# Incomplete dual-cache from older layouts: drop and rebuild.
+if [[ -d "${SDK_CACHE}" || -d "${RUNTIME_CACHE}" ]]; then
+  echo "[gstplayer] Incomplete GStreamer cache; rebuilding ${GSTPLAYER_GSTREAMER_CACHE}..."
+  rm -rf "${SDK_CACHE}" "${RUNTIME_CACHE}" "${STAMP}"
+fi
+
+if is_sdk_valid "${USER_FRAMEWORK}"; then
+  echo "[gstplayer] Snapshotting GStreamer from ~/Library/Frameworks (~1–2 min)..."
+  snapshot_framework "${USER_FRAMEWORK}" "${SDK_CACHE}"
+  if is_runtime_valid "${USER_FRAMEWORK}"; then
+    snapshot_framework "${USER_FRAMEWORK}" "${RUNTIME_CACHE}"
+  fi
+  if is_sdk_valid "${SDK_CACHE}" && is_runtime_valid "${RUNTIME_CACHE}"; then
+    write_stamp
+    echo "[gstplayer] GStreamer ${GST_VER} ready at ${SDK_CACHE} (from ~/Library/Frameworks)"
+    exit 0
+  fi
 fi
 
 if is_sdk_valid "${SYSTEM_FRAMEWORK}"; then
-  if is_runtime_valid "${SYSTEM_FRAMEWORK}" || [[ ! -d "${RUNTIME_CACHE}" ]]; then
-    copy_runtime_snapshot "${SYSTEM_FRAMEWORK}"
+  echo "[gstplayer] Snapshotting GStreamer from /Library/Frameworks (~1–2 min)..."
+  snapshot_framework "${SYSTEM_FRAMEWORK}" "${SDK_CACHE}"
+  snapshot_framework "${SYSTEM_FRAMEWORK}" "${RUNTIME_CACHE}"
+  if is_sdk_valid "${SDK_CACHE}" && is_runtime_valid "${RUNTIME_CACHE}"; then
+    write_stamp
+    echo "[gstplayer] GStreamer ${GST_VER} ready at ${SDK_CACHE} (from /Library/Frameworks)"
+    exit 0
   fi
-  copy_sdk_snapshot "${SYSTEM_FRAMEWORK}"
-  echo "[gstplayer] GStreamer ${GST_VER} ready at ${SDK_CACHE}"
-  exit 0
 fi
 
 if [[ -n "${USER_SET_GSTREAMER_ROOT}" || -n "${USER_SET_FRAMEWORK_SRC}" ]]; then
@@ -158,34 +125,46 @@ if [[ -n "${USER_SET_GSTREAMER_ROOT}" || -n "${USER_SET_FRAMEWORK_SRC}" ]]; then
   exit 1
 fi
 
-WORK_DIR="$(mktemp -d)"
-cleanup() { rm -rf "${WORK_DIR}"; }
-trap cleanup EXIT
+echo "[gstplayer] =============================================="
+echo "[gstplayer] First-time GStreamer macOS ${GST_VER} setup"
+echo "[gstplayer] Download: runtime ~150MB + devel ~720MB ≈ 870MB"
+echo "[gstplayer]           (often 2–5 min on a typical network)"
+echo "[gstplayer] Extract:  typically 2–4 min after download"
+echo "[gstplayer] Cache:    ${GSTPLAYER_GSTREAMER_CACHE}"
+echo "[gstplayer] Later builds reuse this cache (no re-download)."
+echo "[gstplayer] =============================================="
 
-echo "[gstplayer] Downloading GStreamer ${GST_VER} universal packages..."
-curl -fL --retry 3 --retry-delay 2 "${BASE}/${RUNTIME_PKG}" -o "${WORK_DIR}/${RUNTIME_PKG}"
-curl -fL --retry 3 --retry-delay 2 "${BASE}/${DEVEL_PKG}" -o "${WORK_DIR}/${DEVEL_PKG}"
+mkdir -p "${PKG_DIR}"
+RUNTIME_FILE="${PKG_DIR}/${RUNTIME_PKG}"
+DEVEL_FILE="${PKG_DIR}/${DEVEL_PKG}"
 
-echo "[gstplayer] Installing runtime (CurrentUserHomeDirectory)..."
-installer -pkg "${WORK_DIR}/${RUNTIME_PKG}" -target CurrentUserHomeDirectory -allowUntrusted
+gst_pkg_download "${BASE}/${RUNTIME_PKG}" "${RUNTIME_FILE}" "~150MB"
+gst_pkg_download "${BASE}/${DEVEL_PKG}" "${DEVEL_FILE}" "~720MB"
 
-if ! is_runtime_valid "${USER_FRAMEWORK}"; then
-  echo "error: runtime GStreamer.framework missing after install at ${USER_FRAMEWORK}" >&2
+echo "[gstplayer] Extracting runtime package into cache (about 1–2 min)..."
+rm -rf "${RUNTIME_CACHE}"
+mkdir -p "${RUNTIME_CACHE}"
+extract_pkg_to_framework "${RUNTIME_FILE}" "${RUNTIME_CACHE}"
+
+if ! is_runtime_valid "${RUNTIME_CACHE}"; then
+  echo "error: runtime GStreamer.framework incomplete at ${RUNTIME_CACHE}" >&2
   exit 1
 fi
+clean_framework_root "${RUNTIME_CACHE}"
 
-copy_runtime_snapshot "${USER_FRAMEWORK}"
+echo "[gstplayer] Building full SDK cache (runtime + devel, about 1–2 min)..."
+rm -rf "${SDK_CACHE}"
+ditto "${RUNTIME_CACHE}" "${SDK_CACHE}"
+extract_pkg_to_framework "${DEVEL_FILE}" "${SDK_CACHE}"
 
-echo "[gstplayer] Installing devel (CurrentUserHomeDirectory)..."
-installer -pkg "${WORK_DIR}/${DEVEL_PKG}" -target CurrentUserHomeDirectory -allowUntrusted
-
-if ! is_sdk_valid "${USER_FRAMEWORK}"; then
-  echo "error: full SDK GStreamer.framework missing after devel install at ${USER_FRAMEWORK}" >&2
+if ! is_sdk_valid "${SDK_CACHE}"; then
+  echo "error: full SDK GStreamer.framework incomplete at ${SDK_CACHE}" >&2
   exit 1
 fi
+clean_framework_root "${SDK_CACHE}"
 
-copy_sdk_snapshot "${USER_FRAMEWORK}"
-
+write_stamp
+# shellcheck source=gstreamer_paths.sh
 source "${SCRIPT_DIR}/gstreamer_paths.sh"
 
 echo "[gstplayer] GStreamer ${GST_VER} ready (SDK: ${GSTREAMER_FRAMEWORK_SRC}, runtime: ${GSTREAMER_RUNTIME_FRAMEWORK_SRC})"

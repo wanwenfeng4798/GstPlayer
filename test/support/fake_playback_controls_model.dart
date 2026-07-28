@@ -9,28 +9,34 @@ class FakePlaybackControlsModel extends ChangeNotifier
   FakePlaybackControlsModel({
     PlayerState initialState = PlayerState.idle,
     Duration initialPosition = Duration.zero,
-    Duration initialDuration = const Duration(seconds: 100),
-    bool initialSeekable = true,
-    bool supportsOrientation = true,
+    this.duration = const Duration(seconds: 100),
+    this.isSeekable = true,
+    this.supportsOrientation = true,
+    this.bufferingPercent = 100,
     VideoRotation initialRotation = VideoRotation.deg0,
   }) : _state = initialState,
        _position = initialPosition,
-       _duration = initialDuration,
-       _isSeekable = initialSeekable,
-       _supportsOrientation = supportsOrientation,
        _videoRotation = initialRotation;
 
   PlayerState _state;
   Duration _position;
-  Duration _duration;
-  bool _isSeekable;
-  bool _supportsOrientation;
   VideoRotation _videoRotation;
   bool _muted = false;
   double _volume = 1.0;
   bool _looping = false;
   double _speed = 1.0;
-  int _bufferingPercent = 100;
+
+  @override
+  final Duration duration;
+
+  @override
+  final bool isSeekable;
+
+  @override
+  final bool supportsOrientation;
+
+  @override
+  final int bufferingPercent;
 
   Duration? lastSeek;
   int seekCallCount = 0;
@@ -46,16 +52,7 @@ class FakePlaybackControlsModel extends ChangeNotifier
   PlayerState get state => _state;
 
   @override
-  int get bufferingPercent => _bufferingPercent;
-
-  @override
   Duration get position => _position;
-
-  @override
-  Duration get duration => _duration;
-
-  @override
-  bool get isSeekable => _isSeekable;
 
   @override
   bool get muted => _muted;
@@ -68,9 +65,6 @@ class FakePlaybackControlsModel extends ChangeNotifier
 
   @override
   double get speed => _speed;
-
-  @override
-  bool get supportsOrientation => _supportsOrientation;
 
   @override
   VideoRotation get videoRotation => _videoRotation;

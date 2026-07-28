@@ -7,46 +7,34 @@ import 'package:gstplayer/src/domain/player_events.dart';
 class FakePlaybackPresentationModel extends ChangeNotifier
     implements PlaybackPresentationModel {
   FakePlaybackPresentationModel({
-    int? playerId = 42,
-    bool initialized = true,
-    double aspectRatio = 16 / 9,
-    VideoRotation videoRotation = VideoRotation.deg0,
-    PlayerState state = PlayerState.idle,
-    int bufferingPercent = 100,
-  }) : _playerId = playerId,
-       _initialized = initialized,
-       _aspectRatio = aspectRatio,
-       _videoRotation = videoRotation,
-       _state = state,
-       _bufferingPercent = bufferingPercent;
+    this.playerId = 42,
+    this.initialized = true,
+    this.aspectRatio = 16 / 9,
+    this.videoRotation = VideoRotation.deg0,
+    this.state = PlayerState.idle,
+    this.bufferingPercent = 100,
+  });
 
-  int? _playerId;
-  bool _initialized;
-  double _aspectRatio;
-  VideoRotation _videoRotation;
-  PlayerState _state;
-  int _bufferingPercent;
+  @override
+  int? playerId;
+
+  @override
+  final bool initialized;
+
+  @override
+  double aspectRatio;
+
+  @override
+  VideoRotation videoRotation;
+
+  @override
+  PlayerState state;
+
+  @override
+  int bufferingPercent;
 
   AspectRatioMode? lastAspectRatioMode;
   int setAspectRatioModeCallCount = 0;
-
-  @override
-  bool get initialized => _initialized;
-
-  @override
-  int? get playerId => _playerId;
-
-  @override
-  double get aspectRatio => _aspectRatio;
-
-  @override
-  VideoRotation get videoRotation => _videoRotation;
-
-  @override
-  PlayerState get state => _state;
-
-  @override
-  int get bufferingPercent => _bufferingPercent;
 
   @override
   Future<void> setAspectRatioMode(AspectRatioMode mode) async {
@@ -55,27 +43,27 @@ class FakePlaybackPresentationModel extends ChangeNotifier
   }
 
   void setState(PlayerState value) {
-    _state = value;
+    state = value;
     notifyListeners();
   }
 
   void setBufferingPercent(int value) {
-    _bufferingPercent = value;
+    bufferingPercent = value;
     notifyListeners();
   }
 
   void setAspectRatio(double value) {
-    _aspectRatio = value;
+    aspectRatio = value;
     notifyListeners();
   }
 
   void setVideoRotation(VideoRotation value) {
-    _videoRotation = value;
+    videoRotation = value;
     notifyListeners();
   }
 
   void setPlayerId(int? value) {
-    _playerId = value;
+    playerId = value;
     notifyListeners();
   }
 }

@@ -53,8 +53,10 @@ class ImmersiveControlsState extends ChangeNotifier {
   ImmersiveControlsState({
     required AspectRatioMode initialAspectRatioMode,
     required VideoControlsFullscreenConfig fullscreen,
-  }) : _aspectRatioMode = initialAspectRatioMode,
-       _fullscreen = fullscreen;
+  }) : // Public ctor name is [fullscreen]; field is private and mutable via setter.
+       // ignore: prefer_initializing_formals
+       _fullscreen = fullscreen,
+       _aspectRatioMode = initialAspectRatioMode;
 
   VideoControlsFullscreenConfig _fullscreen;
   bool _landscapeLocked = false;

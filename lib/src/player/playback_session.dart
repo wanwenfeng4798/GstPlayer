@@ -57,6 +57,7 @@ class PlaybackSession extends ChangeNotifier
   bool _supportsOrientation = false;
   int _mediaGeneration = 0;
   VideoRotation _videoRotation = VideoRotation.deg0;
+  VideoSource? _mediaSource;
 
   StreamSubscription<PlayerEvent>? _sub;
   bool _disposed = false;
@@ -107,15 +108,21 @@ class PlaybackSession extends ChangeNotifier
   @override
   bool get muted => _muted;
   String? get error => _error;
+  @override
   List<MediaTrack> get tracks => _tracks;
   VideoMetadata? get videoMetadata => _videoMetadata;
   @override
   bool get isSeekable => _isSeekable;
+  @override
   bool get supportsTracks => _supportsTracks;
   @override
   bool get supportsOrientation => _supportsOrientation;
   @override
   VideoRotation get videoRotation => _videoRotation;
+
+  /// 当前已打开的媒体源 / Currently open media source.
+  @override
+  VideoSource? get mediaSource => _mediaSource;
 
   /// 创建原生 player 并订阅事件流 / Creates native player and subscribes to events.
   Future<void> initialize() async {
@@ -160,6 +167,7 @@ class PlaybackSession extends ChangeNotifier
   /// Clears prior media state via [_resetForOpen]; resets native rotation before load.
   Future<void> open(VideoSource source, {bool autoPlay = false}) async {
     _resetForOpen();
+    _mediaSource = source;
     await _guard(() async {
       await _port.setVideoRotation(0);
       await _port.loadSource(
@@ -226,6 +234,7 @@ class PlaybackSession extends ChangeNotifier
   /// 从 port 重新拉取轨道 / Refreshes tracks from the port.
   Future<void> refreshTracks() => _refreshTracksFromPort();
 
+  @override
   Future<void> selectTrack(MediaTrack track, {bool enable = true}) =>
       _guard(() => _port.selectTrack(track, enable: enable));
 
@@ -244,6 +253,15 @@ class PlaybackSession extends ChangeNotifier
   Future<Uint8List> captureCurrentFrame() async {
     final map = await _port.captureCurrentFrame();
     return CapturedBgraFrame.fromMap(map).toPng();
+  }
+
+  @override
+  Future<Uint8List?> captureFramePng() async {
+    try {
+      return await captureCurrentFrame();
+    } catch (_) {
+      return null;
+    }
   }
 
   /// 取消订阅、销毁 player 并释放监听 / Cancels subscription, disposes player and listeners.

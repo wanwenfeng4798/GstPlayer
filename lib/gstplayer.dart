@@ -28,4 +28,7 @@ export 'src/gstplayer_controller.dart';
 export 'src/theme/video_controls_theme.dart';
 export 'src/model/video_source.dart';
 export 'src/gst_video_view.dart';
+export 'src/overlay/danmaku.dart' show DanmakuItem, DanmakuOverlay;
+export 'src/overlay/subtitle.dart'
+    show SubtitleCue, SubtitleOverlay, SubtitleParser;
 export 'src/gstplayer.dart' show GstPlayer;

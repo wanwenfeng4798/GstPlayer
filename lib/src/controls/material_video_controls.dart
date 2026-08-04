@@ -2,13 +2,16 @@ import 'package:chat_context_menu/chat_context_menu.dart';
 import 'package:flutter/material.dart';
 
 import '../constant/constant.dart';
+import '../domain/player_events.dart';
 import '../theme/video_controls_theme.dart';
 import '../utils/time_util.dart';
 import 'center_button.dart';
 import 'immersive_controls_state.dart';
 import 'playback_controls_model.dart';
-import 'playback_progress_slider.dart';
+import 'progress_bar_with_preview.dart';
 import 'scrub_controller.dart';
+import 'scrub_preview_controller.dart';
+import 'volume_slider.dart';
 
 /// Material 风格内置视频控件栏 / Material-styled built-in video control bar.
 ///
@@ -48,6 +51,7 @@ class MaterialVideoControls extends StatefulWidget {
 
 class _MaterialVideoControlsState extends State<MaterialVideoControls> {
   late final ScrubController _scrub;
+  late final ScrubPreviewController _preview;
 
   @override
   void initState() {
@@ -56,11 +60,13 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
       model: widget.model,
       onInteract: widget.onInteract,
     );
+    _preview = ScrubPreviewController();
   }
 
   @override
   void dispose() {
     _scrub.dispose();
+    _preview.dispose();
     super.dispose();
   }
 
@@ -72,6 +78,25 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
     return widget.model;
   }
 
+  Future<void> _captureFrame() async {
+    widget.onInteract();
+    final png = await widget.model.captureFramePng();
+    if (!mounted || png == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('截图'),
+        content: Image.memory(png),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
@@ -81,6 +106,9 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
       builder: (context, _) {
         final landscapeLocked =
             widget.immersive?.landscapeLocked ?? widget.landscapeLocked;
+        final subtitleTracks = model.tracks
+            .where((t) => t.trackType == TrackType.subtitle)
+            .toList();
         return Stack(
           fit: StackFit.expand,
           children: [
@@ -133,9 +161,12 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
                             ),
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                           ),
-                          child: PlaybackProgressSlider(
+                          child: ProgressBarWithPreview(
                             model: model,
                             scrub: _scrub,
+                            preview: _preview,
+                            theme: theme,
+                            previewBarHeight: 64,
                             builder: (context, snap) => Slider(
                               value: snap.displayValue,
                               onChangeStart: snap.enabled
@@ -148,7 +179,7 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
                         ),
                         LayoutBuilder(
                           builder: (context, constraints) {
-                            final compact = constraints.maxWidth < 280;
+                            final compact = constraints.maxWidth < 320;
                             return Padding(
                               padding: const EdgeInsets.only(
                                 left: 12,
@@ -199,7 +230,27 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
                                       model.toggleMuted();
                                     },
                                   ),
+                                  if (!compact)
+                                    VolumeSlider(
+                                      model: model,
+                                      theme: theme,
+                                      onInteract: widget.onInteract,
+                                      width: 72,
+                                    ),
                                   if (!compact) ...[
+                                    IconButton(
+                                      style: IconButton.styleFrom(
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      color: theme.iconColor,
+                                      icon: Icon(
+                                        Icons.photo_camera_outlined,
+                                        size: theme.secondaryIconSize,
+                                      ),
+                                      onPressed: _captureFrame,
+                                    ),
                                     IconButton(
                                       style: IconButton.styleFrom(
                                         tapTargetSize:
@@ -220,6 +271,85 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
                                         await model.setLooping(!model.looping);
                                       },
                                     ),
+                                    if (model.supportsTracks &&
+                                        subtitleTracks.isNotEmpty)
+                                      ChatContextMenuWrapper(
+                                        topPadding: 0,
+                                        backgroundColor: theme.backgroundColor,
+                                        borderRadius: BorderRadius.circular(
+                                          theme.borderRadius,
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                        menuBuilder: (context, hideMenu) {
+                                          return Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              for (final track
+                                                  in subtitleTracks)
+                                                InkWell(
+                                                  onTap: () {
+                                                    widget.onInteract();
+                                                    model.selectTrack(
+                                                      track,
+                                                      enable: !track.selected,
+                                                    );
+                                                    hideMenu();
+                                                  },
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 16,
+                                                          vertical: 10,
+                                                        ),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        SizedBox(
+                                                          width: 20,
+                                                          child: track.selected
+                                                              ? Icon(
+                                                                  Icons.check,
+                                                                  size: 16,
+                                                                  color: theme
+                                                                      .textColor,
+                                                                )
+                                                              : null,
+                                                        ),
+                                                        Text(
+                                                          track.label.isEmpty
+                                                              ? 'Subtitle ${track.id}'
+                                                              : track.label,
+                                                          style: TextStyle(
+                                                            color: theme
+                                                                .textColor,
+                                                            fontSize: 14,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          );
+                                        },
+                                        widgetBuilder: (context, showMenu, _) {
+                                          return IconButton(
+                                            style: IconButton.styleFrom(
+                                              tapTargetSize: MaterialTapTargetSize
+                                                  .shrinkWrap,
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                            color: theme.iconColor,
+                                            icon: Icon(
+                                              Icons.closed_caption,
+                                              size: theme.secondaryIconSize,
+                                            ),
+                                            onPressed: showMenu,
+                                          );
+                                        },
+                                      ),
                                     ChatContextMenuWrapper(
                                       topPadding: 0,
                                       backgroundColor: theme.backgroundColor,

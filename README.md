@@ -20,10 +20,12 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 > (for HTTPS / reqwest). **Windows / Linux:** install GStreamer once on the
 > machine (see below).
 
-> Scope: video playback only — open / play / pause / stop / seek / volume /
+> Scope: video playback — open / play / pause / stop / seek / volume /
 > mute / speed / looping, plus state / position / duration / resolution /
-> buffering / EOS / error reporting. It does **not** do recording, streaming
-> (as a server), or subtitle-track selection.
+> buffering / EOS / error reporting, scrub preview, poster / last-frame,
+> external subtitles (SRT/VTT overlay), danmaku overlay, and screenshots.
+> It does **not** do recording, streaming (as a server), or system
+> picture-in-picture.
 
 ## Table of contents
 
@@ -47,7 +49,13 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 
 - Local files, Flutter assets, and network URLs (`http(s)://`, `rtsp://`, ...).
 - Play / pause / stop / seek / looping.
-- Volume, mute, and playback speed control.
+- Volume slider, mute, and playback speed control.
+- Mobile immersive gestures: horizontal seek, left brightness / right volume.
+- Progress-bar scrub thumbnail preview (debounced `captureThumbnail`).
+- Poster image and keep-last-frame after EOS.
+- External subtitle overlay (SRT/WebVTT) plus embedded subtitle track selection API/UI.
+- Danmaku (bullet comment) overlay driven by app-supplied cues.
+- Frame capture (`captureCurrentFrame`) and one-shot covers (`captureThumbnail`).
 - Reactive state via [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
   plain getters: state, position, duration, video size, aspect ratio, buffering %,
   volume, speed, looping, muted, and errors. Rebuild with `ListenableBuilder` /

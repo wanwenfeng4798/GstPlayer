@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:gstplayer/src/controls/playback_controls_model.dart';
 import 'package:gstplayer/src/enum/video_rotation.dart';
 import 'package:gstplayer/src/domain/player_events.dart';
+import 'package:gstplayer/src/model/video_source.dart';
 
 /// Test double for [PlaybackControlsModel].
 class FakePlaybackControlsModel extends ChangeNotifier
@@ -12,7 +13,10 @@ class FakePlaybackControlsModel extends ChangeNotifier
     this.duration = const Duration(seconds: 100),
     this.isSeekable = true,
     this.supportsOrientation = true,
+    this.supportsTracks = true,
     this.bufferingPercent = 100,
+    this.mediaSource,
+    this.tracks = const [],
     VideoRotation initialRotation = VideoRotation.deg0,
   }) : _state = initialState,
        _position = initialPosition,
@@ -36,7 +40,16 @@ class FakePlaybackControlsModel extends ChangeNotifier
   final bool supportsOrientation;
 
   @override
+  final bool supportsTracks;
+
+  @override
   final int bufferingPercent;
+
+  @override
+  final VideoSource? mediaSource;
+
+  @override
+  final List<MediaTrack> tracks;
 
   Duration? lastSeek;
   int seekCallCount = 0;
@@ -120,6 +133,12 @@ class FakePlaybackControlsModel extends ChangeNotifier
     _videoRotation = rotation;
     notifyListeners();
   }
+
+  @override
+  Future<void> selectTrack(MediaTrack track, {bool enable = true}) async {}
+
+  @override
+  Future<Uint8List?> captureFramePng() async => null;
 
   void setPosition(Duration position) {
     _position = position;

@@ -91,18 +91,46 @@ class _PlayerPageState extends State<PlayerPage> {
 
   final List<String> mediaList = ThumbnailPage.networkSamples;
 
+  static const _assetSource = VideoSource.asset('assets/sample.mp4');
+
+  List<SubtitleCue> _subtitles = const [];
+  bool _subtitlesEnabled = true;
+  bool _danmakuEnabled = true;
+  ImageProvider? _poster;
+
+  static final _sampleDanmaku = <DanmakuItem>[
+    const DanmakuItem(at: Duration(seconds: 1), text: '开始播放！'),
+    DanmakuItem(
+      at: const Duration(seconds: 2),
+      text: '音量滑轨 / 手势都在控件里',
+      color: Colors.lightBlueAccent.shade100,
+    ),
+    const DanmakuItem(
+      at: Duration(seconds: 4),
+      text: '拖进度条看小窗预览',
+      color: Color(0xFFFFD54F),
+    ),
+    DanmakuItem(
+      at: const Duration(seconds: 6),
+      text: '弹幕演示',
+      color: Colors.pinkAccent.shade100,
+    ),
+    const DanmakuItem(at: Duration(seconds: 10), text: '字幕与弹幕可开关'),
+  ];
+
   @override
   void initState() {
     super.initState();
     final sw = Stopwatch()..start();
     _controller
         .initialize()
-        .then((_) {
+        .then((_) async {
           debugPrint(
             '[gstp-init-timing] example_controller_init='
             '${sw.elapsedMilliseconds}ms '
             'playerId=${_controller.playerId}',
           );
+          await _preparePosterAndSubtitles();
           if (mounted) setState(() => _ready = true);
         })
         .catchError((Object e, StackTrace st) {
@@ -116,6 +144,23 @@ class _PlayerPageState extends State<PlayerPage> {
         });
   }
 
+  Future<void> _preparePosterAndSubtitles() async {
+    try {
+      _subtitles = await SubtitleParser.loadAsset('assets/sample.srt');
+    } catch (e) {
+      debugPrint('load subtitles failed: $e');
+    }
+    try {
+      final png = await GstPlayer.captureThumbnail(
+        _assetSource,
+        maxWidth: 480,
+      );
+      _poster = MemoryImage(png);
+    } catch (e) {
+      debugPrint('poster capture failed: $e');
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -123,10 +168,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Future<void> _openAsset() async {
-    await _controller.open(
-      const VideoSource.asset('assets/sample.mp4'),
-      autoPlay: true,
-    );
+    await _controller.open(_assetSource, autoPlay: true);
   }
 
   Future<void> _showPng(Uint8List png, String title) async {
@@ -179,6 +221,30 @@ class _PlayerPageState extends State<PlayerPage> {
                   title: const Text('播放'),
                   toolbarHeight: 48,
                   actions: [
+                    IconButton(
+                      tooltip: _danmakuEnabled ? '关闭弹幕' : '打开弹幕',
+                      onPressed: () {
+                        setState(() => _danmakuEnabled = !_danmakuEnabled);
+                      },
+                      icon: Icon(
+                        _danmakuEnabled
+                            ? Icons.chat_bubble
+                            : Icons.chat_bubble_outline,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: _subtitlesEnabled ? '关闭字幕' : '打开字幕',
+                      onPressed: () {
+                        setState(
+                          () => _subtitlesEnabled = !_subtitlesEnabled,
+                        );
+                      },
+                      icon: Icon(
+                        _subtitlesEnabled
+                            ? Icons.closed_caption
+                            : Icons.closed_caption_disabled,
+                      ),
+                    ),
                     ChatContextMenuWrapper(
                       backgroundColor: Colors.white,
                       widgetBuilder: (context, shoeMenu, hideMenu) {
@@ -255,6 +321,12 @@ class _PlayerPageState extends State<PlayerPage> {
                     controller: _controller,
                     showControls: true,
                     controlsStyle: .cupertino,
+                    poster: _poster,
+                    keepLastFrame: true,
+                    danmaku: _sampleDanmaku,
+                    danmakuEnabled: _danmakuEnabled,
+                    subtitles: _subtitles,
+                    subtitlesEnabled: _subtitlesEnabled,
                   ),
                 ),
         );

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../enum/video_rotation.dart';
 import '../domain/player_events.dart';
+import '../model/video_source.dart';
 
 /// 内置视频控件窄接口：只读 transport 状态 + 命令 / Narrow seam for built-in controls: readonly transport state and commands.
 ///
@@ -18,6 +19,15 @@ abstract class PlaybackControlsModel implements Listenable {
   double get volume;
   bool get looping;
   double get speed;
+
+  /// 当前已打开的媒体源（scrub 预览抽帧用）/ Open media source for scrub thumbnail capture.
+  VideoSource? get mediaSource;
+
+  /// 当前媒体轨道列表 / Current media tracks.
+  List<MediaTrack> get tracks;
+
+  /// 是否支持多轨选择 / Whether multi-track selection is supported.
+  bool get supportsTracks;
 
   /// 当前 pipeline 是否支持视频旋转 / Whether rotation is supported.
   bool get supportsOrientation;
@@ -39,4 +49,10 @@ abstract class PlaybackControlsModel implements Listenable {
 
   /// 设置视频顺时针旋转（需 [supportsOrientation]）/ Sets rotation when [supportsOrientation].
   Future<void> setVideoRotation(VideoRotation rotation);
+
+  /// 选中或取消选中轨道 / Selects or deselects a track.
+  Future<void> selectTrack(MediaTrack track, {bool enable = true});
+
+  /// 截取当前帧 PNG（控件截图按钮）/ Captures current frame as PNG.
+  Future<Uint8List?> captureFramePng();
 }

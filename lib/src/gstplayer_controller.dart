@@ -119,6 +119,7 @@ class GstPlayerController extends ChangeNotifier
   String? get error => _session.error;
 
   /// 当前媒体音轨/视频轨/字幕轨列表 / Audio, video, and subtitle tracks for current media.
+  @override
   List<MediaTrack> get tracks => _session.tracks;
 
   /// 视频元数据（含 DAR）；无视频轨时可能为 null / Video metadata including DAR; null when no video track.
@@ -129,6 +130,7 @@ class GstPlayerController extends ChangeNotifier
   bool get isSeekable => _session.isSeekable;
 
   /// 当前 pipeline 是否支持多轨选择 / Whether multi-track selection is supported.
+  @override
   bool get supportsTracks => _session.supportsTracks;
 
   /// 当前 pipeline 是否支持视频方向变换 / Whether video orientation transforms are supported.
@@ -158,6 +160,10 @@ class GstPlayerController extends ChangeNotifier
 
   /// 媒体打开代数；每次 [open] 递增 / Media open generation; increments on each [open].
   int get mediaGeneration => _session.mediaGeneration;
+
+  /// 当前已打开的媒体源 / Currently open media source.
+  @override
+  VideoSource? get mediaSource => _session.mediaSource;
 
   /// 绑定 [GstVideoView] 的沉浸状态，供全屏 API 读写横屏锁定 / Binds immersive state for fullscreen API.
   void attachImmersive(ImmersiveControlsState immersive) {
@@ -236,6 +242,7 @@ class GstPlayerController extends ChangeNotifier
   Future<void> refreshTracks() => _session.refreshTracks();
 
   /// 选中或取消选中 [track] / Selects or deselects [track].
+  @override
   Future<void> selectTrack(MediaTrack track, {bool enable = true}) =>
       _session.selectTrack(track, enable: enable);
 
@@ -251,6 +258,9 @@ class GstPlayerController extends ChangeNotifier
 
   /// 截取当前最新画面为 PNG / Captures the latest decoded frame as PNG bytes.
   Future<Uint8List> captureCurrentFrame() => _session.captureCurrentFrame();
+
+  @override
+  Future<Uint8List?> captureFramePng() => _session.captureFramePng();
 
   /// 释放 player 与事件订阅 / Disposes the player and event subscription.
   @override

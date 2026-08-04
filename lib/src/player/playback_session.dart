@@ -62,12 +62,22 @@ class PlaybackSession extends ChangeNotifier
   StreamSubscription<PlayerEvent>? _sub;
   bool _disposed = false;
 
+  /// Latest play/pause intent while transport ops are in flight / 传输进行中的最新播放意图.
+  bool? _wantPlaying;
+  int _transportGen = 0;
+  int? _wantGen;
+  Future<void>? _transportFlush;
+
   /// 每次 [open] 递增；供 View 在切换媒体时重置 UI 状态 / Increments on each [open]; lets views reset UI state on media switch.
   int get mediaGeneration => _mediaGeneration;
 
-  /// 是否正在播放 / Whether `state == playing`.
+  /// 是否正在播放 / Whether playback should show as playing (honors pending intent).
   @override
-  bool get isPlaying => _state == PlayerState.playing;
+  bool get isPlaying {
+    final want = _wantPlaying;
+    if (want != null) return want;
+    return _state == PlayerState.playing;
+  }
 
   /// 是否已 EOS / Whether playback completed.
   bool get isCompleted => _state == PlayerState.completed;
@@ -186,17 +196,91 @@ class PlaybackSession extends ChangeNotifier
     if (_state == PlayerState.completed) {
       _speed = 1.0;
       _position = Duration.zero;
-      notifyListeners();
     }
-    return _guard(_port.play);
+    _setWantPlaying(true);
+    return _flushTransport();
   }
 
-  Future<void> pause() => _guard(_port.pause);
+  Future<void> pause() {
+    _setWantPlaying(false);
+    return _flushTransport();
+  }
 
-  Future<void> stop() => _guard(_port.stop);
+  Future<void> stop() async {
+    _clearTransportIntent();
+    _state = PlayerState.stopped;
+    notifyListeners();
+    // Wait for any in-flight play/pause before stop so native order stays sane.
+    final inFlight = _transportFlush;
+    if (inFlight != null) {
+      await inFlight;
+    }
+    await _guard(_port.stop);
+  }
 
   @override
-  Future<void> togglePlayPause() => isPlaying ? pause() : play();
+  Future<void> togglePlayPause() {
+    if (isPlaying) {
+      return pause();
+    }
+    return play();
+  }
+
+  void _setWantPlaying(bool want) {
+    _wantPlaying = want;
+    _wantGen = ++_transportGen;
+    if (want) {
+      if (_state != PlayerState.buffering) {
+        _state = PlayerState.playing;
+      }
+    } else {
+      _state = PlayerState.paused;
+    }
+    notifyListeners();
+  }
+
+  void _clearTransportIntent() {
+    _wantPlaying = null;
+    _wantGen = null;
+  }
+
+  Future<void> _flushTransport() {
+    return _transportFlush ??= _runTransportFlush();
+  }
+
+  /// Serializes play/pause and coalesces to the latest intent so rapid toggles
+  /// cannot leave UI "playing" while native ends on pause (or vice versa).
+  Future<void> _runTransportFlush() async {
+    try {
+      while (!_disposed) {
+        final want = _wantPlaying;
+        final gen = _wantGen;
+        if (want == null || gen == null) break;
+        try {
+          if (want) {
+            await _port.play();
+          } else {
+            await _port.pause();
+          }
+        } catch (e) {
+          _applyError(e.toString());
+          if (_wantGen == gen) {
+            _clearTransportIntent();
+          }
+          break;
+        }
+        // Only clear when this intent is still the latest; else loop.
+        if (_wantGen == gen) {
+          _clearTransportIntent();
+        }
+      }
+    } finally {
+      _transportFlush = null;
+      if (!_disposed && _wantPlaying != null) {
+        unawaited(_flushTransport());
+      }
+    }
+  }
 
   /// 跳转；仅更新位置预览，缓冲态由 native BUFFERING 事件驱动 / Seeks; position preview only — buffering from native events.
   @override
@@ -294,6 +378,7 @@ class PlaybackSession extends ChangeNotifier
 
   void _resetForOpen() {
     _error = null;
+    _clearTransportIntent();
     // Optimistic loading UI until native BUFFERING / READY / PLAYING events.
     _bufferingPercent = 0;
     _videoSize = Size.zero;
@@ -338,12 +423,34 @@ class PlaybackSession extends ChangeNotifier
           hdrFormat: event.hdrFormat,
         );
       case PlayerEventKind.stateChanged:
-        _state = event.state;
+        if (_wantPlaying != null) {
+          // Ignore stale playing/paused/ready echoes while an intent is in flight.
+          switch (event.state) {
+            case PlayerState.playing:
+            case PlayerState.paused:
+            case PlayerState.ready:
+            case PlayerState.stopped:
+              break;
+            case PlayerState.completed:
+            case PlayerState.error:
+            case PlayerState.idle:
+              _clearTransportIntent();
+              _state = event.state;
+            case PlayerState.buffering:
+              _state = event.state;
+          }
+        } else {
+          _state = event.state;
+        }
       case PlayerEventKind.buffering:
         _bufferingPercent = event.bufferingPercent;
         // Native may pause during rebuffer; restore transport state from the event.
         if (event.bufferingPercent < 100) {
           _state = PlayerState.buffering;
+        } else if (_wantPlaying != null) {
+          _state = _wantPlaying!
+              ? PlayerState.playing
+              : PlayerState.paused;
         } else {
           // Buffering finished but native may still be waiting for surface /
           // deferred play — do not fake playing (masks "not actually playing").
@@ -352,9 +459,11 @@ class PlaybackSession extends ChangeNotifier
               : event.state;
         }
       case PlayerEventKind.eos:
+        _clearTransportIntent();
         _state = PlayerState.completed;
         _position = _duration;
       case PlayerEventKind.error:
+        _clearTransportIntent();
         _error = event.message;
         _state = PlayerState.error;
         _bufferingPercent = 100;

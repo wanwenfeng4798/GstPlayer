@@ -32,51 +32,45 @@ class _VolumePopupButtonState extends State<VolumePopupButton> {
 
   @override
   void dispose() {
-    _removeOverlay();
+    _removeOverlay(notify: false);
     super.dispose();
   }
 
-  void _removeOverlay() {
+  void _removeOverlay({bool notify = true}) {
     _entry?.remove();
     _entry = null;
-    _open = false;
+    if (_open) {
+      _open = false;
+      if (notify && mounted) setState(() {});
+    }
   }
 
   void _toggle() {
     widget.onInteract();
     if (_open) {
-      setState(() {
-        _removeOverlay();
-      });
+      _removeOverlay();
       return;
     }
     _entry = OverlayEntry(
       builder: (context) {
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: () {
-                  _removeOverlay();
-                  // Rebuild icon state after closing.
-                  if (mounted) setState(() {});
-                },
-              ),
-            ),
-            CompositedTransformFollower(
-              link: _link,
-              showWhenUnlinked: false,
-              targetAnchor: Alignment.topCenter,
-              followerAnchor: Alignment.bottomCenter,
-              offset: const Offset(0, -8),
+        // No full-screen barrier: a modal barrier was swallowing play/pause
+        // taps and could leave the UI feeling "dead" after volume use.
+        return UnconstrainedBox(
+          child: CompositedTransformFollower(
+            link: _link,
+            showWhenUnlinked: false,
+            targetAnchor: Alignment.topCenter,
+            followerAnchor: Alignment.bottomCenter,
+            offset: const Offset(0, -8),
+            child: TapRegion(
+              onTapOutside: (_) => _removeOverlay(),
               child: _VolumePopupPanel(
                 model: widget.model,
                 theme: widget.theme,
                 onInteract: widget.onInteract,
               ),
             ),
-          ],
+          ),
         );
       },
     );
@@ -135,36 +129,56 @@ class _VolumePopupPanel extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         child: SizedBox(
-          width: 44,
-          height: 120,
+          width: 52,
+          height: 148,
           child: ListenableBuilder(
             listenable: model,
             builder: (context, _) {
               final value = model.muted ? 0.0 : model.volume.clamp(0.0, 1.0);
-              return RotatedBox(
-                quarterTurns: -1,
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: theme.activeTrackColor,
-                    inactiveTrackColor: theme.inactiveTrackColor,
-                    thumbColor: theme.thumbColor,
-                    trackHeight: 3,
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 10,
+              final percent = (value * 100).round();
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 4),
+                    child: Text(
+                      '$percent',
+                      style: TextStyle(
+                        color: theme.textColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 6,
+                  ),
+                  Expanded(
+                    child: RotatedBox(
+                      quarterTurns: -1,
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          activeTrackColor: theme.activeTrackColor,
+                          inactiveTrackColor: theme.inactiveTrackColor,
+                          thumbColor: theme.thumbColor,
+                          trackHeight: 3,
+                          overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 10,
+                          ),
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 6,
+                          ),
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: Slider(
+                          value: value,
+                          onChanged: (v) {
+                            onInteract();
+                            model.setVolume(v);
+                          },
+                        ),
+                      ),
                     ),
-                    padding: EdgeInsets.zero,
                   ),
-                  child: Slider(
-                    value: value,
-                    onChanged: (v) {
-                      onInteract();
-                      model.setVolume(v);
-                    },
-                  ),
-                ),
+                  const SizedBox(height: 6),
+                ],
               );
             },
           ),

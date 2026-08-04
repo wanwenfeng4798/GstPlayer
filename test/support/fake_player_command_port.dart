@@ -33,6 +33,13 @@ class FakePlayerCommandPort implements PlayerCommandPort {
   int playCallCount = 0;
   int pauseCallCount = 0;
   int getTracksCallCount = 0;
+  final List<String> transportLog = <String>[];
+
+  /// Optional delay/blocker so tests can interleave toggles mid-flight.
+  Duration playDelay = Duration.zero;
+  Duration pauseDelay = Duration.zero;
+  Completer<void>? playGate;
+  Completer<void>? pauseGate;
 
   @override
   int? get playerId => _playerId;
@@ -83,11 +90,27 @@ class FakePlayerCommandPort implements PlayerCommandPort {
   @override
   Future<void> play() async {
     playCallCount++;
+    transportLog.add('play');
+    if (playDelay > Duration.zero) {
+      await Future<void>.delayed(playDelay);
+    }
+    final gate = playGate;
+    if (gate != null) {
+      await gate.future;
+    }
   }
 
   @override
   Future<void> pause() async {
     pauseCallCount++;
+    transportLog.add('pause');
+    if (pauseDelay > Duration.zero) {
+      await Future<void>.delayed(pauseDelay);
+    }
+    final gate = pauseGate;
+    if (gate != null) {
+      await gate.future;
+    }
   }
 
   @override

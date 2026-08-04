@@ -140,6 +140,20 @@ Cross-platform Flutter video player plugin. Decoding via GStreamer (**native C c
   layout metadata when crossing 90/270 so letterboxing updates immediately.
   `open` resets `rotate_degrees` and calls `setVideoRotation(0)`.
 
+## Dart UI controls & overlays
+
+- Built-in chrome (`BiliBottomChrome`): pink progress row + tool row; volume
+  popup shows live 0–100; Material/Cupertino share layout, swap icons.
+  Theme presets: `VideoControlsTheme.material|cupertino|bilibili()`.
+- Mobile `ImmersiveGestureLayer` mounts whenever `isMobilePlatform` (inline **and**
+  fullscreen). Do **not** gate gestures on `immersiveActive` / `landscapeLocked`.
+  `gesturesEnabled` documents this; `immersiveActive` remains fullscreen-only for
+  top-bar immersive menus.
+- Scrub preview: debounced `GstPlayer.captureThumbnail` on `mediaSource`.
+- `GstVideoView` overlays: `poster`, `keepLastFrame` (EOS capture), `danmaku` /
+  `DanmakuItem`, external `subtitles` / `SubtitleParser` (SRT/VTT). Embedded
+  subtitle tracks use `selectTrack` from the control bar when present.
+
 ## Rate / audio
 
 - Custom playbin `audio-sink` bin: `scaletempo ! audioconvert ! audioresample !

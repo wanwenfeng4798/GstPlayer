@@ -45,18 +45,19 @@
 
 - 支持本地文件、Flutter 资源（asset）以及网络地址（`http(s)://`、`rtsp://` 等）。
 - 播放 / 暂停 / 停止 / 跳转 / 循环。
-- 音量滑轨、静音、倍速控制。
-- 移动端沉浸手势：水平快进/快退，左侧亮度 / 右侧音量。
+- 音量（竖向弹出滑条，滑动时显示 **0–100** 数值）、静音、倍速。
+- B 站风格底栏：粉色进度条（`#FB7299`）、进度行在工具行上方、自动隐藏。
+- 移动端画面手势（**非全屏与全屏均可用**）：水平快进/快退，左侧亮度 / 右侧音量（HUD 显示百分比）。
 - 进度条拖拽缩略图预览（防抖 `captureThumbnail`）。
 - 封面图与播完保留最后一帧。
-- 外挂字幕叠层（SRT/WebVTT）以及内嵌字幕轨选择 API/UI。
-- 弹幕叠层（由 App 注入时间轴数据）。
+- 外挂字幕叠层（SRT/WebVTT，`SubtitleParser`）以及内嵌字幕轨选择 API/UI。
+- 弹幕叠层（由 App 注入 `DanmakuItem` 时间轴数据）。
 - 当前帧截图与一次性抽封面。
 - 基于 [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
   普通 getter 的响应式状态：播放状态、进度、时长、视频尺寸、宽高比、缓冲百分比、
   音量、倍速、循环、静音、错误等。用 `ListenableBuilder` / `addListener` 订阅重建。
 - 开箱即用的 `GstVideoView` 组件，内置可自动隐藏、可主题化的控制条
-  （Material / Cupertino / 自适应）。
+  （Material / Cupertino / 自适应；默认强调色贴近 B 站粉）。
 - 通过 Flutter `Texture` 渲染（Android GL 写入 `SurfaceProducer`；Apple/桌面由 `appsink` 供帧）。
 
 ## 平台支持
@@ -296,6 +297,12 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 等待完整运行时就绪（`gst_init` 成功 + worker 已启动）。必要时会先启动
 `initialize()`。控制器 `create` 与 `captureThumbnail` 会自动调用。
 
+### `GstPlayer.captureThumbnail(VideoSource, {Duration? at, int maxWidth})`
+
+无头 GStreamer 管线一次性抽封面（`gstp_thumbnail_capture`），返回 PNG
+`Uint8List`。无需已打开的 controller。`at` 为 null 时由 native 约取时长 5%（或
+1 秒）。进度条 scrub 预览也复用此 API。
+
 ### `GstPlayerController`
 
 | 方法 | 说明 |
@@ -309,6 +316,8 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 | `setMuted(bool)` / `toggleMuted()` | 静音控制。 |
 | `setSpeed(double)` | 倍速。 |
 | `setLooping(bool)` | 结束时循环。 |
+| `tracks` / `refreshTracks()` / `selectTrack(MediaTrack, {enable})` | 音轨 / 视频轨 / 字幕轨。 |
+| `captureCurrentFrame()` | 当前解码帧 PNG（`gstp_player_capture_frame`）。 |
 | `queryPosition()` / `queryDuration()` | 直接向管线查询。 |
 | `dispose()` | 拆除播放器并释放全部资源。 |
 
@@ -316,7 +325,7 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 `addListener`）：
 `state`、`position`、`duration`、`videoSize`、`aspectRatio`、`bufferingPercent`、
 `volume`、`speed`、`looping`、`muted`、`isPlaying`、`isCompleted`、`error`、
-`playerId`、`initialized`。
+`playerId`、`initialized`、`mediaSource`、`tracks`、`supportsTracks`。
 
 `PlayerState`：`idle`、`ready`、`buffering`、`playing`、`paused`、`stopped`、
 `completed`、`error`。
@@ -329,28 +338,72 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 
 ### `GstVideoView`
 
-一个 `StatelessWidget`，为控制器嵌入 `Texture` 视频画面，并默认叠加自适应控制条。
+为控制器嵌入 `Texture` 视频画面，并默认叠加可自动隐藏的 B 站风格控制条
+（进度行 + 工具行）。
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `controller` | 必填 | 要渲染的 `GstPlayerController`。 |
-| `aspectRatioMode` | `AspectRatioMode.fit` | GStreamer sink 缩放（`fit` / `fill` / `stretch`）；亦可通过 `controller.setAspectRatioMode` 设置。 |
+| `aspectRatioMode` | `AspectRatioMode.fit` | 布局缩放（`fit` / `fill` / `stretch`）；亦可通过 `controller.setAspectRatioMode` 设置。 |
 | `backgroundColor` | 黑色 | 黑边 / 背景颜色。 |
 | `showControls` | `true` | 是否叠加内置控制条。 |
 | `controlsStyle` | `adaptive` | `adaptive` / `material` / `cupertino`。 |
+| `fullscreen` | `VideoControlsFullscreenConfig()` | 沉浸 / 全屏顶栏等配置。 |
+| `poster` | `null` | 开播前 / 空闲时封面 `ImageProvider`。 |
+| `keepLastFrame` | `true` | EOS 后截取并保留最后一帧。 |
+| `danmaku` | `[]` | App 注入的 `DanmakuItem` 列表。 |
+| `danmakuEnabled` | `false` | 是否显示弹幕。 |
+| `subtitles` | `[]` | 外挂 `SubtitleCue`（可用 `SubtitleParser` 解析）。 |
+| `subtitlesEnabled` | `true` | 是否显示外挂字幕。 |
 
-### 控制条主题
+封面 / 字幕 / 弹幕示例：
 
-在 `ThemeData.extensions` 中注册 `VideoControlsTheme` 以自定义控制条，或使用内置的
-`VideoControlsTheme.material()` / `VideoControlsTheme.cupertino()` 预设：
+```dart
+GstVideoView(
+  controller: controller,
+  poster: MemoryImage(posterPng),
+  keepLastFrame: true,
+  subtitles: await SubtitleParser.loadAsset('assets/sample.srt'),
+  subtitlesEnabled: true,
+  danmaku: [
+    DanmakuItem(at: Duration(seconds: 1), text: 'Hello'),
+  ],
+  danmakuEnabled: true,
+)
+```
+
+### 控制条、手势与主题
+
+**底栏（B 站风格）：** 粉色进度条单独一行；工具行含播放、时间、音量弹出、截图、循环、倍速/字幕、全屏。
+
+**音量弹出：** 点击喇叭图标弹出竖向粉色滑条，上方实时显示 **0–100** 数值；长按切换静音。
+
+**移动端手势**（Android / iOS，**非全屏与全屏均有效**）：
+
+| 区域 | 手势 | 效果 |
+| --- | --- | --- |
+| 左侧约 40% | 竖滑 | 屏幕亮度 + HUD 百分比 |
+| 右侧约 40% | 竖滑 | 播放器音量 + HUD 百分比 |
+| 水平 | 拖拽 | 进退预览 / seek |
+
+**进度条预览：** 拖拽或悬停进度条时出现缩略图气泡（对当前 `mediaSource` 调用
+`GstPlayer.captureThumbnail`）。直播源可能仅显示时间。
+
+在 `ThemeData.extensions` 中注册 `VideoControlsTheme`，或使用预设
+`material()` / `cupertino()` / **`bilibili()`**（粉 `#FB7299`）：
 
 ```dart
 MaterialApp(
   theme: ThemeData(
-    extensions: const [/* 你的 */ VideoControlsTheme.material()],
+    extensions: [VideoControlsTheme.bilibili()],
   ),
 );
 ```
+
+### 叠层辅助 API
+
+- `SubtitleParser.parse(String)` / `SubtitleParser.loadAsset(String)` → `List<SubtitleCue>`
+- `DanmakuItem({at, text, color, duration})` — 传给 `GstVideoView.danmaku`
 
 ## 架构
 

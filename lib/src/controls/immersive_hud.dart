@@ -86,13 +86,17 @@ class _HudContent extends StatelessWidget {
       ),
     };
 
+    final isVolumeOrBrightness =
+        snapshot.kind == ImmersiveHudKind.volume ||
+        snapshot.kind == ImmersiveHudKind.brightness;
+
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.black54,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -101,7 +105,14 @@ class _HudContent extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 text,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: isVolumeOrBrightness ? 18 : 14,
+                  fontWeight: isVolumeOrBrightness
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ],
           ],

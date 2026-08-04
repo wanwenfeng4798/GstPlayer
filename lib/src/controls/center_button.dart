@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../domain/player_events.dart';
 import '../theme/video_controls_theme.dart';
-import '../utils/platform_util.dart';
 import 'immersive_controls_state.dart';
 import 'playback_controls_model.dart';
 
@@ -26,11 +25,23 @@ class CenterButton extends StatelessWidget {
   final VideoControlsTheme theme;
   final VoidCallback onInteract;
 
-  /// 沉浸 HUD；非空时隐藏中央按钮避免与正中 HUD 重叠 / Hides button while center HUD is shown.
+  /// 沉浸 HUD；与正中 playPause HUD 重叠时隐藏按钮 / Hides button while center playPause HUD is shown.
   final ImmersiveHudSnapshot? hud;
 
+  /// Only the play/pause HUD replaces the center control; volume/brightness/seek
+  /// HUDs must not leave a hit-blocking empty box over the button.
   static bool _hideForHud(ImmersiveHudSnapshot snap) =>
-      isMobilePlatform || snap.kind == ImmersiveHudKind.playPause;
+      snap.kind == ImmersiveHudKind.playPause;
+
+  /// Placeholder that does not absorb taps (gestures/chrome below stay usable).
+  Widget _passThroughPlaceholder() {
+    return IgnorePointer(
+      child: SizedBox(
+        width: theme.centerButtonSize,
+        height: theme.centerButtonSize,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,18 +50,12 @@ class CenterButton extends StatelessWidget {
       builder: (context, _) {
         final snap = hud;
         if (snap != null && _hideForHud(snap)) {
-          return SizedBox(
-            width: theme.centerButtonSize,
-            height: theme.centerButtonSize,
-          );
+          return _passThroughPlaceholder();
         }
         final PlayerState state = model.state;
         final buffering = model.bufferingPercent;
         if (buffering < 100 || state == PlayerState.buffering) {
-          return SizedBox(
-            width: theme.centerButtonSize,
-            height: theme.centerButtonSize,
-          );
+          return _passThroughPlaceholder();
         }
         final playing = state == PlayerState.playing;
         final icon = playing
@@ -68,9 +73,11 @@ class CenterButton extends StatelessWidget {
                   color: theme.backgroundColor,
                 ),
                 child: IconButton(
-                  onPressed: () async {
+                  onPressed: () {
                     onInteract();
-                    await model.togglePlayPause();
+                    // Fire-and-forget: do not await so rapid taps are not serialized
+                    // behind each native round-trip.
+                    model.togglePlayPause();
                   },
                   style: IconButton.styleFrom(
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,

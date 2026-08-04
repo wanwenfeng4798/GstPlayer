@@ -49,19 +49,20 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 
 - Local files, Flutter assets, and network URLs (`http(s)://`, `rtsp://`, ...).
 - Play / pause / stop / seek / looping.
-- Volume slider, mute, and playback speed control.
-- Mobile immersive gestures: horizontal seek, left brightness / right volume.
+- Volume (popup vertical slider with live **0–100** readout), mute, and playback speed.
+- Bilibili-inspired control chrome: pink progress track (`#FB7299`), progress row above the tool row, auto-hiding bar.
+- Mobile surface gestures (**inline and fullscreen**): horizontal seek, left brightness / right volume (HUD shows percent).
 - Progress-bar scrub thumbnail preview (debounced `captureThumbnail`).
 - Poster image and keep-last-frame after EOS.
-- External subtitle overlay (SRT/WebVTT) plus embedded subtitle track selection API/UI.
-- Danmaku (bullet comment) overlay driven by app-supplied cues.
+- External subtitle overlay (SRT/WebVTT via `SubtitleParser`) plus embedded subtitle track selection API/UI.
+- Danmaku (bullet comment) overlay driven by app-supplied `DanmakuItem` cues.
 - Frame capture (`captureCurrentFrame`) and one-shot covers (`captureThumbnail`).
 - Reactive state via [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
   plain getters: state, position, duration, video size, aspect ratio, buffering %,
   volume, speed, looping, muted, and errors. Rebuild with `ListenableBuilder` /
   `addListener`.
 - A drop-in `GstVideoView` widget with a built-in, auto-hiding, themeable
-  control bar (Material / Cupertino / adaptive).
+  control bar (Material / Cupertino / adaptive; default theme accent matches Bilibili pink).
 - GPU-friendly video via Flutter `Texture` (Android GL into `SurfaceProducer`; Apple/desktop pixel-buffer textures fed from GStreamer `appsink`).
 
 ## Platform support
@@ -313,7 +314,8 @@ automatically.
 
 One-shot cover extraction via a headless GStreamer pipeline in C
 (`gstp_thumbnail_capture`). Returns PNG `Uint8List`. Does not require an open
-controller. When `at` is null, native picks ~5% of duration (or 1s).
+controller. When `at` is null, native picks ~5% of duration (or 1s). Also used
+internally for progress-bar scrub preview.
 
 ### `GstPlayerController`
 
@@ -328,6 +330,7 @@ controller. When `at` is null, native picks ~5% of duration (or 1s).
 | `setMuted(bool)` / `toggleMuted()` | Mute control. |
 | `setSpeed(double)` | Playback speed multiplier. |
 | `setLooping(bool)` | Loop at end-of-stream. |
+| `tracks` / `refreshTracks()` / `selectTrack(MediaTrack, {enable})` | Audio / video / subtitle tracks. |
 | `captureCurrentFrame()` | Latest decoded frame as PNG (`gstp_player_capture_frame`). |
 | `queryPosition()` / `queryDuration()` | Query the pipeline directly. |
 | `dispose()` | Tear down the player and release all resources. |
@@ -336,7 +339,7 @@ Reactive state (plain getters on `ChangeNotifier`; read inside `ListenableBuilde
 or after `addListener`):
 `state`, `position`, `duration`, `videoSize`, `aspectRatio`, `bufferingPercent`,
 `volume`, `speed`, `looping`, `muted`, `isPlaying`, `isCompleted`, `error`,
-`playerId`, `initialized`.
+`playerId`, `initialized`, `mediaSource`, `tracks`, `supportsTracks`.
 
 `PlayerState`: `idle`, `ready`, `buffering`, `playing`, `paused`, `stopped`,
 `completed`, `error`.
@@ -349,30 +352,75 @@ or after `addListener`):
 
 ### `GstVideoView`
 
-A `StatelessWidget` that embeds a Flutter `Texture` for the controller's video and,
-by default, an adaptive control bar.
+Embeds a Flutter `Texture` for the controller's video and, by default, an
+auto-hiding Bilibili-style control bar (progress row + tool row).
 
 | Parameter | Default | Description |
 | --- | --- | --- |
 | `controller` | required | The `GstPlayerController` to render. |
-| `aspectRatioMode` | `AspectRatioMode.fit` | GStreamer sink scaling (`fit` / `fill` / `stretch`). Also available via `controller.setAspectRatioMode`. |
+| `aspectRatioMode` | `AspectRatioMode.fit` | Layout scaling (`fit` / `fill` / `stretch`). Also via `controller.setAspectRatioMode`. |
 | `backgroundColor` | black | Letterbox / background color. |
 | `showControls` | `true` | Overlay the built-in control bar. |
 | `controlsStyle` | `adaptive` | `adaptive` / `material` / `cupertino`. |
+| `fullscreen` | `VideoControlsFullscreenConfig()` | Immersive / fullscreen chrome options. |
+| `poster` | `null` | `ImageProvider` shown before frames / while idle. |
+| `keepLastFrame` | `true` | Capture and keep the last frame after EOS. |
+| `danmaku` | `[]` | App-supplied `DanmakuItem` list. |
+| `danmakuEnabled` | `false` | Toggle danmaku overlay. |
+| `subtitles` | `[]` | External `SubtitleCue` list (e.g. from `SubtitleParser`). |
+| `subtitlesEnabled` | `true` | Toggle external subtitle overlay. |
 
-### Theming the controls
+Example with poster, subtitles, and danmaku:
 
-Register a `VideoControlsTheme` in `ThemeData.extensions` to customize the
-control bar, or rely on the built-in `VideoControlsTheme.material()` /
-`VideoControlsTheme.cupertino()` presets:
+```dart
+GstVideoView(
+  controller: controller,
+  poster: MemoryImage(posterPng),
+  keepLastFrame: true,
+  subtitles: await SubtitleParser.loadAsset('assets/sample.srt'),
+  subtitlesEnabled: true,
+  danmaku: [
+    DanmakuItem(at: Duration(seconds: 1), text: 'Hello'),
+  ],
+  danmakuEnabled: true,
+)
+```
+
+### Controls, gestures, and theming
+
+**Bottom chrome (Bilibili-inspired):** pink progress track on its own row; tool row
+with play, time, volume popup, capture, loop, speed / captions, fullscreen.
+
+**Volume popup:** tap the speaker icon for a vertical pink slider; the live
+**0–100** value is shown above the track. Long-press toggles mute.
+
+**Mobile gestures** (Android / iOS, **both inline and fullscreen**):
+
+| Zone | Gesture | Effect |
+| --- | --- | --- |
+| Left ~40% | Vertical drag | Screen brightness + HUD `%` |
+| Right ~40% | Vertical drag | Pipeline volume + HUD `%` |
+| Horizontal | Drag | Seek preview / seek |
+
+**Scrub preview:** while dragging or hovering the progress bar, a thumbnail
+bubble appears (via `GstPlayer.captureThumbnail` on the open `mediaSource`).
+Live sources may show time only.
+
+Register a `VideoControlsTheme` in `ThemeData.extensions`, or use presets
+`material()` / `cupertino()` / **`bilibili()`** (pink `#FB7299`):
 
 ```dart
 MaterialApp(
   theme: ThemeData(
-    extensions: const [/* your */ VideoControlsTheme.material()],
+    extensions: [VideoControlsTheme.bilibili()],
   ),
 );
 ```
+
+### Overlays helpers
+
+- `SubtitleParser.parse(String)` / `SubtitleParser.loadAsset(String)` → `List<SubtitleCue>`
+- `DanmakuItem({at, text, color, duration})` — supply to `GstVideoView.danmaku`
 
 ## Architecture
 

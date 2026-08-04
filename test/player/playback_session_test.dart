@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gstplayer/src/enum/video_rotation.dart';
@@ -181,6 +183,39 @@ void main() {
       expect(port.playCallCount, 1);
       expect(port.pauseCallCount, 0);
     });
+
+    test(
+      'rapid toggles coalesce so final play reaches native last',
+      () async {
+        await session.initialize();
+        port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.playing));
+        await Future<void>.delayed(Duration.zero);
+
+        final gate = Completer<void>();
+        port.pauseGate = gate;
+
+        // First toggle starts pause and blocks mid-flight.
+        final first = session.togglePlayPause();
+        await Future<void>.delayed(Duration.zero);
+        expect(session.isPlaying, isFalse);
+        expect(port.transportLog, ['pause']);
+
+        // Burst while pause is still in flight: end intent is play.
+        unawaited(session.togglePlayPause()); // want play
+        unawaited(session.togglePlayPause()); // want pause
+        final last = session.togglePlayPause(); // want play
+        expect(session.isPlaying, isTrue);
+
+        gate.complete();
+        await first;
+        await last;
+
+        // Intermediate intents coalesce; native must end on play.
+        expect(port.transportLog.last, 'play');
+        expect(session.isPlaying, isTrue);
+        expect(port.playCallCount, greaterThanOrEqualTo(1));
+      },
+    );
 
     test('tracksChanged event refreshes tracks from port', () async {
       port = FakePlayerCommandPort(

@@ -57,7 +57,9 @@ class CenterButton extends StatelessWidget {
         if (buffering < 100 || state == PlayerState.buffering) {
           return _passThroughPlaceholder();
         }
-        final playing = state == PlayerState.playing;
+        // Use isPlaying (respects in-flight want) so the icon matches the
+        // bottom chrome and rapid toggles do not show a stale PlayerState.
+        final playing = model.isPlaying;
         final icon = playing
             ? CupertinoIcons.pause_solid
             : CupertinoIcons.play_arrow_solid;

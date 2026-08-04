@@ -9,23 +9,12 @@ import 'playback_controls_model.dart';
 import 'progress_bar_with_preview.dart';
 import 'scrub_controller.dart';
 import 'scrub_preview_controller.dart';
+import 'scrub_preview_track.dart';
 import 'volume_popup_button.dart';
+import 'bili_overlay_controls.dart';
 
 /// Icon set for shared Bilibili-style bottom chrome / 共享底栏图标集.
 class BiliControlIcons {
-  /// Creates an icon set / 创建图标集.
-  const BiliControlIcons({
-    required this.play,
-    required this.pause,
-    required this.volumeOn,
-    required this.volumeOff,
-    required this.loop,
-    required this.capture,
-    required this.subtitle,
-    required this.fullscreen,
-    required this.fullscreenExit,
-  });
-
   /// Material icon set / Material 图标.
   static const material = BiliControlIcons(
     play: Icons.play_arrow,
@@ -35,9 +24,30 @@ class BiliControlIcons {
     loop: Icons.loop,
     capture: Icons.photo_camera_outlined,
     subtitle: Icons.closed_caption,
+    danmakuOn: Icons.subtitles,
+    danmakuOff: Icons.subtitles_outlined,
+    externalSubtitleOn: Icons.closed_caption,
+    externalSubtitleOff: Icons.closed_caption_off_outlined,
     fullscreen: Icons.fullscreen,
     fullscreenExit: Icons.fullscreen_exit,
   );
+
+  /// Creates an icon set / 创建图标集.
+  const BiliControlIcons({
+    required this.play,
+    required this.pause,
+    required this.volumeOn,
+    required this.volumeOff,
+    required this.loop,
+    required this.capture,
+    required this.subtitle,
+    required this.danmakuOn,
+    required this.danmakuOff,
+    required this.externalSubtitleOn,
+    required this.externalSubtitleOff,
+    required this.fullscreen,
+    required this.fullscreenExit,
+  });
 
   /// Cupertino-leaning icon set / 偏 Cupertino 图标.
   static const cupertino = BiliControlIcons(
@@ -48,6 +58,10 @@ class BiliControlIcons {
     loop: Icons.repeat,
     capture: Icons.camera_alt_outlined,
     subtitle: Icons.closed_caption,
+    danmakuOn: Icons.subtitles,
+    danmakuOff: Icons.subtitles_outlined,
+    externalSubtitleOn: Icons.closed_caption,
+    externalSubtitleOff: Icons.closed_caption_off_outlined,
     fullscreen: Icons.open_in_full,
     fullscreenExit: Icons.close_fullscreen,
   );
@@ -59,6 +73,10 @@ class BiliControlIcons {
   final IconData loop;
   final IconData capture;
   final IconData subtitle;
+  final IconData danmakuOn;
+  final IconData danmakuOff;
+  final IconData externalSubtitleOn;
+  final IconData externalSubtitleOff;
   final IconData fullscreen;
   final IconData fullscreenExit;
 }
@@ -74,7 +92,10 @@ class BiliBottomChrome extends StatelessWidget {
     required this.scrub,
     required this.preview,
     required this.icons,
-    required this.onCapture,
+    this.onCapture,
+    this.scrubPreview,
+    this.overlayControls,
+    this.showCaptureButton = true,
     this.showFullscreenButton = false,
     this.landscapeLocked,
     this.onFullscreenToggle,
@@ -85,8 +106,11 @@ class BiliBottomChrome extends StatelessWidget {
   final VoidCallback onInteract;
   final ScrubController scrub;
   final ScrubPreviewController preview;
+  final ScrubPreviewTrack? scrubPreview;
+  final BiliOverlayControlsConfig? overlayControls;
   final BiliControlIcons icons;
-  final VoidCallback onCapture;
+  final VoidCallback? onCapture;
+  final bool showCaptureButton;
   final bool showFullscreenButton;
   final bool? landscapeLocked;
   final VoidCallback? onFullscreenToggle;
@@ -142,6 +166,7 @@ class BiliBottomChrome extends StatelessWidget {
                     model: model,
                     scrub: scrub,
                     preview: preview,
+                    scrubPreview: scrubPreview,
                     theme: theme,
                     previewBarHeight: 72,
                     builder: (context, snap) => Slider(
@@ -159,6 +184,12 @@ class BiliBottomChrome extends StatelessWidget {
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       final compact = constraints.maxWidth < 320;
+                      final hasOverlay = overlayControls != null;
+                      // Bilibili-style overlay row: play + danmaku + toggles only.
+                      // Volume/loop/speed belong to the classic row (no overlay).
+                      final showTimeInBar =
+                          !hasOverlay || constraints.maxWidth >= 400;
+                      final showSecondaryTools = !compact && !hasOverlay;
                       return Row(
                         children: [
                           IconButton(
@@ -176,26 +207,114 @@ class BiliBottomChrome extends StatelessWidget {
                               model.togglePlayPause();
                             },
                           ),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                '${formatDuration(model.position)} / ${formatDuration(model.duration)}',
-                                maxLines: 1,
-                                softWrap: false,
-                                style: TextStyle(
-                                  color: theme.textColor,
-                                  fontSize: 12,
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
+                          if (showTimeInBar)
+                            Flexible(
+                              flex: hasOverlay ? 0 : 1,
+                              fit: hasOverlay ? FlexFit.loose : FlexFit.tight,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  '${formatDuration(model.position)} / ${formatDuration(model.duration)}',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    color: theme.textColor,
+                                    fontSize: 12,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          const Spacer(),
-                          if (!compact) ...[
+                          if (hasOverlay) ...[
+                            if (overlayControls!.showDanmakuInput) ...[
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: _BiliDanmakuInput(
+                                  hint: overlayControls!.danmakuHint,
+                                  enabled: overlayControls!.danmakuEnabled,
+                                  onInteract: onInteract,
+                                  onSend: overlayControls!.onDanmakuSend!,
+                                ),
+                              ),
+                            ],
+                            if (overlayControls!.showDanmakuToggle)
+                              IconButton(
+                                style: IconButton.styleFrom(
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(32, 32),
+                                ),
+                                color: overlayControls!.danmakuEnabled
+                                    ? theme.activeIconColor
+                                    : theme.iconColor.withValues(alpha: 0.55),
+                                tooltip: overlayControls!.danmakuEnabled
+                                    ? '关闭弹幕'
+                                    : '打开弹幕',
+                                icon: Icon(
+                                  overlayControls!.danmakuEnabled
+                                      ? icons.danmakuOn
+                                      : icons.danmakuOff,
+                                  size: theme.secondaryIconSize,
+                                ),
+                                onPressed: () {
+                                  onInteract();
+                                  overlayControls!.onDanmakuEnabledChanged!(
+                                    !overlayControls!.danmakuEnabled,
+                                  );
+                                },
+                              ),
+                            if (overlayControls!.showSubtitlesToggle)
+                              IconButton(
+                                style: IconButton.styleFrom(
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(32, 32),
+                                ),
+                                color: overlayControls!.subtitlesEnabled
+                                    ? theme.activeIconColor
+                                    : theme.iconColor.withValues(alpha: 0.55),
+                                tooltip: overlayControls!.subtitlesEnabled
+                                    ? '关闭字幕'
+                                    : '打开字幕',
+                                icon: Icon(
+                                  overlayControls!.subtitlesEnabled
+                                      ? icons.externalSubtitleOn
+                                      : icons.externalSubtitleOff,
+                                  size: theme.secondaryIconSize,
+                                ),
+                                onPressed: () {
+                                  onInteract();
+                                  overlayControls!.onSubtitlesEnabledChanged!(
+                                    !overlayControls!.subtitlesEnabled,
+                                  );
+                                },
+                              ),
+                            if (showCaptureButton && onCapture != null)
+                              IconButton(
+                                style: IconButton.styleFrom(
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(32, 32),
+                                ),
+                                color: theme.iconColor,
+                                icon: Icon(
+                                  icons.capture,
+                                  size: theme.secondaryIconSize,
+                                ),
+                                onPressed: onCapture,
+                              ),
+                          ] else
+                            const Spacer(),
+                          if (showSecondaryTools) ...[
                             VolumePopupButton(
                               model: model,
                               theme: theme,
@@ -203,18 +322,20 @@ class BiliBottomChrome extends StatelessWidget {
                               volumeOnIcon: icons.volumeOn,
                               volumeOffIcon: icons.volumeOff,
                             ),
-                            IconButton(
-                              style: IconButton.styleFrom(
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: VisualDensity.compact,
+                            if (showCaptureButton && onCapture != null)
+                              IconButton(
+                                style: IconButton.styleFrom(
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                color: theme.iconColor,
+                                icon: Icon(
+                                  icons.capture,
+                                  size: theme.secondaryIconSize,
+                                ),
+                                onPressed: onCapture,
                               ),
-                              color: theme.iconColor,
-                              icon: Icon(
-                                icons.capture,
-                                size: theme.secondaryIconSize,
-                              ),
-                              onPressed: onCapture,
-                            ),
                             IconButton(
                               style: IconButton.styleFrom(
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -420,6 +541,81 @@ class BiliBottomChrome extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _BiliDanmakuInput extends StatefulWidget {
+  const _BiliDanmakuInput({
+    required this.hint,
+    required this.enabled,
+    required this.onInteract,
+    required this.onSend,
+  });
+
+  final String hint;
+  final bool enabled;
+  final VoidCallback onInteract;
+  final ValueChanged<String> onSend;
+
+  @override
+  State<_BiliDanmakuInput> createState() => _BiliDanmakuInputState();
+}
+
+class _BiliDanmakuInputState extends State<_BiliDanmakuInput> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    widget.onInteract();
+    widget.onSend(text);
+    _controller.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      enabled: widget.enabled,
+      style: const TextStyle(color: Colors.white, fontSize: 13),
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: widget.hint,
+        hintStyle: TextStyle(
+          color: Colors.white.withValues(alpha: 0.45),
+          fontSize: 12,
+        ),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 6,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: Colors.white.withValues(alpha: 0.35),
+          ),
+        ),
+      ),
+      textInputAction: TextInputAction.send,
+      onTap: widget.onInteract,
+      onSubmitted: (_) => _submit(),
     );
   }
 }

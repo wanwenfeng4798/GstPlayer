@@ -28,6 +28,16 @@ export 'src/gstplayer_controller.dart';
 export 'src/theme/video_controls_theme.dart';
 export 'src/model/video_source.dart';
 export 'src/gst_video_view.dart';
+export 'src/controls/scrub_preview_track.dart'
+    show
+        ScrubPreviewFrame,
+        ScrubPreviewTrack,
+        ScrubPreviewTrackFrames,
+        ScrubPreviewTrackSprite,
+        ScrubPreviewTrackVtt,
+        ScrubPreviewVttParser;
+export 'src/controls/bili_overlay_controls.dart'
+    show BiliOverlayControlsConfig;
 export 'src/overlay/danmaku.dart' show DanmakuItem, DanmakuOverlay;
 export 'src/overlay/subtitle.dart'
     show SubtitleCue, SubtitleOverlay, SubtitleParser;

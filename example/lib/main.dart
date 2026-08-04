@@ -1,15 +1,10 @@
-import 'dart:typed_data';
-
 import 'package:chat_context_menu/chat_context_menu.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gstplayer/gstplayer.dart';
-
-import 'thumbnail_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // No plugin kickoff here — open PlayerPage via HomePage to feel route jank
-  // when controller.initialize() runs in initState (create awaits ensureReady).
   runApp(const MyApp());
 }
 
@@ -37,7 +32,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// Landing page with no player init — push [PlayerPage] to test transition jank.
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -46,29 +40,13 @@ class HomePage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('GST视频播放器')),
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FilledButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const PlayerPage()),
-                );
-              },
-              child: const Text('进入播放页（initState 初始化）'),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ThumbnailPage(),
-                  ),
-                );
-              },
-              child: const Text('抽封面'),
-            ),
-          ],
+        child: FilledButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const PlayerPage()),
+            );
+          },
+          child: const Text('进入播放页'),
         ),
       ),
     );
@@ -86,36 +64,33 @@ class _PlayerPageState extends State<PlayerPage> {
   final GstPlayerController _controller = GstPlayerController();
 
   bool _ready = false;
-
   String? _initError;
 
-  final List<String> mediaList = ThumbnailPage.networkSamples;
+  static const _networkSamples = [
+    'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+  ];
 
   static const _assetSource = VideoSource.asset('assets/sample.mp4');
 
   List<SubtitleCue> _subtitles = const [];
   bool _subtitlesEnabled = true;
   bool _danmakuEnabled = true;
-  ImageProvider? _poster;
+  ScrubPreviewTrack? _scrubPreview;
 
-  static final _sampleDanmaku = <DanmakuItem>[
+  List<DanmakuItem> _danmaku = [
     const DanmakuItem(at: Duration(seconds: 1), text: '开始播放！'),
     DanmakuItem(
       at: const Duration(seconds: 2),
-      text: '音量滑轨 / 手势都在控件里',
+      text: '拖动进度条看小窗预览（WebVTT 雪碧图）',
       color: Colors.lightBlueAccent.shade100,
     ),
     const DanmakuItem(
       at: Duration(seconds: 4),
-      text: '拖进度条看小窗预览',
+      text: '底栏可发弹幕、开关字幕',
       color: Color(0xFFFFD54F),
     ),
-    DanmakuItem(
-      at: const Duration(seconds: 6),
-      text: '弹幕演示',
-      color: Colors.pinkAccent.shade100,
-    ),
-    const DanmakuItem(at: Duration(seconds: 10), text: '字幕与弹幕可开关'),
   ];
 
   @override
@@ -130,7 +105,7 @@ class _PlayerPageState extends State<PlayerPage> {
             '${sw.elapsedMilliseconds}ms '
             'playerId=${_controller.playerId}',
           );
-          await _preparePosterAndSubtitles();
+          await _prepareSubtitlesAndPreview();
           if (mounted) setState(() => _ready = true);
         })
         .catchError((Object e, StackTrace st) {
@@ -144,20 +119,17 @@ class _PlayerPageState extends State<PlayerPage> {
         });
   }
 
-  Future<void> _preparePosterAndSubtitles() async {
+  Future<void> _prepareSubtitlesAndPreview() async {
     try {
       _subtitles = await SubtitleParser.loadAsset('assets/sample.srt');
     } catch (e) {
       debugPrint('load subtitles failed: $e');
     }
     try {
-      final png = await GstPlayer.captureThumbnail(
-        _assetSource,
-        maxWidth: 480,
-      );
-      _poster = MemoryImage(png);
+      final vtt = await rootBundle.loadString('assets/sample_preview.vtt');
+      _scrubPreview = ScrubPreviewTrack.vtt(vtt);
     } catch (e) {
-      debugPrint('poster capture failed: $e');
+      debugPrint('load scrub preview vtt failed: $e');
     }
   }
 
@@ -171,41 +143,18 @@ class _PlayerPageState extends State<PlayerPage> {
     await _controller.open(_assetSource, autoPlay: true);
   }
 
-  Future<void> _showPng(Uint8List png, String title) async {
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(title),
-          content: Image.memory(png),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('关闭'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _captureCurrentFrame() async {
-    try {
-      final png = await _controller.captureCurrentFrame();
-      await _showPng(png, '当前帧');
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('截帧失败: $e')));
-    }
-  }
-
-  void _openThumbnailPage() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const ThumbnailPage()));
+  void _sendDanmaku(String text) {
+    final at = _controller.position;
+    setState(() {
+      _danmaku = [
+        ..._danmaku,
+        DanmakuItem(
+          at: at,
+          text: text,
+          color: Colors.white,
+        ),
+      ];
+    });
   }
 
   @override
@@ -221,30 +170,6 @@ class _PlayerPageState extends State<PlayerPage> {
                   title: const Text('播放'),
                   toolbarHeight: 48,
                   actions: [
-                    IconButton(
-                      tooltip: _danmakuEnabled ? '关闭弹幕' : '打开弹幕',
-                      onPressed: () {
-                        setState(() => _danmakuEnabled = !_danmakuEnabled);
-                      },
-                      icon: Icon(
-                        _danmakuEnabled
-                            ? Icons.chat_bubble
-                            : Icons.chat_bubble_outline,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: _subtitlesEnabled ? '关闭字幕' : '打开字幕',
-                      onPressed: () {
-                        setState(
-                          () => _subtitlesEnabled = !_subtitlesEnabled,
-                        );
-                      },
-                      icon: Icon(
-                        _subtitlesEnabled
-                            ? Icons.closed_caption
-                            : Icons.closed_caption_disabled,
-                      ),
-                    ),
                     ChatContextMenuWrapper(
                       backgroundColor: Colors.white,
                       widgetBuilder: (context, shoeMenu, hideMenu) {
@@ -261,8 +186,10 @@ class _PlayerPageState extends State<PlayerPage> {
                         return Column(
                           mainAxisSize: .min,
                           crossAxisAlignment: .start,
-                          children: List.generate(mediaList.length, (index) {
-                            final media = mediaList[index];
+                          children: List.generate(_networkSamples.length, (
+                            index,
+                          ) {
+                            final media = _networkSamples[index];
                             return TextButton(
                               onPressed: () {
                                 _controller.open(
@@ -271,7 +198,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                 );
                                 hideMenu();
                               },
-                              child: Text(media),
+                              child: Text(media.split('/').last),
                             );
                           }),
                         );
@@ -284,22 +211,6 @@ class _PlayerPageState extends State<PlayerPage> {
                         visualDensity: .compact,
                       ),
                       child: const Text('本地'),
-                    ),
-                    TextButton(
-                      onPressed: _openThumbnailPage,
-                      style: TextButton.styleFrom(
-                        tapTargetSize: .shrinkWrap,
-                        visualDensity: .compact,
-                      ),
-                      child: const Text('抽封面'),
-                    ),
-                    TextButton(
-                      onPressed: _captureCurrentFrame,
-                      style: TextButton.styleFrom(
-                        tapTargetSize: .shrinkWrap,
-                        visualDensity: .compact,
-                      ),
-                      child: const Text('截帧'),
                     ),
                   ],
                 ),
@@ -321,12 +232,20 @@ class _PlayerPageState extends State<PlayerPage> {
                     controller: _controller,
                     showControls: true,
                     controlsStyle: .cupertino,
-                    poster: _poster,
+                    scrubPreview: _scrubPreview,
                     keepLastFrame: true,
-                    danmaku: _sampleDanmaku,
+                    danmaku: _danmaku,
                     danmakuEnabled: _danmakuEnabled,
+                    onDanmakuSend: _sendDanmaku,
+                    onDanmakuEnabledChanged: (enabled) {
+                      setState(() => _danmakuEnabled = enabled);
+                    },
+                    onSubtitlesEnabledChanged: (enabled) {
+                      setState(() => _subtitlesEnabled = enabled);
+                    },
                     subtitles: _subtitles,
                     subtitlesEnabled: _subtitlesEnabled,
+                    showCaptureButton: true,
                   ),
                 ),
         );

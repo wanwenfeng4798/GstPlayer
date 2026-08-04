@@ -7,6 +7,8 @@ import 'immersive_controls_state.dart';
 import 'playback_controls_model.dart';
 import 'scrub_controller.dart';
 import 'scrub_preview_controller.dart';
+import 'scrub_preview_track.dart';
+import 'bili_overlay_controls.dart';
 
 /// Cupertino 风格内置视频控件栏（B 站底栏布局）/ Cupertino controls with Bilibili bottom chrome.
 class CupertinoVideoControls extends StatefulWidget {
@@ -15,6 +17,9 @@ class CupertinoVideoControls extends StatefulWidget {
     required this.model,
     required this.theme,
     required this.onInteract,
+    this.scrubPreview,
+    this.overlayControls,
+    this.showCaptureButton = true,
     this.showFullscreenButton = false,
     this.landscapeLocked,
     this.onFullscreenToggle,
@@ -24,6 +29,9 @@ class CupertinoVideoControls extends StatefulWidget {
   final PlaybackControlsModel model;
   final VideoControlsTheme theme;
   final VoidCallback onInteract;
+  final ScrubPreviewTrack? scrubPreview;
+  final BiliOverlayControlsConfig? overlayControls;
+  final bool showCaptureButton;
   final bool showFullscreenButton;
   final bool? landscapeLocked;
   final VoidCallback? onFullscreenToggle;
@@ -111,8 +119,11 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
               onInteract: widget.onInteract,
               scrub: _scrub,
               preview: _preview,
+              scrubPreview: widget.scrubPreview,
+              overlayControls: widget.overlayControls,
               icons: BiliControlIcons.cupertino,
-              onCapture: _captureFrame,
+              onCapture: widget.showCaptureButton ? _captureFrame : null,
+              showCaptureButton: widget.showCaptureButton,
               showFullscreenButton: widget.showFullscreenButton,
               landscapeLocked: landscapeLocked,
               onFullscreenToggle: widget.onFullscreenToggle,

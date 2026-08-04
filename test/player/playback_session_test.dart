@@ -142,7 +142,8 @@ void main() {
       expect(port.lastSeekPosition, const Duration(seconds: 12));
     });
 
-    test('seek failure after optimistic update sets error', () async {
+    test('seek failure after optimistic update soft-fails without error state',
+        () async {
       port = FakePlayerCommandPort(failSeek: true);
       session = PlaybackSession(port: port);
       await session.initialize();
@@ -150,7 +151,43 @@ void main() {
       await session.seek(const Duration(seconds: 5));
 
       expect(session.position, const Duration(seconds: 5));
-      expect(session.error, contains('seek failed'));
+      expect(session.error, isNull);
+      expect(session.state, isNot(PlayerState.error));
+    });
+
+    test('durationChanged refreshes isSeekable from event', () async {
+      port = FakePlayerCommandPort(seekable: false);
+      session = PlaybackSession(port: port);
+      await session.initialize();
+      await session.open(VideoSource.network('https://example.com/asset'));
+      expect(session.isSeekable, isFalse);
+
+      port.emit(
+        event(
+          kind: PlayerEventKind.durationChanged,
+          durationMs: 60000,
+          isSeekable: true,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(session.isSeekable, isTrue);
+    });
+
+    test('stateChanged refreshes isSeekable from event', () async {
+      await session.initialize();
+      expect(session.isSeekable, isTrue);
+
+      port.emit(
+        event(
+          kind: PlayerEventKind.stateChanged,
+          state: PlayerState.playing,
+          isSeekable: false,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(session.isSeekable, isFalse);
     });
 
     test('PlayerEventKind.error applies error state', () async {
@@ -216,6 +253,25 @@ void main() {
         expect(port.playCallCount, greaterThanOrEqualTo(1));
       },
     );
+
+    test('late paused event does not clobber in-flight play intent', () async {
+      await session.initialize();
+      port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.paused));
+      await Future<void>.delayed(Duration.zero);
+
+      await session.play();
+      expect(session.isPlaying, isTrue);
+
+      // Stale pause from a prior native apply must not flip UI back.
+      port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.paused));
+      await Future<void>.delayed(Duration.zero);
+      expect(session.isPlaying, isTrue);
+
+      port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.playing));
+      await Future<void>.delayed(Duration.zero);
+      expect(session.isPlaying, isTrue);
+      expect(session.state, PlayerState.playing);
+    });
 
     test('tracksChanged event refreshes tracks from port', () async {
       port = FakePlayerCommandPort(

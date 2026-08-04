@@ -13,6 +13,7 @@ import 'model/video_source.dart';
 import 'enum/video_source_type.dart';
 import 'domain/player_events.dart';
 import 'player/ffi_native_worker.dart';
+import 'player/ffi_thumbnail_worker.dart';
 
 /// 插件入口：加载原生库并初始化 GStreamer 运行时。
 ///
@@ -129,6 +130,9 @@ class GstPlayer {
   /// [maxWidth] 限制输出宽度（默认 320）。
   ///
   /// 须先 [initialize]（或由本方法内部 [ensureReady]）。不占用播放中的 controller。
+  ///
+  /// Runs on [FfiThumbnailWorker] so scrub previews never block transport
+  /// (play/pause/seek) on [FfiNativeWorker].
   static Future<Uint8List> captureThumbnail(
     VideoSource source, {
     Duration? at,
@@ -137,8 +141,8 @@ class GstPlayer {
     await ensureReady();
     final resolved = await _resolveThumbnailUri(source);
     try {
-      final worker = await FfiNativeWorker.ensureStarted();
-      final map = await worker.run<Map<String, Object?>>(
+      final worker = await FfiThumbnailWorker.ensureStarted();
+      final map = await worker.capture(
         FfiThumbnailCaptureRequest(
           uri: resolved.uri,
           positionMs: at?.inMilliseconds ?? -1,
@@ -146,6 +150,8 @@ class GstPlayer {
         ),
       );
       return CapturedBgraFrame.fromMap(map).toPng();
+    } on ThumbnailSupersededException {
+      rethrow;
     } finally {
       final temp = resolved.tempFile;
       if (temp != null) {

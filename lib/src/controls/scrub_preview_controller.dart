@@ -1,40 +1,35 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 
-import '../gstplayer.dart' show GstPlayer;
-import '../model/video_source.dart';
 import '../utils/time_util.dart';
+import 'scrub_preview_track.dart';
 
-/// Debounced scrub-bar thumbnail requests / 进度条拖拽缩略图（防抖）.
+/// Drag-only scrub preview driven by an external [ScrubPreviewTrack] /
+/// 仅拖动时显示；预览帧来自外部传入的缩略图轨（不实时抽帧）.
 class ScrubPreviewController extends ChangeNotifier {
   /// Creates a scrub preview controller / 创建 scrub 预览控制器.
-  ScrubPreviewController({this.debounce = const Duration(milliseconds: 100)});
+  ScrubPreviewController({this._track});
 
-  /// Debounce before issuing [GstPlayer.captureThumbnail].
-  final Duration debounce;
-
-  Timer? _timer;
-  int _seq = 0;
+  ScrubPreviewTrack? _track;
   bool _visible = false;
   double _fraction = 0;
   Duration _at = Duration.zero;
-  Uint8List? _png;
-  bool _loading = false;
-  VideoSource? _source;
+  ScrubPreviewFrame? _frame;
 
   bool get visible => _visible;
   double get fraction => _fraction;
   Duration get at => _at;
-  Uint8List? get png => _png;
-  bool get loading => _loading;
+  ScrubPreviewFrame? get frame => _frame;
+  bool get hasTrack => _track != null;
   String get timeLabel => formatDuration(_at);
 
-  /// Bind the media used for headless thumbnail capture / 绑定抽帧媒体源.
-  void setSource(VideoSource? source) {
-    if (_source == source) return;
-    _source = source;
-    clear();
+  /// Replace the external thumbnail track / 替换外部缩略图轨.
+  void setTrack(ScrubPreviewTrack? track) {
+    if (identical(_track, track)) return;
+    _track = track;
+    if (_visible) {
+      _frame = _track?.frameAt(_at);
+    }
+    notifyListeners();
   }
 
   /// Show preview at [fraction] of [duration] / 按进度分数显示预览.
@@ -53,52 +48,15 @@ class ScrubPreviewController extends ChangeNotifier {
     _visible = true;
     _fraction = clamped;
     _at = at;
+    _frame = _track?.frameAt(at);
     notifyListeners();
-
-    final source = _source;
-    if (source == null) return;
-
-    _timer?.cancel();
-    _timer = Timer(debounce, () => unawaited(_fetch(source, at)));
   }
 
-  /// Hide bubble and cancel pending work / 隐藏并取消待处理请求.
+  /// Hide bubble / 隐藏预览气泡.
   void clear() {
-    _timer?.cancel();
-    _timer = null;
-    _seq++;
-    final changed = _visible || _png != null || _loading;
+    final changed = _visible || _frame != null;
     _visible = false;
-    _png = null;
-    _loading = false;
+    _frame = null;
     if (changed) notifyListeners();
-  }
-
-  Future<void> _fetch(VideoSource source, Duration at) async {
-    final seq = ++_seq;
-    _loading = true;
-    notifyListeners();
-    try {
-      final png = await GstPlayer.captureThumbnail(
-        source,
-        at: at,
-        maxWidth: 160,
-      );
-      if (seq != _seq) return;
-      _png = png;
-      _loading = false;
-      notifyListeners();
-    } catch (_) {
-      if (seq != _seq) return;
-      _png = null;
-      _loading = false;
-      notifyListeners();
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
   }
 }

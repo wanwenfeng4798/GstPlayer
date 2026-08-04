@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../controls/playback_controls_model.dart';
+import '../gstplayer.dart';
 import '../domain/player_events.dart';
 import '../enum/video_rotation.dart';
 import '../ffi/init_timing.dart';
@@ -66,6 +67,7 @@ class PlaybackSession extends ChangeNotifier
   bool? _wantPlaying;
   int _transportGen = 0;
   int? _wantGen;
+  int? _sentTransportGen;
   Future<void>? _transportFlush;
 
   /// 每次 [open] 递增；供 View 在切换媒体时重置 UI 状态 / Increments on each [open]; lets views reset UI state on media switch.
@@ -242,6 +244,7 @@ class PlaybackSession extends ChangeNotifier
   void _clearTransportIntent() {
     _wantPlaying = null;
     _wantGen = null;
+    _sentTransportGen = null;
   }
 
   Future<void> _flushTransport() {
@@ -250,12 +253,19 @@ class PlaybackSession extends ChangeNotifier
 
   /// Serializes play/pause and coalesces to the latest intent so rapid toggles
   /// cannot leave UI "playing" while native ends on pause (or vice versa).
+  ///
+  /// Native play/pause returns immediately (async GST apply). Keep
+  /// [_wantPlaying] until a confirming state event so a late PAUSED from an
+  /// earlier pause cannot clobber a newer play (UI playing, pipeline paused).
   Future<void> _runTransportFlush() async {
     try {
       while (!_disposed) {
+        // Coalesce rapid taps in the same event-loop turn before hitting native.
+        await Future<void>.delayed(Duration.zero);
         final want = _wantPlaying;
         final gen = _wantGen;
         if (want == null || gen == null) break;
+        if (_sentTransportGen == gen) break;
         try {
           if (want) {
             await _port.play();
@@ -269,24 +279,39 @@ class PlaybackSession extends ChangeNotifier
           }
           break;
         }
-        // Only clear when this intent is still the latest; else loop.
         if (_wantGen == gen) {
-          _clearTransportIntent();
+          _sentTransportGen = gen;
         }
+        // Newer tap while awaiting — loop and send the latest intent.
+        if (_wantGen != gen) {
+          continue;
+        }
+        // Leave [_wantPlaying] set; [_applyEvent] clears on confirming state.
+        break;
       }
     } finally {
       _transportFlush = null;
-      if (!_disposed && _wantPlaying != null) {
+      if (!_disposed &&
+          _wantPlaying != null &&
+          _wantGen != null &&
+          _sentTransportGen != _wantGen) {
         unawaited(_flushTransport());
       }
     }
   }
 
   /// 跳转；仅更新位置预览，缓冲态由 native BUFFERING 事件驱动 / Seeks; position preview only — buffering from native events.
+  ///
+  /// Soft-fails: a native seek error keeps optimistic position and does not
+  /// promote the session to [PlayerState.error] (scrub must stay recoverable).
   @override
   Future<void> seek(Duration position) async {
     _previewSeek(position, showBuffering: false);
-    await _guard(() => _port.seek(position));
+    try {
+      await _port.seek(position);
+    } catch (e) {
+      debugPrint('gstplayer: seek soft-fail: $e');
+    }
   }
 
   @override
@@ -344,7 +369,17 @@ class PlaybackSession extends ChangeNotifier
     try {
       return await captureCurrentFrame();
     } catch (_) {
-      return null;
+      final source = _mediaSource;
+      if (source == null) return null;
+      try {
+        return await GstPlayer.captureThumbnail(
+          source,
+          at: _position,
+          maxWidth: 720,
+        );
+      } catch (_) {
+        return null;
+      }
     }
   }
 
@@ -401,6 +436,7 @@ class PlaybackSession extends ChangeNotifier
     switch (event.kind) {
       case PlayerEventKind.durationChanged:
         _duration = Duration(milliseconds: event.durationMs);
+        _isSeekable = event.isSeekable;
       case PlayerEventKind.positionChanged:
         _position = Duration(milliseconds: event.positionMs);
       case PlayerEventKind.videoSize:
@@ -423,11 +459,20 @@ class PlaybackSession extends ChangeNotifier
           hdrFormat: event.hdrFormat,
         );
       case PlayerEventKind.stateChanged:
+        _isSeekable = event.isSeekable;
         if (_wantPlaying != null) {
-          // Ignore stale playing/paused/ready echoes while an intent is in flight.
+          // Confirm or ignore while an intent is in flight.
           switch (event.state) {
             case PlayerState.playing:
+              if (_wantPlaying == true) {
+                _clearTransportIntent();
+                _state = event.state;
+              }
             case PlayerState.paused:
+              if (_wantPlaying == false) {
+                _clearTransportIntent();
+                _state = event.state;
+              }
             case PlayerState.ready:
             case PlayerState.stopped:
               break;

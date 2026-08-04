@@ -6,10 +6,13 @@ import 'playback_progress_slider.dart';
 import 'scrub_controller.dart';
 import 'scrub_preview_bubble.dart';
 import 'scrub_preview_controller.dart';
+import 'scrub_preview_track.dart';
 
-/// Progress slider with optional scrub thumbnail bubble / 带缩略图预览的进度条.
+/// Progress slider with scrub thumbnail bubble while dragging /
+/// 拖动进度条时显示缩略图预览，松手后隐藏。
 class ProgressBarWithPreview extends StatefulWidget {
-  /// Creates a progress bar with scrub preview / 创建带预览的进度条.
+  /// Creates a progress bar with drag-only scrub preview /
+  /// 创建仅拖动时显示预览的进度条.
   const ProgressBarWithPreview({
     super.key,
     required this.model,
@@ -17,6 +20,7 @@ class ProgressBarWithPreview extends StatefulWidget {
     required this.preview,
     required this.theme,
     required this.builder,
+    this.scrubPreview,
     this.cupertino = false,
     this.previewBarHeight = 56,
   });
@@ -26,6 +30,9 @@ class ProgressBarWithPreview extends StatefulWidget {
   final ScrubPreviewController preview;
   final VideoControlsTheme theme;
   final PlaybackProgressSliderBuilder builder;
+
+  /// External thumbnail track (WebVTT / sprite / frames). Null = time-only bubble.
+  final ScrubPreviewTrack? scrubPreview;
   final bool cupertino;
   final double previewBarHeight;
 
@@ -37,28 +44,15 @@ class _ProgressBarWithPreviewState extends State<ProgressBarWithPreview> {
   @override
   void initState() {
     super.initState();
-    widget.preview.setSource(widget.model.mediaSource);
-    widget.model.addListener(_onModel);
+    widget.preview.setTrack(widget.scrubPreview);
   }
 
   @override
   void didUpdateWidget(covariant ProgressBarWithPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.model != widget.model) {
-      oldWidget.model.removeListener(_onModel);
-      widget.model.addListener(_onModel);
+    if (oldWidget.scrubPreview != widget.scrubPreview) {
+      widget.preview.setTrack(widget.scrubPreview);
     }
-    widget.preview.setSource(widget.model.mediaSource);
-  }
-
-  @override
-  void dispose() {
-    widget.model.removeListener(_onModel);
-    super.dispose();
-  }
-
-  void _onModel() {
-    widget.preview.setSource(widget.model.mediaSource);
   }
 
   void _previewAt(double fraction) {
@@ -106,37 +100,19 @@ class _ProgressBarWithPreviewState extends State<ProgressBarWithPreview> {
       },
     );
 
-    final child = MouseRegion(
-      onHover: (event) {
-        if (widget.scrub.isScrubbing) return;
-        final box = context.findRenderObject() as RenderBox?;
-        if (box == null || !box.hasSize || box.size.width <= 0) return;
-        final fraction = (event.localPosition.dx / box.size.width).clamp(
-          0.0,
-          1.0,
-        );
-        if (!widget.model.isSeekable ||
-            widget.model.duration <= Duration.zero) {
-          return;
-        }
-        _previewAt(fraction);
-      },
-      onExit: (_) {
-        if (!widget.scrub.isScrubbing) widget.preview.clear();
-      },
-      child: slider,
-    );
-
     return Stack(
       clipBehavior: Clip.none,
-      alignment: Alignment.bottomCenter,
       children: [
-        ScrubPreviewBubble(
-          controller: widget.preview,
-          theme: widget.theme,
-          barHeight: widget.previewBarHeight,
+        slider,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ScrubPreviewBubble(
+              controller: widget.preview,
+              theme: widget.theme,
+              barHeight: widget.previewBarHeight,
+            ),
+          ),
         ),
-        child,
       ],
     );
   }

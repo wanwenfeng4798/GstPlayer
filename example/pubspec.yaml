@@ -30,3 +30,5 @@ flutter:
   assets:
     - assets/sample.mp4
     - assets/sample.srt
+    - assets/sample_preview.vtt
+    - assets/preview/sprite.jpg

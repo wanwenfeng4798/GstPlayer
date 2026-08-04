@@ -15,6 +15,8 @@ import 'immersive_gesture_layer.dart';
 import 'immersive_hud.dart';
 import 'material_video_controls.dart';
 import 'playback_controls_model.dart';
+import 'scrub_preview_track.dart';
+import 'bili_overlay_controls.dart';
 
 /// 在视频上方绘制自适应、自动隐藏控件栏的 overlay / Overlay with adaptive, auto-hiding control bar on top of the video.
 ///
@@ -28,18 +30,32 @@ class VideoControls extends StatefulWidget {
   /// - `immersive` — 沉浸控件状态 / immersive controls state
   /// - `style` — Material / Cupertino / adaptive
   /// - `autoHide` — 播放中自动隐藏延迟 / auto-hide delay while playing
+  /// - `scrubPreview` — 外部进度条缩略图轨（WebVTT/雪碧图），不实时抽帧
+  /// - `overlayControls` — B 站风格弹幕输入与外挂字幕开关
   const VideoControls({
     super.key,
     required this.model,
     required this.immersive,
     this.style = VideoControlsStyle.adaptive,
     this.autoHide = const Duration(seconds: 3),
+    this.scrubPreview,
+    this.overlayControls,
+    this.showCaptureButton = true,
   });
 
   final PlaybackControlsModel model;
   final ImmersiveControlsState immersive;
   final VideoControlsStyle style;
   final Duration autoHide;
+
+  /// External scrub thumbnail track (GSY-style). Null shows time label only.
+  final ScrubPreviewTrack? scrubPreview;
+
+  /// Danmaku input + external subtitle toggles on the bottom chrome.
+  final BiliOverlayControlsConfig? overlayControls;
+
+  /// Screenshot button on the bottom chrome (off by default on mobile).
+  final bool showCaptureButton;
 
   @override
   State<VideoControls> createState() => _VideoControlsState();
@@ -249,6 +265,9 @@ class _VideoControlsState extends State<VideoControls> {
             model: widget.model,
             theme: theme,
             onInteract: _keepAlive,
+            scrubPreview: widget.scrubPreview,
+            overlayControls: widget.overlayControls,
+            showCaptureButton: widget.showCaptureButton,
             showFullscreenButton: isMobilePlatform,
             landscapeLocked: widget.immersive.landscapeLocked,
             onFullscreenToggle: _toggleFullscreen,
@@ -258,6 +277,9 @@ class _VideoControlsState extends State<VideoControls> {
             model: widget.model,
             theme: theme,
             onInteract: _keepAlive,
+            scrubPreview: widget.scrubPreview,
+            overlayControls: widget.overlayControls,
+            showCaptureButton: widget.showCaptureButton,
             showFullscreenButton: isMobilePlatform,
             landscapeLocked: widget.immersive.landscapeLocked,
             onFullscreenToggle: _toggleFullscreen,

@@ -28,14 +28,14 @@ GstFlowReturn gstp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
   }
   GstSample *sample = gst_app_sink_pull_sample(sink);
   if (!sample) {
-    return GST_FLOW_ERROR;
+    return GST_FLOW_OK;
   }
 
   GstCaps *caps = gst_sample_get_caps(sample);
   GstBuffer *buffer = gst_sample_get_buffer(sample);
   if (!caps || !buffer) {
     gst_sample_unref(sample);
-    return GST_FLOW_ERROR;
+    return GST_FLOW_OK;
   }
 
   GstStructure *s = gst_caps_get_structure(caps, 0);
@@ -51,7 +51,7 @@ GstFlowReturn gstp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
   GstMapInfo map;
   if (!gst_buffer_map(buffer, &map, GST_MAP_READ)) {
     gst_sample_unref(sample);
-    return GST_FLOW_ERROR;
+    return GST_FLOW_OK;
   }
 
   const int dst_stride = width * 4;

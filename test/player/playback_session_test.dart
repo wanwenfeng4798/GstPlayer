@@ -233,7 +233,7 @@ void main() {
 
         // First toggle starts pause and blocks mid-flight.
         final first = session.togglePlayPause();
-        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(const Duration(milliseconds: 240));
         expect(session.isPlaying, isFalse);
         expect(port.transportLog, ['pause']);
 
@@ -246,6 +246,7 @@ void main() {
         gate.complete();
         await first;
         await last;
+        await Future<void>.delayed(const Duration(milliseconds: 240));
 
         // Intermediate intents coalesce; native must end on play.
         expect(port.transportLog.last, 'play');

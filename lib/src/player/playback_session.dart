@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -27,6 +28,8 @@ import 'command_port.dart';
 /// Seek/volume and similar commands optimistically update UI (`_preview*`) before async Rust calls.
 class PlaybackSession extends ChangeNotifier
     implements PlaybackControlsModel, PlaybackPresentationModel {
+  static const Duration _transportDebounce = Duration(milliseconds: 200);
+
   /// 创建会话；可注入测试用 [port] 与 [mediaSourceResolver] / Creates a session with optional test doubles.
   PlaybackSession({
     PlayerCommandPort? port,
@@ -260,8 +263,8 @@ class PlaybackSession extends ChangeNotifier
   Future<void> _runTransportFlush() async {
     try {
       while (!_disposed) {
-        // Coalesce rapid taps in the same event-loop turn before hitting native.
-        await Future<void>.delayed(Duration.zero);
+        // Coalesce rapid taps so we don't hammer Android codec state changes.
+        await Future<void>.delayed(_transportDebounce);
         final want = _wantPlaying;
         final gen = _wantGen;
         if (want == null || gen == null) break;
@@ -366,20 +369,28 @@ class PlaybackSession extends ChangeNotifier
 
   @override
   Future<Uint8List?> captureFramePng() async {
+    /* Android display sink has no appsink branch; use headless thumbnail. */
+    if (!kIsWeb && Platform.isAndroid) {
+      return _captureThumbnailFallback();
+    }
     try {
       return await captureCurrentFrame();
     } catch (_) {
-      final source = _mediaSource;
-      if (source == null) return null;
-      try {
-        return await GstPlayer.captureThumbnail(
-          source,
-          at: _position,
-          maxWidth: 720,
-        );
-      } catch (_) {
-        return null;
-      }
+      return _captureThumbnailFallback();
+    }
+  }
+
+  Future<Uint8List?> _captureThumbnailFallback() async {
+    final source = _mediaSource;
+    if (source == null) return null;
+    try {
+      return await GstPlayer.captureThumbnail(
+        source,
+        at: _position,
+        maxWidth: 720,
+      );
+    } catch (_) {
+      return null;
     }
   }
 

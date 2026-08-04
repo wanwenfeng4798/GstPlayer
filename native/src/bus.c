@@ -131,8 +131,9 @@ static gboolean gstp_bus_on_message(GstBus *bus, GstMessage *msg,
     }
     p->buffering_percent = percent;
     if (percent < 100) {
-      /* Pause download while prerolling network buffers. */
-      if (p->desired_playing && p->pipeline) {
+      /* Match playbin usage: force PAUSED only for URI/network-style buffering.
+       * Local/asset transient buffering should not interrupt decode state. */
+      if (p->is_uri && p->desired_playing && p->pipeline) {
         gst_element_set_state(p->pipeline, GST_STATE_PAUSED);
       }
       gstp_player_set_state(p, GSTP_STATE_BUFFERING);
@@ -149,7 +150,8 @@ static gboolean gstp_bus_on_message(GstBus *bus, GstMessage *msg,
         break;
       }
 #endif
-      if (p->pipeline) {
+      if (p->is_uri && p->pipeline) {
+        /* Resume forced buffering pause only for URI/network streams. */
         gst_element_set_state(p->pipeline, GST_STATE_PLAYING);
       }
       gstp_player_set_state(p, GSTP_STATE_PLAYING);

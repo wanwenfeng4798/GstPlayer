@@ -17,6 +17,21 @@ void main() {
       state.dispose();
     });
 
+    test('gesturesEnabled is true on mobile without fullscreen', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      state = ImmersiveControlsState(
+        initialAspectRatioMode: AspectRatioMode.fit,
+        fullscreen: const VideoControlsFullscreenConfig(),
+      );
+      expect(state.landscapeLocked, isFalse);
+      expect(state.gesturesEnabled, isTrue);
+      expect(state.immersiveActive, isFalse);
+
+      state.landscapeLocked = true;
+      expect(state.gesturesEnabled, isTrue);
+      expect(state.immersiveActive, isTrue);
+    });
+
     test('immersiveActive follows desktopImmersive on desktop hosts', () {
       state = ImmersiveControlsState(
         initialAspectRatioMode: AspectRatioMode.fit,

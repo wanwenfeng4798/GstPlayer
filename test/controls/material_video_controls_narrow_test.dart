@@ -22,7 +22,7 @@ void main() {
             height: 200,
             child: MaterialVideoControls(
               model: model,
-              theme: VideoControlsTheme.material(),
+              theme: VideoControlsTheme.bilibili(),
               onInteract: () {},
               showFullscreenButton: true,
               landscapeLocked: false,
@@ -36,9 +36,9 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.textContaining('/'), findsOneWidget);
-    expect(find.byIcon(Icons.loop), findsNothing);
-    expect(find.text('1.0x'), findsNothing);
-    expect(find.byIcon(Icons.volume_up), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow), findsWidgets);
     expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+    // Compact width hides secondary tools including volume.
+    expect(find.byIcon(Icons.volume_up), findsNothing);
   });
 }

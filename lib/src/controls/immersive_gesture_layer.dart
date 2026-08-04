@@ -27,6 +27,9 @@ double seekSecondsFromDrag({
 }
 
 /// 移动端沉浸手势层：分区亮度/音量、水平进退 / Mobile immersive gestures: brightness, volume, seek.
+///
+/// 全屏与非全屏均挂载；与顶栏 [ImmersiveControlsState.immersiveActive] 无关。
+/// Mounted for both fullscreen and inline; independent of [ImmersiveControlsState.immersiveActive].
 class ImmersiveGestureLayer extends StatefulWidget {
   /// 创建手势层 / Creates the gesture layer.
   const ImmersiveGestureLayer({
@@ -59,6 +62,7 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
   bool _isHorizontal = false;
   double? _brightnessBaseline;
   double? _volumeBaseline;
+  double _lastKnownBrightness = 1.0;
 
   _GestureZone _zoneFor(double x, double width) {
     if (x < width * _leftZoneRatio) return _GestureZone.left;
@@ -67,7 +71,23 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
   }
 
   Future<void> _ensureBrightnessBaseline() async {
-    _brightnessBaseline ??= await ScreenBrightness.instance.application;
+    try {
+      final value = await ScreenBrightness.instance.application;
+      _lastKnownBrightness = value.clamp(0.0, 1.0);
+      _brightnessBaseline ??= _lastKnownBrightness;
+    } catch (_) {
+      _brightnessBaseline ??= _lastKnownBrightness;
+    }
+  }
+
+  Future<void> _setBrightness(double brightness) async {
+    try {
+      await ScreenBrightness.instance.setApplicationScreenBrightness(
+        brightness,
+      );
+    } catch (_) {
+      // Platform may reject; HUD still reflects intended value.
+    }
   }
 
   void _onPanStart(DragStartDetails details) {
@@ -80,6 +100,8 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
     _axisResolved = false;
     _isHorizontal = false;
     _volumeBaseline = widget.model.volume;
+    // Immediate fallback so the first vertical updates are not dropped.
+    _brightnessBaseline ??= _lastKnownBrightness;
     unawaited(_ensureBrightnessBaseline());
   }
 
@@ -126,12 +148,10 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
 
     switch (zone) {
       case _GestureZone.left:
-        final base = _brightnessBaseline;
-        if (base == null) return;
+        final base = _brightnessBaseline ?? _lastKnownBrightness;
         final brightness = (base + deltaNorm * 0.5).clamp(0.0, 1.0);
-        unawaited(
-          ScreenBrightness.instance.setApplicationScreenBrightness(brightness),
-        );
+        _lastKnownBrightness = brightness;
+        unawaited(_setBrightness(brightness));
         widget.immersive.showHud(
           ImmersiveHudSnapshot(
             kind: ImmersiveHudKind.brightness,

@@ -242,9 +242,7 @@ class _VideoControlsState extends State<VideoControls> {
     final cupertino = _useCupertino(context);
     final theme =
         Theme.of(context).extension<VideoControlsTheme>() ??
-        (cupertino
-            ? VideoControlsTheme.cupertino()
-            : VideoControlsTheme.material());
+        VideoControlsTheme.bilibili();
 
     final controls = cupertino
         ? CupertinoVideoControls(
@@ -284,42 +282,30 @@ class _VideoControlsState extends State<VideoControls> {
     Widget body = Stack(
       fit: StackFit.expand,
       children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
+        if (isMobilePlatform)
+          ImmersiveGestureLayer(
+            immersive: widget.immersive,
+            model: widget.model,
             onTap: _toggle,
-            onDoubleTap: () async {
-              final wasPlaying = widget.model.isPlaying;
-              await widget.model.togglePlayPause();
-              widget.immersive.showHud(
-                ImmersiveHudSnapshot(
-                  kind: ImmersiveHudKind.playPause,
-                  value: wasPlaying ? 0.0 : 1.0,
-                ),
-              );
-            },
-            child: const SizedBox.expand(),
-          ),
-        ),
-        ListenableBuilder(
-          listenable: widget.immersive,
-          builder: (context, _) {
-            if (!widget.immersive.immersiveActive) {
-              return const SizedBox.shrink();
-            }
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                if (isMobilePlatform)
-                  ImmersiveGestureLayer(
-                    immersive: widget.immersive,
-                    model: widget.model,
-                    onTap: _toggle,
+          )
+        else
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _toggle,
+              onDoubleTap: () async {
+                final wasPlaying = widget.model.isPlaying;
+                await widget.model.togglePlayPause();
+                widget.immersive.showHud(
+                  ImmersiveHudSnapshot(
+                    kind: ImmersiveHudKind.playPause,
+                    value: wasPlaying ? 0.0 : 1.0,
                   ),
-              ],
-            );
-          },
-        ),
+                );
+              },
+              child: const SizedBox.expand(),
+            ),
+          ),
         if (!isMobilePlatform)
           Focus(
             focusNode: _focusNode,

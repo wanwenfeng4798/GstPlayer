@@ -33,20 +33,20 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme> {
     this.bufferingTextStyle,
   });
 
-  /// Material 预设（实心图标、宽滑条、半透明 scrim）/ Material preset.
+  /// Material 预设 / Material preset.
   factory VideoControlsTheme.material() => const VideoControlsTheme(
     iconColor: Color(0xFFFFFFFF),
-    activeIconColor: Color(0xFF82B1FF),
-    activeTrackColor: Color(0xFFFFFFFF),
+    activeIconColor: Color(0xFFFB7299),
+    activeTrackColor: Color(0xFFFB7299),
     inactiveTrackColor: Color.fromARGB(118, 255, 255, 255),
     bufferedTrackColor: Color.fromARGB(149, 255, 255, 255),
-    thumbColor: Color(0xFFFFFFFF),
+    thumbColor: Color(0xFFFB7299),
     textColor: Color(0xFFFFFFFF),
     backgroundColor: Color(0x99000000),
     primaryIconSize: 24,
     secondaryIconSize: 20,
     centerButtonSize: 48,
-    barPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    barPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
     borderRadius: 0,
     bufferingScrimColor: Colors.transparent,
     bufferingIndicatorColor: Color(0xFFFFFFFF),
@@ -56,24 +56,47 @@ class VideoControlsTheme extends ThemeExtension<VideoControlsTheme> {
     stretchScreenIcon: Icons.aspect_ratio,
   );
 
-  /// Cupertino 预设（细轨道、圆角半透明栏）/ Cupertino preset.
+  /// Cupertino 预设（B 站粉轨）/ Cupertino preset with Bilibili pink track.
   factory VideoControlsTheme.cupertino() => const VideoControlsTheme(
     iconColor: Color(0xFFFFFFFF),
-    activeIconColor: Color(0xFFFFFFFF),
-    activeTrackColor: Color(0xFFFFFFFF),
+    activeIconColor: Color(0xFFFB7299),
+    activeTrackColor: Color(0xFFFB7299),
     inactiveTrackColor: Color(0x3DFFFFFF),
     bufferedTrackColor: Color(0x66FFFFFF),
-    thumbColor: Color(0xFFFFFFFF),
+    thumbColor: Color(0xFFFB7299),
     textColor: Color(0xFFEBEBF5),
-    backgroundColor: Color(0x66000000),
+    backgroundColor: Color(0x99000000),
     primaryIconSize: 24,
     secondaryIconSize: 20,
     centerButtonSize: 48,
-    barPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-    borderRadius: 14,
+    barPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+    borderRadius: 0,
     bufferingScrimColor: Colors.transparent,
     bufferingIndicatorColor: Color(0xFFEBEBF5),
     bufferingTextColor: Color(0xFFEBEBF5),
+    fitScreenIcon: Icons.fit_screen,
+    fillScreenIcon: Icons.crop_free,
+    stretchScreenIcon: Icons.aspect_ratio,
+  );
+
+  /// Bilibili 预设（粉强调 `#FB7299`）/ Bilibili preset (pink accent).
+  factory VideoControlsTheme.bilibili() => const VideoControlsTheme(
+    iconColor: Color(0xFFFFFFFF),
+    activeIconColor: Color(0xFFFB7299),
+    activeTrackColor: Color(0xFFFB7299),
+    inactiveTrackColor: Color(0x4DFFFFFF),
+    bufferedTrackColor: Color(0x80FFFFFF),
+    thumbColor: Color(0xFFFB7299),
+    textColor: Color(0xFFFFFFFF),
+    backgroundColor: Color(0xB3000000),
+    primaryIconSize: 26,
+    secondaryIconSize: 20,
+    centerButtonSize: 48,
+    barPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+    borderRadius: 0,
+    bufferingScrimColor: Colors.transparent,
+    bufferingIndicatorColor: Color(0xFFFB7299),
+    bufferingTextColor: Color(0xFFFFFFFF),
     fitScreenIcon: Icons.fit_screen,
     fillScreenIcon: Icons.crop_free,
     stretchScreenIcon: Icons.aspect_ratio,

@@ -1,25 +1,14 @@
-import 'dart:ui';
-
-import 'package:chat_context_menu/chat_context_menu.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 
-import '../constant/constant.dart';
-import '../domain/player_events.dart';
 import '../theme/video_controls_theme.dart';
-import '../utils/time_util.dart';
+import 'bili_bottom_chrome.dart';
 import 'center_button.dart';
 import 'immersive_controls_state.dart';
 import 'playback_controls_model.dart';
-import 'progress_bar_with_preview.dart';
 import 'scrub_controller.dart';
 import 'scrub_preview_controller.dart';
-import 'volume_slider.dart';
 
-/// Cupertino 风格内置视频控件栏 / Cupertino-styled built-in video control bar.
-///
-/// 磨砂底栏、[CupertinoSlider]、倍速 ActionSheet；中央 [CenterButton]。
-/// Frosted bar, [CupertinoSlider], speed ActionSheet; central [CenterButton].
+/// Cupertino 风格内置视频控件栏（B 站底栏布局）/ Cupertino controls with Bilibili bottom chrome.
 class CupertinoVideoControls extends StatefulWidget {
   const CupertinoVideoControls({
     super.key,
@@ -35,17 +24,9 @@ class CupertinoVideoControls extends StatefulWidget {
   final PlaybackControlsModel model;
   final VideoControlsTheme theme;
   final VoidCallback onInteract;
-
-  /// 是否显示全屏按钮（仅移动端）/ Whether to show the fullscreen toggle (mobile only).
   final bool showFullscreenButton;
-
-  /// 横屏锁定态 / Landscape lock state.
   final bool? landscapeLocked;
-
-  /// 全屏切换回调 / Fullscreen toggle callback.
   final VoidCallback? onFullscreenToggle;
-
-  /// 沉浸状态；用于中央按钮与 HUD 互斥 / Immersive state for center/HUD mutex.
   final ImmersiveControlsState? immersive;
 
   @override
@@ -107,15 +88,11 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
   Widget build(BuildContext context) {
     final model = widget.model;
     final theme = widget.theme;
-    final size = MediaQuery.sizeOf(context);
     return ListenableBuilder(
       listenable: _listenable,
       builder: (context, _) {
         final landscapeLocked =
             widget.immersive?.landscapeLocked ?? widget.landscapeLocked;
-        final subtitleTracks = model.tracks
-            .where((t) => t.trackType == TrackType.subtitle)
-            .toList();
         return Stack(
           fit: StackFit.expand,
           children: [
@@ -128,303 +105,17 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
                 hud: widget.immersive?.hud,
               ),
             ),
-            Positioned(
-              left: 8,
-              right: 8,
-              bottom: 8,
-              child: SafeArea(
-                top: false,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(theme.borderRadius),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(color: theme.backgroundColor),
-                      child: SizedBox(
-                        width: size.width - 16,
-                        child: Padding(
-                          padding: theme.barPadding,
-                          child: Row(
-                            children: [
-                              IconButton(
-                                onPressed: () {
-                                  widget.onInteract();
-                                  model.toggleMuted();
-                                },
-                                style: IconButton.styleFrom(
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                icon: Icon(
-                                  model.muted || model.volume == 0
-                                      ? CupertinoIcons.volume_off
-                                      : CupertinoIcons.volume_up,
-                                  size: theme.secondaryIconSize,
-                                  color: theme.iconColor,
-                                ),
-                              ),
-                              VolumeSlider(
-                                model: model,
-                                theme: theme,
-                                onInteract: widget.onInteract,
-                                cupertino: true,
-                                width: 64,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                formatDuration(model.position),
-                                style: TextStyle(
-                                  color: theme.textColor,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                  ),
-                                  child: ProgressBarWithPreview(
-                                    model: model,
-                                    scrub: _scrub,
-                                    preview: _preview,
-                                    theme: theme,
-                                    cupertino: true,
-                                    previewBarHeight: 52,
-                                    builder: (context, snap) => CupertinoSlider(
-                                      value: snap.displayValue,
-                                      activeColor: theme.activeTrackColor,
-                                      thumbColor: theme.thumbColor,
-                                      onChangeStart: snap.enabled
-                                          ? (_) => snap.onSeekStart?.call()
-                                          : null,
-                                      onChanged: snap.onSeekChanged,
-                                      onChangeEnd: snap.onSeekEnd,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                formatDuration(model.duration),
-                                style: TextStyle(
-                                  color: theme.textColor,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              IconButton(
-                                onPressed: _captureFrame,
-                                style: IconButton.styleFrom(
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                icon: Icon(
-                                  CupertinoIcons.camera,
-                                  size: theme.secondaryIconSize,
-                                  color: theme.iconColor,
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: () async {
-                                  widget.onInteract();
-                                  await model.setLooping(!model.looping);
-                                },
-                                style: IconButton.styleFrom(
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                icon: Icon(
-                                  CupertinoIcons.repeat,
-                                  size: theme.secondaryIconSize,
-                                  color: model.looping
-                                      ? theme.iconColor
-                                      : theme.iconColor.withValues(alpha: 0.5),
-                                ),
-                              ),
-                              if (model.supportsTracks &&
-                                  subtitleTracks.isNotEmpty)
-                                ChatContextMenuWrapper(
-                                  topPadding: 0,
-                                  backgroundColor: theme.backgroundColor,
-                                  borderRadius: BorderRadius.circular(
-                                    theme.borderRadius,
-                                  ),
-                                  padding: EdgeInsets.zero,
-                                  menuBuilder: (context, hideMenu) {
-                                    return Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        for (final track in subtitleTracks)
-                                          InkWell(
-                                            onTap: () {
-                                              widget.onInteract();
-                                              model.selectTrack(
-                                                track,
-                                                enable: !track.selected,
-                                              );
-                                              hideMenu();
-                                            },
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 16,
-                                                    vertical: 10,
-                                                  ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  SizedBox(
-                                                    width: 20,
-                                                    child: track.selected
-                                                        ? Icon(
-                                                            Icons.check,
-                                                            size: 16,
-                                                            color: theme
-                                                                .textColor,
-                                                          )
-                                                        : null,
-                                                  ),
-                                                  Text(
-                                                    track.label.isEmpty
-                                                        ? 'Subtitle ${track.id}'
-                                                        : track.label,
-                                                    style: TextStyle(
-                                                      color: theme.textColor,
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    );
-                                  },
-                                  widgetBuilder: (context, showMenu, _) {
-                                    return IconButton(
-                                      onPressed: showMenu,
-                                      style: IconButton.styleFrom(
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                        visualDensity: VisualDensity.compact,
-                                      ),
-                                      icon: Icon(
-                                        CupertinoIcons.captions_bubble,
-                                        size: theme.secondaryIconSize,
-                                        color: theme.iconColor,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ChatContextMenuWrapper(
-                                topPadding: 0,
-                                backgroundColor: theme.backgroundColor,
-                                borderRadius: BorderRadius.circular(
-                                  theme.borderRadius,
-                                ),
-                                padding: EdgeInsets.zero,
-                                menuBuilder: (context, hideMenu) {
-                                  return ListenableBuilder(
-                                    listenable: model,
-                                    builder: (context, _) {
-                                      final current = model.speed;
-                                      return Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          for (final s in speeds)
-                                            InkWell(
-                                              onTap: () {
-                                                widget.onInteract();
-                                                model.setSpeed(s);
-                                                hideMenu();
-                                              },
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 10,
-                                                    ),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    SizedBox(
-                                                      width: 20,
-                                                      child: s == current
-                                                          ? Icon(
-                                                              Icons.check,
-                                                              size: 16,
-                                                              color: theme
-                                                                  .textColor,
-                                                            )
-                                                          : null,
-                                                    ),
-                                                    Text(
-                                                      '${s}x',
-                                                      style: TextStyle(
-                                                        color: theme.textColor,
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      );
-                                    },
-                                  );
-                                },
-                                widgetBuilder: (context, showMenu, _) {
-                                  return GestureDetector(
-                                    onTap: showMenu,
-                                    child: Text(
-                                      '${model.speed}x',
-                                      style: TextStyle(
-                                        color: theme.iconColor,
-                                        fontSize:
-                                            theme.secondaryIconSize * 0.7,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              if (widget.showFullscreenButton &&
-                                  landscapeLocked != null &&
-                                  widget.onFullscreenToggle != null) ...[
-                                const SizedBox(width: 6),
-                                IconButton(
-                                  onPressed: () {
-                                    widget.onInteract();
-                                    widget.onFullscreenToggle!();
-                                  },
-                                  style: IconButton.styleFrom(
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  icon: Icon(
-                                    landscapeLocked
-                                        ? CupertinoIcons
-                                              .arrow_down_right_arrow_up_left
-                                        : CupertinoIcons
-                                              .arrow_up_left_arrow_down_right,
-                                    size: theme.secondaryIconSize,
-                                    color: theme.iconColor,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            BiliBottomChrome(
+              model: model,
+              theme: theme,
+              onInteract: widget.onInteract,
+              scrub: _scrub,
+              preview: _preview,
+              icons: BiliControlIcons.cupertino,
+              onCapture: _captureFrame,
+              showFullscreenButton: widget.showFullscreenButton,
+              landscapeLocked: landscapeLocked,
+              onFullscreenToggle: widget.onFullscreenToggle,
             ),
           ],
         );

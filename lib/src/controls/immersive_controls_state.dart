@@ -95,7 +95,17 @@ class ImmersiveControlsState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 沉浸能力是否激活 / Whether immersive features are active.
+  /// 是否启用画面手势（亮度/音量/seek）/ Whether surface gestures are enabled.
+  ///
+  /// 移动端恒为 true（全屏与非全屏）；桌面端跟随 [desktopImmersive]。
+  /// Always true on mobile (fullscreen and inline); follows [desktopImmersive] on desktop.
+  bool get gesturesEnabled =>
+      isMobilePlatform || _fullscreen.desktopImmersive;
+
+  /// 沉浸能力是否激活（顶栏铺满菜单等）/ Whether immersive chrome features are active.
+  ///
+  /// 移动端仅全屏；桌面端跟随 [desktopImmersive]。不作为手势门闸。
+  /// Fullscreen-only on mobile; follows [desktopImmersive] on desktop. Not a gesture gate.
   bool get immersiveActive => isMobilePlatform
       ? _landscapeLocked
       : _fullscreen.desktopImmersive;

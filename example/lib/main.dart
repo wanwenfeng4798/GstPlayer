@@ -22,15 +22,15 @@ class MyApp extends StatelessWidget {
       title: 'GST视频播放器',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorSchemeSeed: Colors.indigo,
+        colorSchemeSeed: Colors.pink,
         useMaterial3: true,
-        extensions: [VideoControlsTheme.cupertino()],
+        extensions: [VideoControlsTheme.bilibili()],
       ),
       darkTheme: ThemeData(
-        colorSchemeSeed: Colors.indigo,
+        colorSchemeSeed: Colors.pink,
         brightness: Brightness.dark,
         useMaterial3: true,
-        extensions: [VideoControlsTheme.cupertino()],
+        extensions: [VideoControlsTheme.bilibili()],
       ),
       home: const HomePage(),
     );

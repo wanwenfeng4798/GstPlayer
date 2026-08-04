@@ -369,7 +369,8 @@ class PlaybackSession extends ChangeNotifier
 
   @override
   Future<Uint8List?> captureFramePng() async {
-    /* Android display sink has no appsink branch; use headless thumbnail. */
+    /* All platforms: GStreamer screenshot path (official snapshot-style thumbnail).
+     * Android display sink has no appsink branch, so go straight to thumbnail. */
     if (!kIsWeb && Platform.isAndroid) {
       return _captureThumbnailFallback();
     }

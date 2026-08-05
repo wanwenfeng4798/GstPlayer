@@ -68,10 +68,15 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _ready = false;
   String? _initError;
 
+  // Public progressive downloads (mp4 / mkv / webm / mov / avi). Avoid Google
+  // gtv-videos-bucket — often unreachable in some networks.
   static const _networkSamples = [
-    'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-    'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
+    'https://test-videos.co.uk/vids/bigbuckbunny/mkv/360/Big_Buck_Bunny_360_10s_1MB.mkv',
+    'https://test-videos.co.uk/vids/bigbuckbunny/webm/vp9/360/Big_Buck_Bunny_360_10s_1MB.webm',
+    'https://filesamples.com/samples/video/mov/sample_640x360.mov',
+    'https://filesamples.com/samples/video/avi/sample_640x360.avi',
+    'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
   ];
 
   static const _assetSource = VideoSource.asset('assets/sample.mp4');

@@ -140,7 +140,7 @@ rustup target add \
 
 ```yaml
 dependencies:
-  gstplayer: ^0.0.1
+  gstplayer: ^0.0.2
 ```
 
 ```bash

@@ -1,3 +1,67 @@
+## 0.0.2
+
+### Playback stability (Android)
+
+- Android video sink is **display-only**:
+  `glupload → glcolorconvert → glvideoflip → queue → glimagesink`.
+- Removed the main-pipeline capture tee
+  (`tee → gldownload → videoconvert → capsfilter → appsink`). That branch
+  competed with MediaCodec / External-OES under rapid play/pause and caused
+  `_amc_gl_wait`, frozen video, and flush failures.
+- `gst_element_set_state` for play/pause/stop no longer blocks up to 5s on
+  `get_state`; UI converges via bus `STATE_CHANGED`.
+- `BUFFERING` forced PAUSED/PLAYING applies only to URI/network streams
+  (`is_uri`); local/asset transient buffering no longer interrupts decode.
+- `appsink` sample callback returns `GST_FLOW_OK` on drop instead of
+  `GST_FLOW_ERROR`, so a bad capture frame cannot tear down the pipeline.
+- Dart transport: play/pause intent coalesce with **200ms debounce**, so rapid
+  toggles send only the latest intent to native (tests updated accordingly).
+
+### Screenshot / thumbnail
+
+- Android `captureFramePng()` uses headless `GstPlayer.captureThumbnail`
+  (no live appsink on the display sink).
+- Native `gstp_thumbnail_capture` follows GStreamer official
+  `snapshot.c` flow:
+  `uridecodebin → videoconvert → videoscale → appsink`, then `PAUSED` →
+  seek (`KEY_UNIT | FLUSH`) → `pull-preroll`.
+- Android thumbnail extras (still GStreamer decodebin APIs):
+  - `autoplug-continue`: skip audio/text so `amcaudiodec` is never created
+    (avoids `Downstream returned not-linked` / `code should not be reached`
+    SIGABRT).
+  - `force-sw-decoders=true`: prefer libav so appsink gets system-memory
+    frames (AMC video is GL-only: “Codec only supports GL output but
+    downstream does not”).
+- iOS / desktop still prefer `captureCurrentFrame()` (appsink), with
+  thumbnail fallback on failure.
+- Screenshot keeps using GStreamer only (no Flutter `PixelCopy` path).
+
+### Controls & scrub preview
+
+- Bilibili-style bottom chrome: play, danmaku input, danmaku/subtitle toggles,
+  screenshot, fullscreen; overlay mode uses a compact row (overflow fixed).
+- Scrub preview is **external** (GSY-style WebVTT + sprite / frame list),
+  shown only while dragging — no live `captureThumbnail` on the scrub path.
+- `ScrubPreviewTrack` supports `assets/` WebVTT and sprite paths.
+- Example ships `assets/sample_preview.vtt` + `assets/preview/sprite.jpg`.
+- Removed example dedicated thumbnail/cover extraction page
+  (`thumbnail_page.dart`) and in-playback cover-grab UX from the sample app.
+- Thumbnail work runs on `FfiThumbnailWorker` (dedicated isolate) so scrub /
+  capture does not block play/pause/seek on the transport worker.
+
+### API / example
+
+- `GstVideoView` / controls expose overlay callbacks and keep
+  `showCaptureButton: true`.
+- Example demonstrates external scrub preview, bottom-bar danmaku, and
+  screenshot dialog via `captureFramePng()`.
+
+### Tests
+
+- Playback session: rapid toggle coalesce / late pause-event races.
+- Scrub preview controller and progress-bar-with-preview widgets.
+- FFI thumbnail worker smoke tests.
+
 ## 0.0.1
 
 ### Features

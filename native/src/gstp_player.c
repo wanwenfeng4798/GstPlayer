@@ -29,7 +29,7 @@ void gstp_player_set_state(GstpPlayer *p, int32_t state) {
   gstp_player_emit(p, GSTP_EVENT_STATE_CHANGED, "");
 }
 
-const char *gstp_version(void) { return "0.0.1"; }
+const char *gstp_version(void) { return "0.0.2"; }
 
 int32_t gstp_init(void) { return gstp_runtime_start(); }
 

@@ -148,7 +148,7 @@ Host GStreamer + `pkg-config` — see [Windows & Linux host SDK](#windows--linux
 
 ```yaml
 dependencies:
-  gstplayer: ^0.0.1
+  gstplayer: ^0.0.2
 ```
 
 ```bash

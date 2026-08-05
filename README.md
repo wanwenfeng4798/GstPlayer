@@ -28,8 +28,23 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 > It does **not** do recording, streaming (as a server), or system
 > picture-in-picture.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/android.jpg" alt="Android" width="28%" />
+  &nbsp;
+  <img src="docs/IOS.jpg" alt="iOS" width="28%" />
+  &nbsp;
+  <img src="docs/MAC.png" alt="macOS" width="38%" />
+</p>
+
+<p align="center">
+  <em>Android · iOS · macOS (example app)</em>
+</p>
+
 ## Table of contents
 
+- [Screenshots](#screenshots)
 - [Features](#features)
 - [Platform support](#platform-support)
 - [When to use kinetic_player instead](#when-to-use-kinetic_player-instead)

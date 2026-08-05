@@ -24,8 +24,23 @@ Apple/桌面：`appsink` BGRA 帧）。
 > 进度条缩略图预览、封面与播完留末帧、外挂字幕（SRT/VTT 叠层）、弹幕叠层、截图。
 > **不包含**录制、作为服务端推流、系统画中画。
 
+## 预览
+
+<p align="center">
+  <img src="docs/android.jpg" alt="Android" width="28%" />
+  &nbsp;
+  <img src="docs/IOS.jpg" alt="iOS" width="28%" />
+  &nbsp;
+  <img src="docs/MAC.png" alt="macOS" width="38%" />
+</p>
+
+<p align="center">
+  <em>Android · iOS · macOS（示例应用）</em>
+</p>
+
 ## 目录
 
+- [预览](#预览)
 - [功能特性](#功能特性)
 - [平台支持](#平台支持)
 - [何时改用 kinetic_player](#何时改用-kinetic_player)

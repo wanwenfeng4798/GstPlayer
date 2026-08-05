@@ -18,6 +18,7 @@ func ensureGStreamerMacOS(gstVer: String) {
         return
     }
     let macosDir = URL(fileURLWithPath: #filePath)
+        .resolvingSymlinksInPath()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
     let ensureScript = macosDir.appendingPathComponent("scripts/ensure_gstreamer_macos.sh").path

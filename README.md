@@ -475,6 +475,12 @@ before build/publish:
 - **Android / macOS `pkg-config` errors while building reqwest:** install
   `pkgconf` / `pkg-config` (e.g. `brew install pkgconf`).
 - **iOS Simulator:** not supported. Use a physical device.
+- **iOS `Plug-in ended with non-zero exit code: 1`:** usually the
+  `EnsureGStreamerIOS` SPM build plugin failed (first-time SDK download, or
+  missing `ios/scripts`). Open the Xcode Report navigator for the real stderr.
+  Manual fix: `sh ios/scripts/ensure_gstreamer_ios.sh` (needs network, ~480MB),
+  then rebuild. First Flutter SPM builds load the package via a `.packages`
+  symlink — current plugin code resolves that path to find `ios/scripts`.
 - **iOS `'gst/app/gstappsink.h' file not found`:** the example uses Swift Package
   Manager, which does not run the CocoaPods podspec. `Package.swift` /
   the `EnsureGStreamerIOS` build plugin download the SDK into

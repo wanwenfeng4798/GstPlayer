@@ -82,6 +82,11 @@ gst_pkg_download() {
   # Progress meter on stderr so Xcode/Flutter logs stay readable.
   curl -fL --retry 3 --retry-delay 2 --progress-bar \
     "${url}" -o "${file}.partial"
-  mv "${file}.partial" "${file}"
+  if [[ -f "${file}.partial" ]]; then
+    mv "${file}.partial" "${file}"
+  elif [[ ! -f "${file}" ]]; then
+    echo "error: download finished but ${file} is missing" >&2
+    return 1
+  fi
   echo "[gstplayer] Downloaded $(basename "${file}")"
 }

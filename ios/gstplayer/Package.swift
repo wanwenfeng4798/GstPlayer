@@ -16,7 +16,10 @@ func ensureGStreamerIOS(gstVer: String) {
     if Context.environment["GSTREAMER_ROOT_IOS"] != nil {
         return
     }
+    // Flutter SPM may load this Package.swift via `.packages/GstPlayer` symlink;
+    // resolve so `ios/scripts/` is found (not `.packages/scripts/`).
     let iosDir = URL(fileURLWithPath: #filePath)
+        .resolvingSymlinksInPath()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
     let ensureScript = iosDir.appendingPathComponent("scripts/ensure_gstreamer_ios.sh").path
@@ -61,7 +64,7 @@ if !FileManager.default.fileExists(atPath: "\(gstHeaders)/gst/gst.h"),
         [gstplayer] GStreamer iOS headers not found at:
           \(gstHeaders)
           \(gstLegacy)/GStreamer.framework/Headers
-        Run: sh \(URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("scripts/ensure_gstreamer_ios.sh").path)
+        Run: sh \(URL(fileURLWithPath: #filePath).resolvingSymlinksInPath().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("scripts/ensure_gstreamer_ios.sh").path)
 
         """,
         stderr

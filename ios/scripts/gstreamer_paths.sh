@@ -32,12 +32,18 @@ GSTPLAYER_GSTREAMER_IOS_PKG_DIR="${HOME}/Library/Caches/gstplayer/gstreamer/${GS
 STAMP="${GSTPLAYER_GSTREAMER_IOS_ROOT}/.install_stamp"
 GSTPLAYER_GSTREAMER_IOS_LEGACY="${_legacy_ios}"
 
+# Do not export GSTREAMER_ROOT_IOS for the default cache — that would make a
+# later `source` treat the cache as a "custom" incomplete root and refuse to
+# download. Only re-export when the user already set it.
 export GST_VER \
   GSTPLAYER_GSTREAMER_IOS_ROOT \
   GSTPLAYER_GSTREAMER_IOS_ROOT_IS_CUSTOM \
-  GSTREAMER_ROOT_IOS="${GSTPLAYER_GSTREAMER_IOS_ROOT}" \
   GSTREAMER_IOS_PKG \
   GSTREAMER_IOS_PKG_URL \
   GSTPLAYER_GSTREAMER_IOS_PKG_DIR \
   GSTPLAYER_GSTREAMER_IOS_LEGACY \
   STAMP
+
+if [[ "${GSTPLAYER_GSTREAMER_IOS_ROOT_IS_CUSTOM}" == "1" ]]; then
+  export GSTREAMER_ROOT_IOS="${GSTPLAYER_GSTREAMER_IOS_ROOT}"
+fi

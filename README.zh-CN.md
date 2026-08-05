@@ -452,6 +452,10 @@ dart run ffigen --config ffigen.yaml
 - **Android / macOS 构建 reqwest 时 `pkg-config` 报错：** 安装 `pkgconf` /
   `pkg-config`（例如 `brew install pkgconf`）。
 - **iOS 模拟器：** 不支持，请用真机。
+- **iOS 报 `Plug-in ended with non-zero exit code: 1`：** 通常是 SPM 构建插件
+  `EnsureGStreamerIOS` 失败（首次下载 SDK，或找不到 `ios/scripts`）。在 Xcode
+  Report 导航查看真实 stderr。可手动执行 `sh ios/scripts/ensure_gstreamer_ios.sh`
+  （需联网，约 480MB）后重编。
 - **iOS 报 `'gst/app/gstappsink.h' file not found`：** 示例工程走 Swift Package Manager，
   不会执行 CocoaPods podspec。`Package.swift` / `EnsureGStreamerIOS` 构建插件会在
   resolve/编译前把 SDK 下载到 `~/Library/Caches/gstplayer/gstreamer/<ver>/ios/iPhone.sdk`。

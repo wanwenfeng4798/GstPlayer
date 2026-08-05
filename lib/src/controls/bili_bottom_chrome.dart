@@ -185,10 +185,11 @@ class BiliBottomChrome extends StatelessWidget {
                     builder: (context, constraints) {
                       final compact = constraints.maxWidth < 320;
                       final hasOverlay = overlayControls != null;
-                      // Bilibili-style overlay row: play + danmaku + toggles only.
-                      // Volume/loop/speed belong to the classic row (no overlay).
+                      // Overlay row: danmaku/subtitle toggles. Volume stays visible
+                      // with or without overlay; loop/speed stay classic-only.
                       final showTimeInBar =
                           !hasOverlay || constraints.maxWidth >= 400;
+                      final showVolume = !compact;
                       final showSecondaryTools = !compact && !hasOverlay;
                       return Row(
                         children: [
@@ -314,7 +315,7 @@ class BiliBottomChrome extends StatelessWidget {
                               ),
                           ] else
                             const Spacer(),
-                          if (showSecondaryTools) ...[
+                          if (showVolume)
                             VolumePopupButton(
                               model: model,
                               theme: theme,
@@ -322,6 +323,7 @@ class BiliBottomChrome extends StatelessWidget {
                               volumeOnIcon: icons.volumeOn,
                               volumeOffIcon: icons.volumeOff,
                             ),
+                          if (showSecondaryTools) ...[
                             if (showCaptureButton && onCapture != null)
                               IconButton(
                                 style: IconButton.styleFrom(

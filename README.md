@@ -6,10 +6,11 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A cross-platform Flutter **video player** plugin that decodes local and network
-video with **GStreamer** (native **C** core + **Dart FFI**) and renders into
-Flutter external **`Texture`** widgets via a custom native bridge (GStreamer
-`appsink` on Apple/desktop; `glimagesink` + `SurfaceProducer` on Android).
+A polished, **all-in-one** Flutter **video player** with a beautiful built-in UI
+and **broad format support** — most local and network codecs via **GStreamer**
+(native **C** core + **Dart FFI**), rendered into Flutter external **`Texture`**
+widgets (GStreamer `appsink` on Apple/desktop; `glimagesink` + `SurfaceProducer`
+on Android).
 
 - Repository: <https://github.com/wanwenfeng4798/GstPlayer>
 
@@ -56,7 +57,7 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 - Poster image and keep-last-frame after EOS.
 - External subtitle overlay (SRT/WebVTT via `SubtitleParser`) plus embedded subtitle track selection API/UI.
 - Danmaku (bullet comment) overlay driven by app-supplied `DanmakuItem` cues.
-- Frame capture (`captureCurrentFrame`) and one-shot covers (`captureThumbnail`).
+- Frame capture (`captureCurrentFrame` / chrome `onScreenshot` — host saves PNG) and one-shot covers (`captureThumbnail`).
 - Reactive state via [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
   plain getters: state, position, duration, video size, aspect ratio, buffering %,
   volume, speed, looping, muted, and errors. Rebuild with `ListenableBuilder` /
@@ -369,6 +370,8 @@ auto-hiding Bilibili-style control bar (progress row + tool row).
 | `danmakuEnabled` | `false` | Toggle danmaku overlay. |
 | `subtitles` | `[]` | External `SubtitleCue` list (e.g. from `SubtitleParser`). |
 | `subtitlesEnabled` | `true` | Toggle external subtitle overlay. |
+| `showCaptureButton` | `true` | Show chrome capture button (also needs `onScreenshot`). |
+| `onScreenshot` | `null` | Host receives PNG bytes and owns saving (gallery / path). Plugin does not write disk or show a preview dialog. |
 
 Example with poster, subtitles, and danmaku:
 
@@ -389,7 +392,8 @@ GstVideoView(
 ### Controls, gestures, and theming
 
 **Bottom chrome (Bilibili-inspired):** pink progress track on its own row; tool row
-with play, time, volume popup, capture, loop, speed / captions, fullscreen.
+with play, time, volume popup, capture (via `onScreenshot`), loop, speed / captions,
+fullscreen. The plugin only delivers PNG bytes; the host app saves them (e.g. gallery).
 
 **Volume popup:** tap the speaker icon for a vertical pink slider; the live
 **0–100** value is shown above the track. Long-press toggles mute.

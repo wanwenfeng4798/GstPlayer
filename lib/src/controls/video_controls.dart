@@ -41,6 +41,7 @@ class VideoControls extends StatefulWidget {
     this.scrubPreview,
     this.overlayControls,
     this.showCaptureButton = true,
+    this.onScreenshot,
   });
 
   final PlaybackControlsModel model;
@@ -54,8 +55,13 @@ class VideoControls extends StatefulWidget {
   /// Danmaku input + external subtitle toggles on the bottom chrome.
   final BiliOverlayControlsConfig? overlayControls;
 
-  /// Screenshot button on the bottom chrome (off by default on mobile).
+  /// Screenshot button on the bottom chrome.
+  ///
+  /// Requires [onScreenshot]; otherwise the button is not shown.
   final bool showCaptureButton;
+
+  /// Host receives PNG bytes and owns persistence (gallery / path).
+  final FutureOr<void> Function(Uint8List pngBytes)? onScreenshot;
 
   @override
   State<VideoControls> createState() => _VideoControlsState();
@@ -268,6 +274,7 @@ class _VideoControlsState extends State<VideoControls> {
             scrubPreview: widget.scrubPreview,
             overlayControls: widget.overlayControls,
             showCaptureButton: widget.showCaptureButton,
+            onScreenshot: widget.onScreenshot,
             showFullscreenButton: isMobilePlatform,
             landscapeLocked: widget.immersive.landscapeLocked,
             onFullscreenToggle: _toggleFullscreen,
@@ -280,6 +287,7 @@ class _VideoControlsState extends State<VideoControls> {
             scrubPreview: widget.scrubPreview,
             overlayControls: widget.overlayControls,
             showCaptureButton: widget.showCaptureButton,
+            onScreenshot: widget.onScreenshot,
             showFullscreenButton: isMobilePlatform,
             landscapeLocked: widget.immersive.landscapeLocked,
             onFullscreenToggle: _toggleFullscreen,

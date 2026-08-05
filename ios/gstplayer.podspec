@@ -4,10 +4,11 @@
 Pod::Spec.new do |s|
   s.name             = 'gstplayer'
   s.version          = '1.0.0'
-  s.summary          = 'GStreamer-backed video player Flutter plugin.'
+  s.summary          = 'Polished all-in-one Flutter video player (GStreamer).'
   s.description      = <<-DESC
-A Flutter video player plugin that decodes local/network video with GStreamer
-(via a native C core + Dart FFI) and renders into Flutter Texture widgets.
+A polished, all-in-one Flutter video player with beautiful built-in controls and
+broad format support for local and network video, powered by GStreamer
+(native C core + Dart FFI) and Flutter Texture rendering.
                        DESC
   s.homepage         = 'https://github.com/wanwenfeng4798/GstPlayer'
   s.license          = { :file => '../LICENSE' }

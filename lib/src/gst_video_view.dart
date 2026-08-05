@@ -48,6 +48,7 @@ class GstVideoView extends StatefulWidget {
   /// - `onDanmakuSend` — 底栏发送弹幕 / send danmaku from bottom bar
   /// - `onDanmakuEnabledChanged` / `onSubtitlesEnabledChanged` — 底栏开关
   /// - `subtitles` / `subtitlesEnabled` — 外挂字幕 cues 与开关 / external subtitle cues
+  /// - `onScreenshot` — 截图 PNG 交给宿主保存（插件不落盘）/ host saves PNG bytes
   const GstVideoView({
     super.key,
     required this.controller,
@@ -67,6 +68,7 @@ class GstVideoView extends StatefulWidget {
     this.subtitles = const [],
     this.subtitlesEnabled = true,
     this.showCaptureButton = true,
+    this.onScreenshot,
   });
 
   /// 绑定的播放器控制器；同时作为 presentation 与 controls 的 model / Bound player controller; model for presentation and controls.
@@ -122,8 +124,15 @@ class GstVideoView extends StatefulWidget {
   /// 是否显示外挂字幕 / Whether external subtitles are visible.
   final bool subtitlesEnabled;
 
-  /// 是否显示底栏截帧按钮（Android 播放中不支持）/ Screenshot button on chrome.
+  /// 是否显示底栏截帧按钮 / Whether to show the screenshot button on chrome.
+  ///
+  /// Also requires [onScreenshot]; otherwise the button is hidden.
   final bool showCaptureButton;
+
+  /// Called with PNG bytes after a successful capture. Host owns saving
+  /// (gallery / file path). Plugin does not write disk or show a preview dialog.
+  /// 截图成功后回调 PNG；由宿主保存（相册/路径），插件不落盘、不弹预览。
+  final FutureOr<void> Function(Uint8List pngBytes)? onScreenshot;
 
   @override
   State<GstVideoView> createState() => _GstVideoViewState();
@@ -307,6 +316,7 @@ class _GstVideoViewState extends State<GstVideoView> {
                 scrubPreview: widget.scrubPreview,
                 overlayControls: _overlayControls,
                 showCaptureButton: widget.showCaptureButton,
+                onScreenshot: widget.onScreenshot,
               ),
           ],
         ),

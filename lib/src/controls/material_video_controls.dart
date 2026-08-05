@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../theme/video_controls_theme.dart';
@@ -20,6 +23,7 @@ class MaterialVideoControls extends StatefulWidget {
     this.scrubPreview,
     this.overlayControls,
     this.showCaptureButton = true,
+    this.onScreenshot,
     this.showFullscreenButton = false,
     this.landscapeLocked,
     this.onFullscreenToggle,
@@ -32,6 +36,7 @@ class MaterialVideoControls extends StatefulWidget {
   final ScrubPreviewTrack? scrubPreview;
   final BiliOverlayControlsConfig? overlayControls;
   final bool showCaptureButton;
+  final FutureOr<void> Function(Uint8List pngBytes)? onScreenshot;
   final bool showFullscreenButton;
   final bool? landscapeLocked;
   final VoidCallback? onFullscreenToggle;
@@ -70,23 +75,16 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
     return widget.model;
   }
 
+  bool get _canCapture =>
+      widget.showCaptureButton && widget.onScreenshot != null;
+
   Future<void> _captureFrame() async {
+    final onScreenshot = widget.onScreenshot;
+    if (onScreenshot == null) return;
     widget.onInteract();
     final png = await widget.model.captureFramePng();
     if (!mounted || png == null) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('截图'),
-        content: Image.memory(png),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('关闭'),
-          ),
-        ],
-      ),
-    );
+    await onScreenshot(png);
   }
 
   @override
@@ -119,8 +117,8 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
               scrubPreview: widget.scrubPreview,
               overlayControls: widget.overlayControls,
               icons: BiliControlIcons.material,
-              onCapture: widget.showCaptureButton ? _captureFrame : null,
-              showCaptureButton: widget.showCaptureButton,
+              onCapture: _canCapture ? _captureFrame : null,
+              showCaptureButton: _canCapture,
               showFullscreenButton: widget.showFullscreenButton,
               landscapeLocked: landscapeLocked,
               onFullscreenToggle: widget.onFullscreenToggle,

@@ -6,9 +6,10 @@
 
 [English](README.md) | 简体中文
 
-一个跨平台的 Flutter **视频播放器**插件：底层通过 **原生 C 核心 + Dart FFI** 驱动
-**GStreamer** 解码本地与网络视频，并通过 Flutter 外部 **`Texture`** 与自定义原生桥接渲染
-（Android：`glimagesink` + `SurfaceProducer`；Apple/桌面：`appsink` BGRA 帧）。
+一个**全能、界面美观**的 Flutter **视频播放器**：内置精致控件，依托 **GStreamer**
+覆盖**大多数本地与网络格式**；底层为 **原生 C 核心 + Dart FFI**，经 Flutter 外部
+**`Texture`** 与自定义原生桥接渲染（Android：`glimagesink` + `SurfaceProducer`；
+Apple/桌面：`appsink` BGRA 帧）。
 
 - 仓库地址：<https://github.com/wanwenfeng4798/GstPlayer>
 
@@ -52,7 +53,7 @@
 - 封面图与播完保留最后一帧。
 - 外挂字幕叠层（SRT/WebVTT，`SubtitleParser`）以及内嵌字幕轨选择 API/UI。
 - 弹幕叠层（由 App 注入 `DanmakuItem` 时间轴数据）。
-- 当前帧截图与一次性抽封面。
+- 当前帧截图（`onScreenshot` 交给宿主保存）与一次性抽封面。
 - 基于 [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
   普通 getter 的响应式状态：播放状态、进度、时长、视频尺寸、宽高比、缓冲百分比、
   音量、倍速、循环、静音、错误等。用 `ListenableBuilder` / `addListener` 订阅重建。
@@ -355,6 +356,8 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 | `danmakuEnabled` | `false` | 是否显示弹幕。 |
 | `subtitles` | `[]` | 外挂 `SubtitleCue`（可用 `SubtitleParser` 解析）。 |
 | `subtitlesEnabled` | `true` | 是否显示外挂字幕。 |
+| `showCaptureButton` | `true` | 是否显示底栏截图按钮（还需提供 `onScreenshot`）。 |
+| `onScreenshot` | `null` | 截图成功后回调 PNG；由宿主保存（相册/路径）。插件不落盘、不弹预览。 |
 
 封面 / 字幕 / 弹幕示例：
 
@@ -374,7 +377,7 @@ GstVideoView(
 
 ### 控制条、手势与主题
 
-**底栏（B 站风格）：** 粉色进度条单独一行；工具行含播放、时间、音量弹出、截图、循环、倍速/字幕、全屏。
+**底栏（B 站风格）：** 粉色进度条单独一行；工具行含播放、时间、音量弹出、截图（`onScreenshot`）、循环、倍速/字幕、全屏。插件只交出 PNG 字节，由宿主负责保存（如相册）。
 
 **音量弹出：** 点击喇叭图标弹出竖向粉色滑条，上方实时显示 **0–100** 数值；长按切换静音。
 

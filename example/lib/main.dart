@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gstplayer/gstplayer.dart';
 
+import 'screenshot_saver.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
@@ -246,6 +248,7 @@ class _PlayerPageState extends State<PlayerPage> {
                     subtitles: _subtitles,
                     subtitlesEnabled: _subtitlesEnabled,
                     showCaptureButton: true,
+                    onScreenshot: (png) => saveScreenshotPng(context, png),
                   ),
                 ),
         );

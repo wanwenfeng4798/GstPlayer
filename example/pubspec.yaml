@@ -14,6 +14,8 @@ dependencies:
     path: ../
   cupertino_icons: ^1.0.9
   chat_context_menu: ^3.0.1
+  path_provider: ^2.1.6
+  gal: ^2.3.2
 
 dev_dependencies:
   flutter_test:

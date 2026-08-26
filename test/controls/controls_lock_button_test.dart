@@ -68,7 +68,7 @@ void main() {
         await pumpControls(tester);
 
         expect(lockButton(), findsOneWidget);
-        expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+        expect(find.byIcon(Icons.lock_open), findsOneWidget);
         expect(find.byIcon(Icons.settings), findsOneWidget);
         expect(find.byIcon(Icons.play_arrow), findsWidgets);
       } finally {
@@ -87,7 +87,7 @@ void main() {
         await tester.pump();
 
         expect(immersive.controlsLocked, isTrue);
-        expect(find.byIcon(Icons.lock_open), findsOneWidget);
+        expect(find.byIcon(Icons.lock_outline), findsOneWidget);
         expect(find.byIcon(Icons.settings), findsNothing);
         expect(find.byIcon(Icons.play_arrow), findsNothing);
         expect(find.text('1.0x'), findsNothing);
@@ -113,7 +113,7 @@ void main() {
         await tester.pump();
 
         expect(immersive.controlsLocked, isFalse);
-        expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+        expect(find.byIcon(Icons.lock_open), findsOneWidget);
         expect(find.byIcon(Icons.settings), findsOneWidget);
         expect(find.byIcon(Icons.play_arrow), findsWidgets);
       } finally {

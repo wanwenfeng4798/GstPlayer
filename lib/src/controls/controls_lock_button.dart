@@ -35,11 +35,10 @@ class ControlsLockButton extends StatelessWidget {
       listenable: immersive,
       builder: (context, _) {
         final locked = immersive.controlsLocked;
-        final size = theme.centerButtonSize * 0.75;
         return SizedBox(
           key: const ValueKey('video-controls-lock-button'),
-          width: size,
-          height: size,
+          width: theme.centerButtonSize,
+          height: theme.centerButtonSize,
           child: Material(
             color: Colors.transparent,
             child: Tooltip(
@@ -56,8 +55,8 @@ class ControlsLockButton extends StatelessWidget {
                       color: theme.backgroundColor,
                       child: Center(
                         child: Icon(
-                          locked ? Icons.lock_open : Icons.lock_outline,
-                          size: theme.secondaryIconSize,
+                          locked ? Icons.lock_outline : Icons.lock_open,
+                          size: theme.primaryIconSize,
                           color: theme.iconColor,
                         ),
                       ),

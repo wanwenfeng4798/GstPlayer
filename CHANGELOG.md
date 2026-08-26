@@ -9,6 +9,9 @@
 
 ### Bottom chrome & settings
 
+- Side lock/unlock on the same row as the center play/pause (far right).
+  Locking hides the bottom chrome (and top/center controls) and blocks
+  gestures and keyboard shortcuts; tap only shows/hides the unlock button.
 - Two-row Bilibili chrome: transport (play, position, progress, remaining time,
   speed, settings, volume, fullscreen) plus danmaku / send / CC.
 - Two-level settings popup: mirror, single-episode loop, autoplay, play-next,

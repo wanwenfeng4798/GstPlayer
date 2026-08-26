@@ -91,6 +91,7 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
   }
 
   void _onPanStart(DragStartDetails details) {
+    if (widget.immersive.controlsLocked) return;
     final width = context.size?.width;
     if (width == null) return;
 
@@ -217,22 +218,30 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: widget.onTap,
-        onDoubleTap: () async {
-          final wasPlaying = widget.model.isPlaying;
-          await widget.model.togglePlayPause();
-          widget.immersive.showHud(
-            ImmersiveHudSnapshot(
-              kind: ImmersiveHudKind.playPause,
-              value: wasPlaying ? 0.0 : 1.0,
-            ),
+      child: ListenableBuilder(
+        listenable: widget.immersive,
+        builder: (context, _) {
+          final locked = widget.immersive.controlsLocked;
+          return GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: widget.onTap,
+            onDoubleTap: locked
+                ? null
+                : () async {
+                    final wasPlaying = widget.model.isPlaying;
+                    await widget.model.togglePlayPause();
+                    widget.immersive.showHud(
+                      ImmersiveHudSnapshot(
+                        kind: ImmersiveHudKind.playPause,
+                        value: wasPlaying ? 0.0 : 1.0,
+                      ),
+                    );
+                  },
+            onPanStart: locked ? null : _onPanStart,
+            onPanUpdate: locked ? null : _onPanUpdate,
+            onPanEnd: locked ? null : _onPanEnd,
           );
         },
-        onPanStart: _onPanStart,
-        onPanUpdate: _onPanUpdate,
-        onPanEnd: _onPanEnd,
       ),
     );
   }

@@ -60,6 +60,7 @@ class ImmersiveControlsState extends ChangeNotifier {
 
   VideoControlsFullscreenConfig _fullscreen;
   bool _landscapeLocked = false;
+  bool _controlsLocked = false;
   AspectRatioMode _aspectRatioMode;
   ImmersiveHudSnapshot? _hud;
 
@@ -76,6 +77,14 @@ class ImmersiveControlsState extends ChangeNotifier {
   set landscapeLocked(bool value) {
     if (_landscapeLocked == value) return;
     _landscapeLocked = value;
+    notifyListeners();
+  }
+
+  /// 控件锁屏：隐藏底栏并禁止误触 / Controls lock: hides chrome and blocks accidental taps.
+  bool get controlsLocked => _controlsLocked;
+  set controlsLocked(bool value) {
+    if (_controlsLocked == value) return;
+    _controlsLocked = value;
     notifyListeners();
   }
 
@@ -99,16 +108,14 @@ class ImmersiveControlsState extends ChangeNotifier {
   ///
   /// 移动端恒为 true（全屏与非全屏）；桌面端跟随 [desktopImmersive]。
   /// Always true on mobile (fullscreen and inline); follows [desktopImmersive] on desktop.
-  bool get gesturesEnabled =>
-      isMobilePlatform || _fullscreen.desktopImmersive;
+  bool get gesturesEnabled => isMobilePlatform || _fullscreen.desktopImmersive;
 
   /// 沉浸能力是否激活（顶栏铺满菜单等）/ Whether immersive chrome features are active.
   ///
   /// 移动端仅全屏；桌面端跟随 [desktopImmersive]。不作为手势门闸。
   /// Fullscreen-only on mobile; follows [desktopImmersive] on desktop. Not a gesture gate.
-  bool get immersiveActive => isMobilePlatform
-      ? _landscapeLocked
-      : _fullscreen.desktopImmersive;
+  bool get immersiveActive =>
+      isMobilePlatform ? _landscapeLocked : _fullscreen.desktopImmersive;
 
   Timer? _hudTimer;
 

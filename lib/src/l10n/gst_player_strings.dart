@@ -38,6 +38,8 @@ class GstPlayerStrings {
     required this.onLabel,
     required this.offLabel,
     required this.untitledAudioTrack,
+    required this.lockControls,
+    required this.unlockControls,
     required this.aspectRatioLabels,
     required this.orientationLabels,
   });
@@ -70,6 +72,8 @@ class GstPlayerStrings {
         onLabel: '开',
         offLabel: '关',
         untitledAudioTrack: '音轨',
+        lockControls: '锁屏',
+        unlockControls: '解锁',
         aspectRatioLabels: const AspectRatioModeLabels(),
         orientationLabels: const VideoRotationLabels(),
       );
@@ -102,6 +106,8 @@ class GstPlayerStrings {
         onLabel: 'On',
         offLabel: 'Off',
         untitledAudioTrack: 'Track',
+        lockControls: 'Lock controls',
+        unlockControls: 'Unlock controls',
         aspectRatioLabels: const AspectRatioModeLabels(
           fit: 'Fit',
           fill: 'Fill',
@@ -136,6 +142,8 @@ class GstPlayerStrings {
   final String onLabel;
   final String offLabel;
   final String untitledAudioTrack;
+  final String lockControls;
+  final String unlockControls;
   final AspectRatioModeLabels aspectRatioLabels;
   final VideoRotationLabels orientationLabels;
 

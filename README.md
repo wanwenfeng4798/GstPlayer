@@ -68,9 +68,12 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 - Volume (popup vertical slider with live **0–100** readout), mute, and playback speed.
 - Bilibili-inspired two-row chrome: pink progress (`#FB7299`), remaining time,
   speed / settings / volume / fullscreen, then danmaku input + CC; auto-hiding.
+- Side lock on the same row as the center play/pause (far right). Locking hides
+  the bottom chrome and ignores surface gestures / keyboard shortcuts; tap only
+  shows or hides the unlock button.
 - Two-level settings: mirror, loop, autoplay, play-next, 16:9 / 4:3, hide black
   bars, lights-off, audio tracks. Chrome copy is zh / en via `language`.
-- Mobile surface gestures (**inline and fullscreen**): horizontal seek, left brightness / right volume (HUD shows percent).
+- Mobile surface gestures (**inline and fullscreen**): horizontal seek, left brightness / right volume (HUD shows percent). Disabled while controls are locked.
 - Progress-bar scrub thumbnail preview (external WebVTT + sprite / frame list).
 - Poster image and keep-last-frame after EOS.
 - External subtitle overlay (SRT/WebVTT via `SubtitleParser`) plus embedded subtitle track selection API/UI.
@@ -436,6 +439,9 @@ GstVideoView(
 
 **Bottom chrome (Bilibili-inspired):**
 
+- **Lock:** padlock on the far right of the center play/pause row. When locked,
+  the bottom chrome is hidden and not hittable; tap the video to show/hide
+  unlock only. Gestures and keyboard shortcuts do not bypass the lock.
 - **Row 1:** play / pause, current time, progress, remaining time, speed, settings
   gear, volume popup, fullscreen.
 - **Row 2:** danmaku toggle, capsule input + send, CC. Input/send disable when
@@ -449,7 +455,7 @@ The plugin does not draw a screenshot button on this chrome. Use
 **Volume popup:** tap the speaker icon for a vertical pink slider; the live
 **0–100** value is shown above the track. Long-press toggles mute.
 
-**Mobile gestures** (Android / iOS, **both inline and fullscreen**):
+**Mobile gestures** (Android / iOS, **both inline and fullscreen**; disabled while locked):
 
 | Zone | Gesture | Effect |
 | --- | --- | --- |

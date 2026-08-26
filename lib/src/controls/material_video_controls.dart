@@ -4,6 +4,7 @@ import '../l10n/gst_player_strings.dart';
 import '../theme/video_controls_theme.dart';
 import 'bili_bottom_chrome.dart';
 import 'center_button.dart';
+import 'controls_lock_button.dart';
 import 'immersive_controls_state.dart';
 import 'playback_controls_model.dart';
 import 'player_chrome_settings.dart';
@@ -83,33 +84,55 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
       builder: (context, _) {
         final landscapeLocked =
             widget.immersive?.landscapeLocked ?? widget.landscapeLocked;
+        final immersive = widget.immersive;
+        final controlsLocked = immersive?.controlsLocked ?? false;
         return Stack(
           fit: StackFit.expand,
           children: [
-            Align(
-              alignment: Alignment.center,
-              child: CenterButton(
+            if (!controlsLocked)
+              Align(
+                alignment: Alignment.center,
+                child: CenterButton(
+                  model: model,
+                  theme: theme,
+                  onInteract: widget.onInteract,
+                  hud: immersive?.hud,
+                ),
+              ),
+            if (immersive != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: SafeArea(
+                  left: false,
+                  top: false,
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: ControlsLockButton(
+                      immersive: immersive,
+                      theme: theme,
+                      strings: widget.strings,
+                      onInteract: widget.onInteract,
+                    ),
+                  ),
+                ),
+              ),
+            if (!controlsLocked)
+              BiliBottomChrome(
                 model: model,
                 theme: theme,
+                strings: widget.strings,
+                settings: widget.settings,
                 onInteract: widget.onInteract,
-                hud: widget.immersive?.hud,
+                scrub: _scrub,
+                preview: _preview,
+                scrubPreview: widget.scrubPreview,
+                overlayControls: widget.overlayControls,
+                icons: BiliControlIcons.material,
+                showFullscreenButton: widget.showFullscreenButton,
+                landscapeLocked: landscapeLocked,
+                onFullscreenToggle: widget.onFullscreenToggle,
               ),
-            ),
-            BiliBottomChrome(
-              model: model,
-              theme: theme,
-              strings: widget.strings,
-              settings: widget.settings,
-              onInteract: widget.onInteract,
-              scrub: _scrub,
-              preview: _preview,
-              scrubPreview: widget.scrubPreview,
-              overlayControls: widget.overlayControls,
-              icons: BiliControlIcons.material,
-              showFullscreenButton: widget.showFullscreenButton,
-              landscapeLocked: landscapeLocked,
-              onFullscreenToggle: widget.onFullscreenToggle,
-            ),
           ],
         );
       },

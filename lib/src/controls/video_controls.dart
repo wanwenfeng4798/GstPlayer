@@ -172,6 +172,18 @@ class _VideoControlsState extends State<VideoControls> {
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (widget.immersive.controlsLocked) {
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.space:
+        case LogicalKeyboardKey.arrowLeft:
+        case LogicalKeyboardKey.arrowRight:
+        case LogicalKeyboardKey.arrowUp:
+        case LogicalKeyboardKey.arrowDown:
+          return KeyEventResult.handled;
+        default:
+          return KeyEventResult.ignored;
+      }
+    }
 
     final step = widget.immersive.fullscreen.seekStep.duration;
     final position = widget.model.position;
@@ -320,6 +332,7 @@ class _VideoControlsState extends State<VideoControls> {
               behavior: HitTestBehavior.opaque,
               onTap: _toggle,
               onDoubleTap: () async {
+                if (widget.immersive.controlsLocked) return;
                 final wasPlaying = widget.model.isPlaying;
                 await widget.model.togglePlayPause();
                 widget.immersive.showHud(

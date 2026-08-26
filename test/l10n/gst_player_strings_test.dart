@@ -8,6 +8,10 @@ void main() {
     final en = GstPlayerStrings.of(GstPlayerLanguage.en);
     expect(zh.settings, '设置');
     expect(en.settings, 'Settings');
+    expect(zh.lockControls, '锁屏');
+    expect(en.lockControls, 'Lock controls');
+    expect(zh.unlockControls, '解锁');
+    expect(en.unlockControls, 'Unlock controls');
     expect(zh.danmakuHint, '发个弹幕呗～');
     expect(en.send, 'Send');
     expect(zh.audioTrackFallback(3), '音轨 3');

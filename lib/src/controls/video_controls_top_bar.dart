@@ -47,6 +47,10 @@ class VideoControlsTopBar extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([immersive, model]),
       builder: (context, _) {
+        if (immersive.controlsLocked) {
+          return const SizedBox.shrink();
+        }
+
         final immersiveActive = immersive.immersiveActive;
         final hasCustomSlots =
             slots.leading != null ||

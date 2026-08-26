@@ -73,6 +73,26 @@ void main() {
       expect(state.aspectRatioMode, AspectRatioMode.fill);
     });
 
+    test('controlsLocked is independent of landscapeLocked', () {
+      state = ImmersiveControlsState(
+        initialAspectRatioMode: AspectRatioMode.fit,
+        fullscreen: const VideoControlsFullscreenConfig(),
+      );
+      expect(state.controlsLocked, isFalse);
+
+      state.controlsLocked = true;
+      expect(state.controlsLocked, isTrue);
+      expect(state.landscapeLocked, isFalse);
+
+      state.landscapeLocked = true;
+      expect(state.controlsLocked, isTrue);
+      expect(state.landscapeLocked, isTrue);
+
+      state.controlsLocked = false;
+      expect(state.controlsLocked, isFalse);
+      expect(state.landscapeLocked, isTrue);
+    });
+
     test('hud starts null', () {
       state = ImmersiveControlsState(
         initialAspectRatioMode: AspectRatioMode.fit,

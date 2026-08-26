@@ -1,6 +1,5 @@
 import 'dart:ui';
 
-import 'package:flutter/cupertino.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../domain/player_events.dart';
@@ -60,35 +59,34 @@ class CenterButton extends StatelessWidget {
         // Use isPlaying (respects in-flight want) so the icon matches the
         // bottom chrome and rapid toggles do not show a stale PlayerState.
         final playing = model.isPlaying;
-        final icon = playing
-            ? CupertinoIcons.pause_solid
-            : CupertinoIcons.play_arrow_solid;
         return SizedBox(
           width: theme.centerButtonSize,
           height: theme.centerButtonSize,
-          child: ClipOval(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: theme.backgroundColor,
-                ),
-                child: IconButton(
-                  onPressed: () {
+          child: Material(
+            color: Colors.transparent,
+            child: ClipOval(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: InkWell(
+                  onTap: () {
                     onInteract();
-                    // Fire-and-forget: do not await so rapid taps are not serialized
-                    // behind each native round-trip.
                     model.togglePlayPause();
                   },
-                  style: IconButton.styleFrom(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  icon: Icon(
-                    icon,
-                    size: theme.primaryIconSize,
-                    color: theme.iconColor,
+                  child: ColoredBox(
+                    color: theme.backgroundColor,
+                    child: Center(
+                      // Play triangle is optically left-heavy; nudge it inward.
+                      child: Padding(
+                        padding: playing
+                            ? EdgeInsets.zero
+                            : const EdgeInsets.only(left: 3),
+                        child: Icon(
+                          playing ? Icons.pause : Icons.play_arrow,
+                          size: theme.primaryIconSize,
+                          color: theme.iconColor,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),

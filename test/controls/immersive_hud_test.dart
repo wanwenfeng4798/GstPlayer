@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -75,7 +74,7 @@ void main() {
         await tester.pump();
 
         expect(find.byIcon(Icons.forward_5), findsOneWidget);
-        expect(find.byIcon(CupertinoIcons.play_arrow_solid), findsOneWidget);
+        expect(find.byIcon(Icons.play_arrow), findsWidgets);
         await tester.pump(const Duration(seconds: 1));
       } finally {
         debugDefaultTargetPlatformOverride = null;
@@ -98,8 +97,7 @@ void main() {
         await tester.pump();
 
         expect(find.byIcon(Icons.pause), findsOneWidget);
-        expect(find.byIcon(CupertinoIcons.pause_solid), findsNothing);
-        expect(find.byIcon(CupertinoIcons.play_arrow_solid), findsNothing);
+        expect(find.byIcon(Icons.play_arrow), findsOneWidget);
         await tester.pump(const Duration(seconds: 1));
       } finally {
         debugDefaultTargetPlatformOverride = null;

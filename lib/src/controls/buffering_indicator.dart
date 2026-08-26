@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../theme/video_controls_theme.dart';
@@ -37,8 +36,9 @@ class BufferingIndicator extends StatelessWidget {
           SizedBox(
             width: cupertinoIndicatorSize,
             height: cupertinoIndicatorSize,
-            child: CupertinoActivityIndicator(
-              radius: 10,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              value: bufferingPercent < 100 ? bufferingPercent / 100 : null,
               color: theme.bufferingIndicatorColor,
             ),
           )

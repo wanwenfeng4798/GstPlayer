@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../l10n/gst_player_strings.dart';
 import '../theme/video_controls_theme.dart';

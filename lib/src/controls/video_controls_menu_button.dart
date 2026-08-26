@@ -27,6 +27,7 @@ class VideoControlsMenuButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChromePopupButton(
       theme: theme,
+      side: ChromePopupSide.below,
       menuBuilder: menuBuilder,
       buttonBuilder: (context, showMenu) {
         return GestureDetector(

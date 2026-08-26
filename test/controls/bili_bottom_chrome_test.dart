@@ -35,7 +35,7 @@ void main() {
     WidgetTester tester, {
     GstPlayerStrings? strings,
     BiliOverlayControlsConfig? overlay,
-    Size size = const Size(800, 240),
+    Size size = const Size(800, 480),
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -177,6 +177,34 @@ void main() {
     await tester.tap(find.text('Japanese'));
     await tester.pumpAndSettle();
     expect(model.lastSelectedTrack?.label, 'Japanese');
+  });
+
+  testWidgets('settings popup sits above and overlaps the gear icon', (
+    tester,
+  ) async {
+    await pumpChrome(tester, size: const Size(800, 480));
+    final iconRect = tester.getRect(find.byIcon(Icons.settings));
+    await tester.tap(find.byIcon(Icons.settings));
+    await tester.pumpAndSettle();
+
+    final popupRect = tester.getRect(find.text('设置'));
+    expect(popupRect.bottom, lessThanOrEqualTo(iconRect.top + 8));
+    expect(popupRect.left, lessThan(iconRect.center.dx));
+    expect(popupRect.right, greaterThan(iconRect.center.dx));
+  });
+
+  testWidgets('speed popup sits above and overlaps the speed label', (
+    tester,
+  ) async {
+    await pumpChrome(tester, size: const Size(800, 480));
+    final labelRect = tester.getRect(find.text('1.0x'));
+    await tester.tap(find.text('1.0x'));
+    await tester.pumpAndSettle();
+
+    final menuRect = tester.getRect(find.text('1.5x'));
+    expect(menuRect.bottom, lessThanOrEqualTo(labelRect.top + 8));
+    expect(menuRect.left, lessThan(labelRect.center.dx + 24));
+    expect(menuRect.right, greaterThan(labelRect.center.dx - 24));
   });
 
   testWidgets('BiliBottomChrome is present in the material controls tree', (

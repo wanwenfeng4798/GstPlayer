@@ -3,12 +3,13 @@ import 'package:material_ui/material_ui.dart';
 import '../domain/player_events.dart';
 import '../l10n/gst_player_strings.dart';
 import '../theme/video_controls_theme.dart';
+import 'chrome_popup_button.dart';
 import 'playback_controls_model.dart';
 import 'player_chrome_settings.dart';
 
 /// Gear button that opens the two-page playback settings overlay /
 /// 齿轮按钮，打开两级播放设置弹层.
-class PlayerSettingsButton extends StatefulWidget {
+class PlayerSettingsButton extends StatelessWidget {
   /// Creates a settings button / 创建设置按钮.
   const PlayerSettingsButton({
     super.key,
@@ -28,81 +29,36 @@ class PlayerSettingsButton extends StatefulWidget {
   final VoidCallback onInteract;
 
   @override
-  State<PlayerSettingsButton> createState() => _PlayerSettingsButtonState();
-}
-
-class _PlayerSettingsButtonState extends State<PlayerSettingsButton> {
-  OverlayEntry? _entry;
-  bool _open = false;
-
-  @override
-  void dispose() {
-    _removeOverlay(notify: false);
-    super.dispose();
-  }
-
-  void _removeOverlay({bool notify = true}) {
-    _entry?.remove();
-    _entry = null;
-    if (_open) {
-      _open = false;
-      if (notify && mounted) setState(() {});
-    }
-  }
-
-  void _toggle() {
-    widget.onInteract();
-    if (_open) {
-      _removeOverlay();
-      return;
-    }
-    _entry = OverlayEntry(
-      builder: (context) {
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: _removeOverlay,
-              ),
-            ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 56),
-                child: TapRegion(
-                  onTapOutside: (_) => _removeOverlay(),
-                  child: _PlayerSettingsPanel(
-                    model: widget.model,
-                    settings: widget.settings,
-                    theme: widget.theme,
-                    strings: widget.strings,
-                    onInteract: widget.onInteract,
-                  ),
-                ),
-              ),
-            ),
-          ],
+  Widget build(BuildContext context) {
+    return ChromePopupButton(
+      theme: theme,
+      decorate: false,
+      menuBuilder: (context, hideMenu) {
+        return _PlayerSettingsPanel(
+          model: model,
+          settings: settings,
+          theme: theme,
+          strings: strings,
+          onInteract: onInteract,
         );
       },
-    );
-    Overlay.of(context, rootOverlay: true).insert(_entry!);
-    setState(() => _open = true);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-        style: IconButton.styleFrom(
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: VisualDensity.compact,
-          padding: EdgeInsets.zero,
-          minimumSize: const Size(32, 32),
-        ),
-        color: widget.theme.iconColor,
-        tooltip: widget.strings.settings,
-        icon: Icon(widget.icon, size: widget.theme.secondaryIconSize),
-        onPressed: _toggle,
+      buttonBuilder: (context, showMenu) {
+        return IconButton(
+          style: IconButton.styleFrom(
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(32, 32),
+          ),
+          color: theme.iconColor,
+          tooltip: strings.settings,
+          icon: Icon(icon, size: theme.secondaryIconSize),
+          onPressed: () {
+            onInteract();
+            showMenu();
+          },
+        );
+      },
     );
   }
 }

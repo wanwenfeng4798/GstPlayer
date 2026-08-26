@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -197,8 +196,20 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      final cupertinoBox = tester.widget<SizedBox>(
+        find.descendant(
+          of: find.byType(BufferingIndicator),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is SizedBox &&
+                widget.width == BufferingIndicator.cupertinoIndicatorSize &&
+                widget.height == BufferingIndicator.cupertinoIndicatorSize,
+          ),
+        ),
+      );
+      expect(cupertinoBox.width, 20);
+      expect(cupertinoBox.height, 20);
       expect(find.text('42%'), findsOneWidget);
       debugDefaultTargetPlatformOverride = null;
     });

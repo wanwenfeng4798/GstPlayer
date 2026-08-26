@@ -10,9 +10,9 @@ environment:
   flutter: ">=3.44.0"
 
 dependencies:
-  chat_context_menu: ^3.0.1
   flutter:
     sdk: flutter
+  material_ui: ^1.1.0
   ffi: ^2.2.0
   screen_brightness: ^2.1.11
 
@@ -25,6 +25,8 @@ dev_dependencies:
     sdk: flutter
 
 flutter:
+  config:
+    enable-swift-package-manager: true
   plugin:
     platforms:
       android:

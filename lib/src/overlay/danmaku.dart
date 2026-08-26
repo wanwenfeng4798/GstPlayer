@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// A single danmaku (bullet comment) cue / 单条弹幕.
 class DanmakuItem {

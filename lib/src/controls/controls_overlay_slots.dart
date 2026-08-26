@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 沉浸控件顶部栏插槽 / AppBar-style slots for the immersive controls top bar.
 class VideoControlsOverlaySlots {

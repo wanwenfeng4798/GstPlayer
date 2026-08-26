@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../enum/video_controls_style.dart';
@@ -14,7 +14,9 @@ import 'immersive_controls_state.dart';
 import 'immersive_gesture_layer.dart';
 import 'immersive_hud.dart';
 import 'material_video_controls.dart';
+import '../l10n/gst_player_strings.dart';
 import 'playback_controls_model.dart';
+import 'player_chrome_settings.dart';
 import 'scrub_preview_track.dart';
 import 'bili_overlay_controls.dart';
 
@@ -36,16 +38,18 @@ class VideoControls extends StatefulWidget {
     super.key,
     required this.model,
     required this.immersive,
+    required this.strings,
+    required this.settings,
     this.style = VideoControlsStyle.adaptive,
     this.autoHide = const Duration(seconds: 3),
     this.scrubPreview,
     this.overlayControls,
-    this.showCaptureButton = true,
-    this.onScreenshot,
   });
 
   final PlaybackControlsModel model;
   final ImmersiveControlsState immersive;
+  final GstPlayerStrings strings;
+  final PlayerChromeSettings settings;
   final VideoControlsStyle style;
   final Duration autoHide;
 
@@ -54,14 +58,6 @@ class VideoControls extends StatefulWidget {
 
   /// Danmaku input + external subtitle toggles on the bottom chrome.
   final BiliOverlayControlsConfig? overlayControls;
-
-  /// Screenshot button on the bottom chrome.
-  ///
-  /// Requires [onScreenshot]; otherwise the button is not shown.
-  final bool showCaptureButton;
-
-  /// Host receives PNG bytes and owns persistence (gallery / path).
-  final FutureOr<void> Function(Uint8List pngBytes)? onScreenshot;
 
   @override
   State<VideoControls> createState() => _VideoControlsState();
@@ -270,12 +266,12 @@ class _VideoControlsState extends State<VideoControls> {
         ? CupertinoVideoControls(
             model: widget.model,
             theme: theme,
+            strings: widget.strings,
+            settings: widget.settings,
             onInteract: _keepAlive,
             scrubPreview: widget.scrubPreview,
             overlayControls: widget.overlayControls,
-            showCaptureButton: widget.showCaptureButton,
-            onScreenshot: widget.onScreenshot,
-            showFullscreenButton: isMobilePlatform,
+            showFullscreenButton: true,
             landscapeLocked: widget.immersive.landscapeLocked,
             onFullscreenToggle: _toggleFullscreen,
             immersive: widget.immersive,
@@ -283,12 +279,12 @@ class _VideoControlsState extends State<VideoControls> {
         : MaterialVideoControls(
             model: widget.model,
             theme: theme,
+            strings: widget.strings,
+            settings: widget.settings,
             onInteract: _keepAlive,
             scrubPreview: widget.scrubPreview,
             overlayControls: widget.overlayControls,
-            showCaptureButton: widget.showCaptureButton,
-            onScreenshot: widget.onScreenshot,
-            showFullscreenButton: isMobilePlatform,
+            showFullscreenButton: true,
             landscapeLocked: widget.immersive.landscapeLocked,
             onFullscreenToggle: _toggleFullscreen,
             immersive: widget.immersive,

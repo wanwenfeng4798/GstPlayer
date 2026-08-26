@@ -1,13 +1,14 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gstplayer/src/controls/controls_overlay_slots.dart';
 import 'package:gstplayer/src/controls/fullscreen_config.dart';
 import 'package:gstplayer/src/controls/immersive_controls_state.dart';
-import 'package:gstplayer/src/controls/video_controls.dart';
+import 'package:gstplayer/src/controls/player_chrome_settings.dart';
 import 'package:gstplayer/src/domain/player_events.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../support/fake_playback_controls_model.dart';
+import '../support/test_chrome.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -15,9 +16,11 @@ void main() {
   group('VideoControlsTopBar', () {
     late FakePlaybackControlsModel model;
     late ImmersiveControlsState immersive;
+    late PlayerChromeSettings settings;
 
     setUp(() {
       model = FakePlaybackControlsModel();
+      settings = PlayerChromeSettings();
       immersive = ImmersiveControlsState(
         initialAspectRatioMode: AspectRatioMode.fit,
         fullscreen: const VideoControlsFullscreenConfig(
@@ -30,6 +33,7 @@ void main() {
     tearDown(() {
       model.dispose();
       immersive.dispose();
+      settings.dispose();
     });
 
     Future<void> pumpControls(
@@ -50,7 +54,13 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: Stack(
-              children: [VideoControls(model: model, immersive: immersive)],
+              children: [
+                testVideoControls(
+                  model: model,
+                  immersive: immersive,
+                  settings: settings,
+                ),
+              ],
             ),
           ),
         ),
@@ -92,7 +102,7 @@ void main() {
           ),
         );
 
-        expect(find.byIcon(Icons.settings), findsOneWidget);
+        expect(find.byIcon(Icons.settings), findsWidgets);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

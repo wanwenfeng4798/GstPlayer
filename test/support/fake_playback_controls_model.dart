@@ -16,11 +16,14 @@ class FakePlaybackControlsModel extends ChangeNotifier
     this.supportsTracks = true,
     this.bufferingPercent = 100,
     this.mediaSource,
-    this.tracks = const [],
+    List<MediaTrack> tracks = const [],
     VideoRotation initialRotation = VideoRotation.deg0,
   }) : _state = initialState,
        _position = initialPosition,
-       _videoRotation = initialRotation;
+       _videoRotation = initialRotation,
+       _tracks = List<MediaTrack>.from(tracks);
+
+  List<MediaTrack> _tracks;
 
   PlayerState _state;
   Duration _position;
@@ -49,7 +52,7 @@ class FakePlaybackControlsModel extends ChangeNotifier
   final VideoSource? mediaSource;
 
   @override
-  final List<MediaTrack> tracks;
+  List<MediaTrack> get tracks => List<MediaTrack>.unmodifiable(_tracks);
 
   Duration? lastSeek;
   int seekCallCount = 0;
@@ -57,6 +60,8 @@ class FakePlaybackControlsModel extends ChangeNotifier
   VideoRotation? lastVideoRotation;
   double? lastVolume;
   AspectRatioMode? lastAspectRatioMode;
+  MediaTrack? lastSelectedTrack;
+  bool? lastSelectTrackEnable;
 
   @override
   bool get isPlaying => _state == PlayerState.playing;
@@ -135,7 +140,24 @@ class FakePlaybackControlsModel extends ChangeNotifier
   }
 
   @override
-  Future<void> selectTrack(MediaTrack track, {bool enable = true}) async {}
+  Future<void> selectTrack(MediaTrack track, {bool enable = true}) async {
+    lastSelectedTrack = track;
+    lastSelectTrackEnable = enable;
+    _tracks = [
+      for (final item in _tracks)
+        if (item.id == track.id && item.trackType == track.trackType)
+          MediaTrack(
+            id: item.id,
+            trackType: item.trackType,
+            language: item.language,
+            label: item.label,
+            selected: enable,
+          )
+        else
+          item,
+    ];
+    notifyListeners();
+  }
 
   @override
   Future<Uint8List?> captureFramePng() async => null;

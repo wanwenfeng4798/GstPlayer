@@ -1,6 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gstplayer/src/controls/material_video_controls.dart';
+import 'package:gstplayer/src/controls/player_chrome_settings.dart';
+import 'package:gstplayer/src/l10n/gst_player_language.dart';
+import 'package:gstplayer/src/l10n/gst_player_strings.dart';
 import 'package:gstplayer/src/theme/video_controls_theme.dart';
 
 import '../support/fake_playback_controls_model.dart';
@@ -13,6 +16,8 @@ void main() {
   ) async {
     final model = FakePlaybackControlsModel();
     addTearDown(model.dispose);
+    final settings = PlayerChromeSettings();
+    addTearDown(settings.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -23,6 +28,8 @@ void main() {
             child: MaterialVideoControls(
               model: model,
               theme: VideoControlsTheme.bilibili(),
+              strings: GstPlayerStrings.of(GstPlayerLanguage.zh),
+              settings: settings,
               onInteract: () {},
               showFullscreenButton: true,
               landscapeLocked: false,
@@ -35,10 +42,9 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.textContaining('/'), findsOneWidget);
     expect(find.byIcon(Icons.play_arrow), findsWidgets);
     expect(find.byIcon(Icons.fullscreen), findsOneWidget);
-    // Compact width hides secondary tools including volume.
-    expect(find.byIcon(Icons.volume_up), findsNothing);
+    expect(find.byIcon(Icons.volume_up), findsOneWidget);
+    expect(find.byIcon(Icons.settings), findsOneWidget);
   });
 }

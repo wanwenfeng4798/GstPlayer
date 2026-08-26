@@ -10,7 +10,7 @@ class BiliOverlayControlsConfig {
     this.onDanmakuEnabledChanged,
     this.onSubtitlesEnabledChanged,
     this.onDanmakuSend,
-    this.danmakuHint = '发个友善的弹幕见证下',
+    this.danmakuHint = '',
   });
 
   final bool danmakuEnabled;

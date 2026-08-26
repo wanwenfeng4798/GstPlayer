@@ -1,7 +1,7 @@
-import 'package:chat_context_menu/chat_context_menu.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../theme/video_controls_theme.dart';
+import 'chrome_popup_button.dart';
 
 /// 通用顶部栏菜单按钮 / Generic top bar menu button.
 class VideoControlsMenuButton extends StatelessWidget {
@@ -25,13 +25,10 @@ class VideoControlsMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChatContextMenuWrapper(
-      topPadding: 0,
-      backgroundColor: theme.backgroundColor,
-      borderRadius: BorderRadius.circular(theme.borderRadius),
-      padding: EdgeInsets.zero,
+    return ChromePopupButton(
+      theme: theme,
       menuBuilder: menuBuilder,
-      widgetBuilder: (context, showMenu, _) {
+      buttonBuilder: (context, showMenu) {
         return GestureDetector(
           onTap: showMenu,
           child: DecoratedBox(

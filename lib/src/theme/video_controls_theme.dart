@@ -1,6 +1,6 @@
 import 'dart:ui' show lerpDouble;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 内置视频控件栏视觉样式 / Visual styling for the built-in video control bar.
 ///

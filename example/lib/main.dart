@@ -1,5 +1,4 @@
-import 'package:chat_context_menu/chat_context_menu.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:gstplayer/gstplayer.dart';
 
@@ -84,6 +83,8 @@ class _PlayerPageState extends State<PlayerPage> {
   List<SubtitleCue> _subtitles = const [];
   bool _subtitlesEnabled = true;
   bool _danmakuEnabled = true;
+  bool _lightsOff = false;
+  int _networkIndex = 0;
   ScrubPreviewTrack? _scrubPreview;
 
   List<DanmakuItem> _danmaku = [
@@ -150,6 +151,14 @@ class _PlayerPageState extends State<PlayerPage> {
     await _controller.open(_assetSource, autoPlay: true);
   }
 
+  void _playNext() {
+    _networkIndex = (_networkIndex + 1) % _networkSamples.length;
+    _controller.open(
+      VideoSource.network(_networkSamples[_networkIndex]),
+      autoPlay: true,
+    );
+  }
+
   void _sendDanmaku(String text) {
     final at = _controller.position;
     setState(() {
@@ -170,46 +179,34 @@ class _PlayerPageState extends State<PlayerPage> {
       listenable: _controller,
       builder: (context, _) {
         final isFullscreen = _controller.isFullscreen;
+        final hideChrome = isFullscreen || _lightsOff;
         return Scaffold(
-          appBar: isFullscreen
+          backgroundColor: Colors.black,
+          appBar: hideChrome
               ? null
               : AppBar(
                   title: const Text('播放'),
                   toolbarHeight: 48,
                   actions: [
-                    ChatContextMenuWrapper(
-                      backgroundColor: Colors.white,
-                      widgetBuilder: (context, shoeMenu, hideMenu) {
-                        return TextButton(
-                          onPressed: shoeMenu,
-                          style: TextButton.styleFrom(
-                            tapTargetSize: .shrinkWrap,
-                            visualDensity: .compact,
-                          ),
-                          child: const Text('网络'),
+                    PopupMenuButton<String>(
+                      tooltip: '网络',
+                      onSelected: (media) {
+                        _controller.open(
+                          VideoSource.network(media),
+                          autoPlay: true,
                         );
                       },
-                      menuBuilder: ((context, hideMenu) {
-                        return Column(
-                          mainAxisSize: .min,
-                          crossAxisAlignment: .start,
-                          children: List.generate(_networkSamples.length, (
-                            index,
-                          ) {
-                            final media = _networkSamples[index];
-                            return TextButton(
-                              onPressed: () {
-                                _controller.open(
-                                  VideoSource.network(media),
-                                  autoPlay: true,
-                                );
-                                hideMenu();
-                              },
-                              child: Text(media.split('/').last),
-                            );
-                          }),
-                        );
-                      }),
+                      itemBuilder: (context) => [
+                        for (final media in _networkSamples)
+                          PopupMenuItem(
+                            value: media,
+                            child: Text(media.split('/').last),
+                          ),
+                      ],
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('网络'),
+                      ),
                     ),
                     TextButton(
                       onPressed: _openAsset,
@@ -241,6 +238,11 @@ class _PlayerPageState extends State<PlayerPage> {
                     controlsStyle: .cupertino,
                     scrubPreview: _scrubPreview,
                     keepLastFrame: true,
+                    language: GstPlayerLanguage.zh,
+                    onPlayNext: _playNext,
+                    onLightsOffChanged: (enabled) {
+                      setState(() => _lightsOff = enabled);
+                    },
                     danmaku: _danmaku,
                     danmakuEnabled: _danmakuEnabled,
                     onDanmakuSend: _sendDanmaku,

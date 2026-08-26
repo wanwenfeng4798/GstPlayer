@@ -54,6 +54,32 @@ abstract final class PlayerEventFixtures {
     );
   }
 
+  static PlayerEvent eos({
+    int positionMs = 5000,
+    int durationMs = 5000,
+  }) {
+    return PlayerEvent(
+      kind: PlayerEventKind.eos,
+      positionMs: positionMs,
+      durationMs: durationMs,
+      width: 0,
+      height: 0,
+      bufferingPercent: 100,
+      state: PlayerState.completed,
+      message: '',
+      fps: 0,
+      pixelAspectWidth: 1,
+      pixelAspectHeight: 1,
+      displayAspectWidth: 16,
+      displayAspectHeight: 9,
+      interlaced: false,
+      colorMatrix: '',
+      colorRange: '',
+      hdrFormat: '',
+      isSeekable: true,
+    );
+  }
+
   static PlayerEvent tracksChanged() {
     return PlayerEvent(
       kind: PlayerEventKind.tracksChanged,

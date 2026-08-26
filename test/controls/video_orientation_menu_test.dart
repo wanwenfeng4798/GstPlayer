@@ -1,13 +1,14 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gstplayer/src/controls/fullscreen_config.dart';
 import 'package:gstplayer/src/controls/immersive_controls_state.dart';
-import 'package:gstplayer/src/controls/video_controls.dart';
-import 'package:gstplayer/src/enum/video_rotation.dart';
+import 'package:gstplayer/src/controls/player_chrome_settings.dart';
 import 'package:gstplayer/src/domain/player_events.dart';
+import 'package:gstplayer/src/enum/video_rotation.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../support/fake_playback_controls_model.dart';
+import '../support/test_chrome.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -15,9 +16,11 @@ void main() {
   group('VideoOrientationMenuButton', () {
     late FakePlaybackControlsModel model;
     late ImmersiveControlsState immersive;
+    late PlayerChromeSettings settings;
 
     setUp(() {
       model = FakePlaybackControlsModel(supportsOrientation: true);
+      settings = PlayerChromeSettings();
       immersive = ImmersiveControlsState(
         initialAspectRatioMode: AspectRatioMode.fit,
         fullscreen: const VideoControlsFullscreenConfig(
@@ -29,6 +32,7 @@ void main() {
     tearDown(() {
       model.dispose();
       immersive.dispose();
+      settings.dispose();
     });
 
     Future<void> pumpControls(WidgetTester tester) async {
@@ -36,7 +40,13 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: Stack(
-              children: [VideoControls(model: model, immersive: immersive)],
+              children: [
+                testVideoControls(
+                  model: model,
+                  immersive: immersive,
+                  settings: settings,
+                ),
+              ],
             ),
           ),
         ),

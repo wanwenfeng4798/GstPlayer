@@ -1,14 +1,15 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gstplayer/src/controls/fullscreen_config.dart';
 import 'package:gstplayer/src/controls/immersive_controls_state.dart';
 import 'package:gstplayer/src/controls/immersive_gesture_layer.dart';
-import 'package:gstplayer/src/controls/video_controls.dart';
+import 'package:gstplayer/src/controls/player_chrome_settings.dart';
 import 'package:gstplayer/src/domain/player_events.dart';
 import 'package:gstplayer/src/theme/video_controls_theme.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../support/fake_playback_controls_model.dart';
+import '../support/test_chrome.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,8 @@ void main() {
         fullscreen: const VideoControlsFullscreenConfig(),
       );
       addTearDown(immersive.dispose);
+      final settings = PlayerChromeSettings();
+      addTearDown(settings.dispose);
       expect(immersive.landscapeLocked, isFalse);
       expect(immersive.gesturesEnabled, isTrue);
 
@@ -40,7 +43,11 @@ void main() {
               height: 200,
               child: Stack(
                 children: [
-                  VideoControls(model: model, immersive: immersive),
+                  testVideoControls(
+                    model: model,
+                    immersive: immersive,
+                    settings: settings,
+                  ),
                 ],
               ),
             ),
@@ -71,6 +78,9 @@ void main() {
         initialAspectRatioMode: AspectRatioMode.fit,
         fullscreen: const VideoControlsFullscreenConfig(),
       );
+      addTearDown(immersive.dispose);
+      final settings = PlayerChromeSettings();
+      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -81,7 +91,11 @@ void main() {
               height: 240,
               child: Stack(
                 children: [
-                  VideoControls(model: model, immersive: immersive),
+                  testVideoControls(
+                    model: model,
+                    immersive: immersive,
+                    settings: settings,
+                  ),
                 ],
               ),
             ),
@@ -107,7 +121,6 @@ void main() {
       // Flush auto-hide / HUD timers before binding invariant checks.
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpWidget(const SizedBox.shrink());
-      immersive.dispose();
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

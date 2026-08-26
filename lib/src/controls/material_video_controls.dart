@@ -1,13 +1,12 @@
-import 'dart:async';
-import 'dart:typed_data';
+import 'package:material_ui/material_ui.dart';
 
-import 'package:flutter/material.dart';
-
+import '../l10n/gst_player_strings.dart';
 import '../theme/video_controls_theme.dart';
 import 'bili_bottom_chrome.dart';
 import 'center_button.dart';
 import 'immersive_controls_state.dart';
 import 'playback_controls_model.dart';
+import 'player_chrome_settings.dart';
 import 'scrub_controller.dart';
 import 'scrub_preview_controller.dart';
 import 'scrub_preview_track.dart';
@@ -19,12 +18,12 @@ class MaterialVideoControls extends StatefulWidget {
     super.key,
     required this.model,
     required this.theme,
+    required this.strings,
+    required this.settings,
     required this.onInteract,
     this.scrubPreview,
     this.overlayControls,
-    this.showCaptureButton = true,
-    this.onScreenshot,
-    this.showFullscreenButton = false,
+    this.showFullscreenButton = true,
     this.landscapeLocked,
     this.onFullscreenToggle,
     this.immersive,
@@ -32,11 +31,11 @@ class MaterialVideoControls extends StatefulWidget {
 
   final PlaybackControlsModel model;
   final VideoControlsTheme theme;
+  final GstPlayerStrings strings;
+  final PlayerChromeSettings settings;
   final VoidCallback onInteract;
   final ScrubPreviewTrack? scrubPreview;
   final BiliOverlayControlsConfig? overlayControls;
-  final bool showCaptureButton;
-  final FutureOr<void> Function(Uint8List pngBytes)? onScreenshot;
   final bool showFullscreenButton;
   final bool? landscapeLocked;
   final VoidCallback? onFullscreenToggle;
@@ -70,21 +69,9 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
   Listenable get _listenable {
     final immersive = widget.immersive;
     if (immersive != null) {
-      return Listenable.merge([widget.model, immersive]);
+      return Listenable.merge([widget.model, immersive, widget.settings]);
     }
-    return widget.model;
-  }
-
-  bool get _canCapture =>
-      widget.showCaptureButton && widget.onScreenshot != null;
-
-  Future<void> _captureFrame() async {
-    final onScreenshot = widget.onScreenshot;
-    if (onScreenshot == null) return;
-    widget.onInteract();
-    final png = await widget.model.captureFramePng();
-    if (!mounted || png == null) return;
-    await onScreenshot(png);
+    return Listenable.merge([widget.model, widget.settings]);
   }
 
   @override
@@ -111,14 +98,14 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
             BiliBottomChrome(
               model: model,
               theme: theme,
+              strings: widget.strings,
+              settings: widget.settings,
               onInteract: widget.onInteract,
               scrub: _scrub,
               preview: _preview,
               scrubPreview: widget.scrubPreview,
               overlayControls: widget.overlayControls,
               icons: BiliControlIcons.material,
-              onCapture: _canCapture ? _captureFrame : null,
-              showCaptureButton: _canCapture,
               showFullscreenButton: widget.showFullscreenButton,
               landscapeLocked: landscapeLocked,
               onFullscreenToggle: widget.onFullscreenToggle,

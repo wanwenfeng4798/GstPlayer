@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../controls/buffering_indicator.dart';
 import '../enum/video_controls_style.dart';
@@ -29,6 +29,8 @@ class PlaybackPresentation extends StatelessWidget {
     required this.model,
     required this.aspectRatioMode,
     this.controlsStyle = VideoControlsStyle.adaptive,
+    this.mirrored = false,
+    this.forcedAspectRatio,
   });
 
   final PlaybackPresentationModel model;
@@ -39,6 +41,12 @@ class PlaybackPresentation extends StatelessWidget {
   /// 缓冲指示器视觉风格 / Visual style for the buffering indicator.
   final VideoControlsStyle controlsStyle;
 
+  /// Horizontal mirror of the video texture / 水平镜像画面.
+  final bool mirrored;
+
+  /// When set, layout uses this ratio instead of native DAR / 强制显示宽高比.
+  final double? forcedAspectRatio;
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -47,7 +55,7 @@ class PlaybackPresentation extends StatelessWidget {
         final playerId = model.playerId;
         if (playerId == null) return const SizedBox.shrink();
         final handle = VideoSurfaceHandle.fromPlayerId(playerId);
-        final ratio = model.aspectRatio;
+        final ratio = forcedAspectRatio ?? model.aspectRatio;
         final mode = aspectRatioMode;
 
         return Stack(
@@ -77,10 +85,19 @@ class PlaybackPresentation extends StatelessWidget {
                   return _VideoAspectLayout(
                     aspectRatio: ratio,
                     mode: mode,
-                    child: TextureVideoSurface(
-                      handle: handle,
-                      androidLayoutSize: androidLayout,
-                    ),
+                    child: mirrored
+                        ? Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.diagonal3Values(-1.0, 1.0, 1.0),
+                            child: TextureVideoSurface(
+                              handle: handle,
+                              androidLayoutSize: androidLayout,
+                            ),
+                          )
+                        : TextureVideoSurface(
+                            handle: handle,
+                            androidLayoutSize: androidLayout,
+                          ),
                   );
                 },
               ),

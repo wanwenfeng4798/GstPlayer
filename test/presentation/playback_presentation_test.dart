@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gstplayer/src/controls/buffering_indicator.dart';
 import 'package:gstplayer/src/enum/video_controls_style.dart';
@@ -306,6 +306,36 @@ void main() {
       expect(
         tester.widget<FittedBox>(find.byType(FittedBox)).fit,
         BoxFit.contain,
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('mirrored applies horizontal Transform scale', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+      model = FakePlaybackPresentationModel();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 180,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: AspectRatioMode.fit,
+                mirrored: true,
+                forcedAspectRatio: 4 / 3,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final transforms = tester.widgetList<Transform>(find.byType(Transform));
+      expect(
+        transforms.any((t) => t.transform.storage[0] == -1.0),
+        isTrue,
       );
       debugDefaultTargetPlatformOverride = null;
     });

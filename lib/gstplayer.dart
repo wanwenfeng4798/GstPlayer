@@ -41,4 +41,8 @@ export 'src/controls/bili_overlay_controls.dart'
 export 'src/overlay/danmaku.dart' show DanmakuItem, DanmakuOverlay;
 export 'src/overlay/subtitle.dart'
     show SubtitleCue, SubtitleOverlay, SubtitleParser;
+export 'src/l10n/gst_player_language.dart' show GstPlayerLanguage;
+export 'src/l10n/gst_player_strings.dart' show GstPlayerStrings;
+export 'src/controls/player_chrome_settings.dart'
+    show ForcedDisplayAspect, PlayerChromeSettings;
 export 'src/gstplayer.dart' show GstPlayer;

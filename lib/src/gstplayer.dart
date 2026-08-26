@@ -149,7 +149,7 @@ class GstPlayer {
           maxWidth: maxWidth,
         ),
       );
-      return CapturedBgraFrame.fromMap(map).toPng();
+      return await CapturedBgraFrame.fromMap(map).toPng();
     } on ThumbnailSupersededException {
       rethrow;
     } finally {

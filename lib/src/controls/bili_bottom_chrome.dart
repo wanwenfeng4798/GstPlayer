@@ -1,17 +1,19 @@
-import 'package:chat_context_menu/chat_context_menu.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../constant/constant.dart';
-import '../domain/player_events.dart';
+import '../l10n/gst_player_strings.dart';
 import '../theme/video_controls_theme.dart';
 import '../utils/time_util.dart';
+import 'bili_overlay_controls.dart';
+import 'chrome_popup_button.dart';
 import 'playback_controls_model.dart';
+import 'player_chrome_settings.dart';
+import 'player_settings_popup.dart';
 import 'progress_bar_with_preview.dart';
 import 'scrub_controller.dart';
 import 'scrub_preview_controller.dart';
 import 'scrub_preview_track.dart';
 import 'volume_popup_button.dart';
-import 'bili_overlay_controls.dart';
 
 /// Icon set for shared Bilibili-style bottom chrome / 共享底栏图标集.
 class BiliControlIcons {
@@ -21,9 +23,7 @@ class BiliControlIcons {
     pause: Icons.pause,
     volumeOn: Icons.volume_up,
     volumeOff: Icons.volume_off,
-    loop: Icons.loop,
-    capture: Icons.photo_camera_outlined,
-    subtitle: Icons.closed_caption,
+    settings: Icons.settings,
     danmakuOn: Icons.subtitles,
     danmakuOff: Icons.subtitles_outlined,
     externalSubtitleOn: Icons.closed_caption,
@@ -38,9 +38,7 @@ class BiliControlIcons {
     required this.pause,
     required this.volumeOn,
     required this.volumeOff,
-    required this.loop,
-    required this.capture,
-    required this.subtitle,
+    required this.settings,
     required this.danmakuOn,
     required this.danmakuOff,
     required this.externalSubtitleOn,
@@ -55,9 +53,7 @@ class BiliControlIcons {
     pause: Icons.pause,
     volumeOn: Icons.volume_up,
     volumeOff: Icons.volume_off,
-    loop: Icons.repeat,
-    capture: Icons.camera_alt_outlined,
-    subtitle: Icons.closed_caption,
+    settings: Icons.settings,
     danmakuOn: Icons.subtitles,
     danmakuOff: Icons.subtitles_outlined,
     externalSubtitleOn: Icons.closed_caption,
@@ -70,9 +66,7 @@ class BiliControlIcons {
   final IconData pause;
   final IconData volumeOn;
   final IconData volumeOff;
-  final IconData loop;
-  final IconData capture;
-  final IconData subtitle;
+  final IconData settings;
   final IconData danmakuOn;
   final IconData danmakuOff;
   final IconData externalSubtitleOn;
@@ -81,7 +75,7 @@ class BiliControlIcons {
   final IconData fullscreenExit;
 }
 
-/// Shared Bilibili-style bottom chrome: progress row + tool row.
+/// Shared Bilibili-style bottom chrome: transport row + optional danmaku row.
 class BiliBottomChrome extends StatelessWidget {
   /// Creates the shared bottom chrome / 创建共享底栏.
   const BiliBottomChrome({
@@ -92,11 +86,11 @@ class BiliBottomChrome extends StatelessWidget {
     required this.scrub,
     required this.preview,
     required this.icons,
-    this.onCapture,
+    required this.strings,
+    required this.settings,
     this.scrubPreview,
     this.overlayControls,
-    this.showCaptureButton = true,
-    this.showFullscreenButton = false,
+    this.showFullscreenButton = true,
     this.landscapeLocked,
     this.onFullscreenToggle,
   });
@@ -109,17 +103,22 @@ class BiliBottomChrome extends StatelessWidget {
   final ScrubPreviewTrack? scrubPreview;
   final BiliOverlayControlsConfig? overlayControls;
   final BiliControlIcons icons;
-  final VoidCallback? onCapture;
-  final bool showCaptureButton;
+  final GstPlayerStrings strings;
+  final PlayerChromeSettings settings;
   final bool showFullscreenButton;
   final bool? landscapeLocked;
   final VoidCallback? onFullscreenToggle;
 
+  ButtonStyle get _iconStyle => IconButton.styleFrom(
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    visualDensity: VisualDensity.compact,
+    padding: EdgeInsets.zero,
+    minimumSize: const Size(32, 32),
+  );
+
   @override
   Widget build(BuildContext context) {
-    final subtitleTracks = model.tracks
-        .where((t) => t.trackType == TrackType.subtitle)
-        .toList();
+    final overlay = overlayControls;
 
     return Positioned(
       left: 0,
@@ -146,398 +145,12 @@ class BiliBottomChrome extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: theme.activeTrackColor,
-                    inactiveTrackColor: theme.inactiveTrackColor,
-                    thumbColor: theme.thumbColor,
-                    secondaryActiveTrackColor: theme.bufferedTrackColor,
-                    trackHeight: 2.5,
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 8,
-                    ),
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 5,
-                      elevation: 1,
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  child: ProgressBarWithPreview(
-                    model: model,
-                    scrub: scrub,
-                    preview: preview,
-                    scrubPreview: scrubPreview,
-                    theme: theme,
-                    previewBarHeight: 72,
-                    builder: (context, snap) => Slider(
-                      value: snap.displayValue,
-                      onChangeStart: snap.enabled
-                          ? (_) => snap.onSeekStart?.call()
-                          : null,
-                      onChanged: snap.onSeekChanged,
-                      onChangeEnd: snap.onSeekEnd,
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, right: 4, bottom: 2),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final compact = constraints.maxWidth < 320;
-                      final hasOverlay = overlayControls != null;
-                      // Overlay row: danmaku/subtitle toggles. Volume stays visible
-                      // with or without overlay; loop/speed stay classic-only.
-                      final showTimeInBar =
-                          !hasOverlay || constraints.maxWidth >= 400;
-                      final showVolume = !compact;
-                      final showSecondaryTools = !compact && !hasOverlay;
-                      return Row(
-                        children: [
-                          IconButton(
-                            style: IconButton.styleFrom(
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            color: theme.iconColor,
-                            icon: Icon(
-                              model.isPlaying ? icons.pause : icons.play,
-                              size: theme.primaryIconSize,
-                            ),
-                            onPressed: () {
-                              onInteract();
-                              model.togglePlayPause();
-                            },
-                          ),
-                          if (showTimeInBar)
-                            Flexible(
-                              flex: hasOverlay ? 0 : 1,
-                              fit: hasOverlay ? FlexFit.loose : FlexFit.tight,
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  '${formatDuration(model.position)} / ${formatDuration(model.duration)}',
-                                  maxLines: 1,
-                                  softWrap: false,
-                                  style: TextStyle(
-                                    color: theme.textColor,
-                                    fontSize: 12,
-                                    fontFeatures: const [
-                                      FontFeature.tabularFigures(),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          if (hasOverlay) ...[
-                            if (overlayControls!.showDanmakuInput) ...[
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: _BiliDanmakuInput(
-                                  hint: overlayControls!.danmakuHint,
-                                  enabled: overlayControls!.danmakuEnabled,
-                                  onInteract: onInteract,
-                                  onSend: overlayControls!.onDanmakuSend!,
-                                ),
-                              ),
-                            ],
-                            if (overlayControls!.showDanmakuToggle)
-                              IconButton(
-                                style: IconButton.styleFrom(
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: const Size(32, 32),
-                                ),
-                                color: overlayControls!.danmakuEnabled
-                                    ? theme.activeIconColor
-                                    : theme.iconColor.withValues(alpha: 0.55),
-                                tooltip: overlayControls!.danmakuEnabled
-                                    ? '关闭弹幕'
-                                    : '打开弹幕',
-                                icon: Icon(
-                                  overlayControls!.danmakuEnabled
-                                      ? icons.danmakuOn
-                                      : icons.danmakuOff,
-                                  size: theme.secondaryIconSize,
-                                ),
-                                onPressed: () {
-                                  onInteract();
-                                  overlayControls!.onDanmakuEnabledChanged!(
-                                    !overlayControls!.danmakuEnabled,
-                                  );
-                                },
-                              ),
-                            if (overlayControls!.showSubtitlesToggle)
-                              IconButton(
-                                style: IconButton.styleFrom(
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: const Size(32, 32),
-                                ),
-                                color: overlayControls!.subtitlesEnabled
-                                    ? theme.activeIconColor
-                                    : theme.iconColor.withValues(alpha: 0.55),
-                                tooltip: overlayControls!.subtitlesEnabled
-                                    ? '关闭字幕'
-                                    : '打开字幕',
-                                icon: Icon(
-                                  overlayControls!.subtitlesEnabled
-                                      ? icons.externalSubtitleOn
-                                      : icons.externalSubtitleOff,
-                                  size: theme.secondaryIconSize,
-                                ),
-                                onPressed: () {
-                                  onInteract();
-                                  overlayControls!.onSubtitlesEnabledChanged!(
-                                    !overlayControls!.subtitlesEnabled,
-                                  );
-                                },
-                              ),
-                            if (showCaptureButton && onCapture != null)
-                              IconButton(
-                                style: IconButton.styleFrom(
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: const Size(32, 32),
-                                ),
-                                color: theme.iconColor,
-                                icon: Icon(
-                                  icons.capture,
-                                  size: theme.secondaryIconSize,
-                                ),
-                                onPressed: onCapture,
-                              ),
-                          ] else
-                            const Spacer(),
-                          if (showVolume)
-                            VolumePopupButton(
-                              model: model,
-                              theme: theme,
-                              onInteract: onInteract,
-                              volumeOnIcon: icons.volumeOn,
-                              volumeOffIcon: icons.volumeOff,
-                            ),
-                          if (showSecondaryTools) ...[
-                            if (showCaptureButton && onCapture != null)
-                              IconButton(
-                                style: IconButton.styleFrom(
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                                color: theme.iconColor,
-                                icon: Icon(
-                                  icons.capture,
-                                  size: theme.secondaryIconSize,
-                                ),
-                                onPressed: onCapture,
-                              ),
-                            IconButton(
-                              style: IconButton.styleFrom(
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: VisualDensity.compact,
-                              ),
-                              color: model.looping
-                                  ? theme.activeIconColor
-                                  : theme.iconColor.withValues(alpha: 0.55),
-                              icon: Icon(
-                                icons.loop,
-                                size: theme.secondaryIconSize,
-                              ),
-                              onPressed: () async {
-                                onInteract();
-                                await model.setLooping(!model.looping);
-                              },
-                            ),
-                            if (model.supportsTracks &&
-                                subtitleTracks.isNotEmpty)
-                              ChatContextMenuWrapper(
-                                topPadding: 0,
-                                backgroundColor: theme.backgroundColor,
-                                borderRadius: BorderRadius.circular(
-                                  theme.borderRadius == 0
-                                      ? 8
-                                      : theme.borderRadius,
-                                ),
-                                padding: EdgeInsets.zero,
-                                menuBuilder: (context, hideMenu) {
-                                  return Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      for (final track in subtitleTracks)
-                                        InkWell(
-                                          onTap: () {
-                                            onInteract();
-                                            model.selectTrack(
-                                              track,
-                                              enable: !track.selected,
-                                            );
-                                            hideMenu();
-                                          },
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 10,
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                SizedBox(
-                                                  width: 20,
-                                                  child: track.selected
-                                                      ? Icon(
-                                                          Icons.check,
-                                                          size: 16,
-                                                          color:
-                                                              theme.textColor,
-                                                        )
-                                                      : null,
-                                                ),
-                                                Text(
-                                                  track.label.isEmpty
-                                                      ? 'Subtitle ${track.id}'
-                                                      : track.label,
-                                                  style: TextStyle(
-                                                    color: theme.textColor,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  );
-                                },
-                                widgetBuilder: (context, showMenu, _) {
-                                  return IconButton(
-                                    style: IconButton.styleFrom(
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    color: theme.iconColor,
-                                    icon: Icon(
-                                      icons.subtitle,
-                                      size: theme.secondaryIconSize,
-                                    ),
-                                    onPressed: showMenu,
-                                  );
-                                },
-                              ),
-                            ChatContextMenuWrapper(
-                              topPadding: 0,
-                              backgroundColor: theme.backgroundColor,
-                              borderRadius: BorderRadius.circular(
-                                theme.borderRadius == 0
-                                    ? 8
-                                    : theme.borderRadius,
-                              ),
-                              padding: EdgeInsets.zero,
-                              menuBuilder: (context, hideMenu) {
-                                return ListenableBuilder(
-                                  listenable: model,
-                                  builder: (context, _) {
-                                    final current = model.speed;
-                                    return Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        for (final s in speeds)
-                                          InkWell(
-                                            onTap: () {
-                                              onInteract();
-                                              model.setSpeed(s);
-                                              hideMenu();
-                                            },
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 16,
-                                                    vertical: 10,
-                                                  ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  SizedBox(
-                                                    width: 20,
-                                                    child: s == current
-                                                        ? Icon(
-                                                            Icons.check,
-                                                            size: 16,
-                                                            color: theme
-                                                                .textColor,
-                                                          )
-                                                        : null,
-                                                  ),
-                                                  Text(
-                                                    '${s}x',
-                                                    style: TextStyle(
-                                                      color: theme.textColor,
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    );
-                                  },
-                                );
-                              },
-                              widgetBuilder: (context, showMenu, _) {
-                                return GestureDetector(
-                                  onTap: showMenu,
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                    ),
-                                    child: Text(
-                                      '${model.speed}x',
-                                      style: TextStyle(
-                                        color: theme.iconColor,
-                                        fontSize:
-                                            theme.secondaryIconSize * 0.75,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                          if (showFullscreenButton &&
-                              landscapeLocked != null &&
-                              onFullscreenToggle != null)
-                            IconButton(
-                              style: IconButton.styleFrom(
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                              ),
-                              color: theme.iconColor,
-                              icon: Icon(
-                                landscapeLocked!
-                                    ? icons.fullscreenExit
-                                    : icons.fullscreen,
-                                size: theme.secondaryIconSize,
-                              ),
-                              onPressed: () {
-                                onInteract();
-                                onFullscreenToggle!();
-                              },
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
+                _buildTransportRow(context),
+                if (overlay != null &&
+                    (overlay.showDanmakuInput ||
+                        overlay.showDanmakuToggle ||
+                        overlay.showSubtitlesToggle))
+                  _buildDanmakuRow(overlay),
               ],
             ),
           ),
@@ -545,18 +158,337 @@ class BiliBottomChrome extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildTransportRow(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, right: 4, bottom: 2),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : 800.0;
+          return FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: width < 480 ? 480 : width,
+              child: Row(
+                children: [
+                  IconButton(
+                    style: _iconStyle,
+                    color: theme.iconColor,
+                    icon: Icon(
+                      model.isPlaying ? icons.pause : icons.play,
+                      size: theme.primaryIconSize,
+                    ),
+                    onPressed: () {
+                      onInteract();
+                      model.togglePlayPause();
+                    },
+                  ),
+                  _TimeLabel(
+                    model: model,
+                    scrub: scrub,
+                    theme: theme,
+                    remaining: false,
+                  ),
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        activeTrackColor: theme.activeTrackColor,
+                        inactiveTrackColor: theme.inactiveTrackColor,
+                        thumbColor: theme.thumbColor,
+                        secondaryActiveTrackColor: theme.bufferedTrackColor,
+                        trackHeight: 2.5,
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 8,
+                        ),
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 5,
+                          elevation: 1,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: ProgressBarWithPreview(
+                        model: model,
+                        scrub: scrub,
+                        preview: preview,
+                        scrubPreview: scrubPreview,
+                        theme: theme,
+                        previewBarHeight: 72,
+                        builder: (context, snap) => Slider(
+                          value: snap.displayValue,
+                          onChangeStart: snap.enabled
+                              ? (_) => snap.onSeekStart?.call()
+                              : null,
+                          onChanged: snap.onSeekChanged,
+                          onChangeEnd: snap.onSeekEnd,
+                        ),
+                      ),
+                    ),
+                  ),
+                  _TimeLabel(
+                    model: model,
+                    scrub: scrub,
+                    theme: theme,
+                    remaining: true,
+                  ),
+                  _SpeedMenuButton(
+                    model: model,
+                    theme: theme,
+                    onInteract: onInteract,
+                  ),
+                  PlayerSettingsButton(
+                    model: model,
+                    settings: settings,
+                    theme: theme,
+                    strings: strings,
+                    icon: icons.settings,
+                    onInteract: onInteract,
+                  ),
+                  VolumePopupButton(
+                    model: model,
+                    theme: theme,
+                    onInteract: onInteract,
+                    volumeOnIcon: icons.volumeOn,
+                    volumeOffIcon: icons.volumeOff,
+                  ),
+                  if (showFullscreenButton && onFullscreenToggle != null)
+                    IconButton(
+                      style: _iconStyle,
+                      color: theme.iconColor,
+                      icon: Icon(
+                        (landscapeLocked ?? false)
+                            ? icons.fullscreenExit
+                            : icons.fullscreen,
+                        size: theme.secondaryIconSize,
+                      ),
+                      onPressed: () {
+                        onInteract();
+                        onFullscreenToggle!();
+                      },
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDanmakuRow(BiliOverlayControlsConfig overlay) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, right: 4, bottom: 4),
+      child: Row(
+        children: [
+          if (overlay.showDanmakuToggle)
+            IconButton(
+              style: _iconStyle,
+              color: overlay.danmakuEnabled
+                  ? theme.activeIconColor
+                  : theme.iconColor.withValues(alpha: 0.55),
+              tooltip: overlay.danmakuEnabled
+                  ? strings.closeDanmaku
+                  : strings.openDanmaku,
+              icon: Icon(
+                overlay.danmakuEnabled ? icons.danmakuOn : icons.danmakuOff,
+                size: theme.secondaryIconSize,
+              ),
+              onPressed: () {
+                onInteract();
+                overlay.onDanmakuEnabledChanged!(!overlay.danmakuEnabled);
+              },
+            ),
+          if (overlay.showDanmakuInput) ...[
+            const SizedBox(width: 4),
+            Expanded(
+              child: _BiliDanmakuInput(
+                hint: overlay.danmakuHint.isEmpty
+                    ? strings.danmakuHint
+                    : overlay.danmakuHint,
+                sendLabel: strings.send,
+                enabled: overlay.danmakuEnabled,
+                accentColor: theme.activeIconColor,
+                onInteract: onInteract,
+                onSend: overlay.onDanmakuSend!,
+              ),
+            ),
+          ] else
+            const Spacer(),
+          if (overlay.showSubtitlesToggle)
+            IconButton(
+              style: _iconStyle,
+              color: overlay.subtitlesEnabled
+                  ? theme.activeIconColor
+                  : theme.iconColor.withValues(alpha: 0.55),
+              tooltip: overlay.subtitlesEnabled
+                  ? strings.closeSubtitles
+                  : strings.openSubtitles,
+              icon: Icon(
+                overlay.subtitlesEnabled
+                    ? icons.externalSubtitleOn
+                    : icons.externalSubtitleOff,
+                size: theme.secondaryIconSize,
+              ),
+              onPressed: () {
+                onInteract();
+                overlay.onSubtitlesEnabledChanged!(!overlay.subtitlesEnabled);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimeLabel extends StatelessWidget {
+  const _TimeLabel({
+    required this.model,
+    required this.scrub,
+    required this.theme,
+    required this.remaining,
+  });
+
+  final PlaybackControlsModel model;
+  final ScrubController scrub;
+  final VideoControlsTheme theme;
+  final bool remaining;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([model, scrub]),
+      builder: (context, _) {
+        final durMs = model.duration.inMilliseconds;
+        final posMs = model.position.inMilliseconds;
+        final fraction = scrub.sliderValue(durMs.toDouble(), posMs.toDouble());
+        final displayPos = Duration(
+          milliseconds: (fraction * durMs).round().clamp(0, durMs),
+        );
+        final text = remaining
+            ? formatDuration(
+                model.duration - displayPos < Duration.zero
+                    ? Duration.zero
+                    : model.duration - displayPos,
+              )
+            : formatDuration(displayPos);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Text(
+            text,
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              color: theme.textColor,
+              fontSize: 12,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SpeedMenuButton extends StatelessWidget {
+  const _SpeedMenuButton({
+    required this.model,
+    required this.theme,
+    required this.onInteract,
+  });
+
+  final PlaybackControlsModel model;
+  final VideoControlsTheme theme;
+  final VoidCallback onInteract;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChromePopupButton(
+      theme: theme,
+      menuBuilder: (context, hideMenu) {
+        return ListenableBuilder(
+          listenable: model,
+          builder: (context, _) {
+            final current = model.speed;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final s in speeds)
+                  InkWell(
+                    onTap: () {
+                      onInteract();
+                      model.setSpeed(s);
+                      hideMenu();
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            child: s == current
+                                ? Icon(
+                                    Icons.check,
+                                    size: 16,
+                                    color: theme.textColor,
+                                  )
+                                : null,
+                          ),
+                          Text(
+                            '${s}x',
+                            style: TextStyle(
+                              color: theme.textColor,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+      buttonBuilder: (context, showMenu) {
+        return GestureDetector(
+          onTap: showMenu,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              '${model.speed}x',
+              style: TextStyle(
+                color: theme.iconColor,
+                fontSize: theme.secondaryIconSize * 0.75,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _BiliDanmakuInput extends StatefulWidget {
   const _BiliDanmakuInput({
     required this.hint,
+    required this.sendLabel,
     required this.enabled,
+    required this.accentColor,
     required this.onInteract,
     required this.onSend,
   });
 
   final String hint;
+  final String sendLabel;
   final bool enabled;
+  final Color accentColor;
   final VoidCallback onInteract;
   final ValueChanged<String> onSend;
 
@@ -574,6 +506,7 @@ class _BiliDanmakuInputState extends State<_BiliDanmakuInput> {
   }
 
   void _submit() {
+    if (!widget.enabled) return;
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     widget.onInteract();
@@ -583,41 +516,71 @@ class _BiliDanmakuInputState extends State<_BiliDanmakuInput> {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: _controller,
-      enabled: widget.enabled,
-      style: const TextStyle(color: Colors.white, fontSize: 13),
-      decoration: InputDecoration(
-        isDense: true,
-        hintText: widget.hint,
-        hintStyle: TextStyle(
-          color: Colors.white.withValues(alpha: 0.45),
-          fontSize: 12,
-        ),
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.12),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 6,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.35),
+    final enabled = widget.enabled;
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _controller,
+            enabled: enabled,
+            style: TextStyle(
+              color: enabled ? Colors.white : Colors.white38,
+              fontSize: 13,
+            ),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: widget.hint,
+              hintStyle: TextStyle(
+                color: Colors.white.withValues(alpha: enabled ? 0.45 : 0.25),
+                fontSize: 12,
+              ),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: 0.12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+              disabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.35),
+                ),
+              ),
+            ),
+            textInputAction: TextInputAction.send,
+            onTap: enabled ? widget.onInteract : null,
+            onSubmitted: (_) => _submit(),
           ),
         ),
-      ),
-      textInputAction: TextInputAction.send,
-      onTap: widget.onInteract,
-      onSubmitted: (_) => _submit(),
+        const SizedBox(width: 8),
+        TextButton(
+          onPressed: enabled ? _submit : null,
+          style: TextButton.styleFrom(
+            foregroundColor: widget.accentColor,
+            disabledForegroundColor: widget.accentColor.withValues(alpha: 0.35),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: const Size(0, 32),
+          ),
+          child: Text(
+            widget.sendLabel,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
     );
   }
 }

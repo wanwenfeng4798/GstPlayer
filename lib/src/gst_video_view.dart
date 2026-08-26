@@ -1,14 +1,17 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'controls/fullscreen_config.dart';
 import 'controls/immersive_controls_state.dart';
+import 'controls/player_chrome_settings.dart';
 import 'controls/scrub_preview_track.dart';
 import 'controls/bili_overlay_controls.dart';
 import 'controls/video_controls.dart';
 import 'enum/video_controls_style.dart';
+import 'l10n/gst_player_language.dart';
+import 'l10n/gst_player_strings.dart';
 import 'overlay/danmaku.dart';
 import 'overlay/subtitle.dart';
 import 'presentation/playback_presentation.dart';
@@ -26,6 +29,9 @@ export 'controls/scrub_preview_track.dart'
 export 'controls/video_controls.dart';
 export 'overlay/danmaku.dart';
 export 'overlay/subtitle.dart';
+export 'l10n/gst_player_language.dart';
+export 'controls/player_chrome_settings.dart'
+    show ForcedDisplayAspect, PlayerChromeSettings;
 
 /// 通过 Flutter 外部 Texture 渲染 GStreamer 视频，可选内置自适应控件栏 / Renders GStreamer video through a Flutter external texture with an optional adaptive control bar.
 ///
@@ -41,6 +47,9 @@ class GstVideoView extends StatefulWidget {
   /// - `showControls` — 是否叠加内置控件栏 / whether to overlay built-in controls
   /// - `controlsStyle` — 控件视觉风格 / control bar visual style
   /// - `fullscreen` — 沉浸控件配置 / immersive controls configuration
+  /// - `language` — 控件文案语言，暂支持中/英 / chrome copy language (zh/en)
+  /// - `onPlayNext` — 播完切下一集 / called at EOS when auto-play next is on
+  /// - `onLightsOffChanged` — 关灯模式变化 / lights-off theater mode
   /// - `poster` — 开播前封面图 / cover image before playback starts
   /// - `keepLastFrame` — 播完后保留最后一帧叠层 / keep last frame after EOS
   /// - `scrubPreview` — 外部进度条缩略图轨（GSY WebVTT/雪碧图），不实时抽帧
@@ -57,6 +66,9 @@ class GstVideoView extends StatefulWidget {
     this.showControls = true,
     this.controlsStyle = VideoControlsStyle.adaptive,
     this.fullscreen = const VideoControlsFullscreenConfig(),
+    this.language = GstPlayerLanguage.zh,
+    this.onPlayNext,
+    this.onLightsOffChanged,
     this.poster,
     this.keepLastFrame = true,
     this.scrubPreview,
@@ -88,6 +100,16 @@ class GstVideoView extends StatefulWidget {
 
   /// 全屏沉浸控件配置 / Fullscreen immersive controls configuration.
   final VideoControlsFullscreenConfig fullscreen;
+
+  /// Chrome copy language (zh / en) / 控件文案语言.
+  final GstPlayerLanguage language;
+
+  /// Called at EOS when looping is off and auto-play next is enabled /
+  /// 非循环且开启播完切下一集时，EOS 回调宿主.
+  final VoidCallback? onPlayNext;
+
+  /// Called when the lights-off setting changes / 关灯模式变化回调.
+  final ValueChanged<bool>? onLightsOffChanged;
 
   /// 开播前/无画面时显示的封面 / Poster shown before frames are available.
   final ImageProvider? poster;
@@ -124,9 +146,8 @@ class GstVideoView extends StatefulWidget {
   /// 是否显示外挂字幕 / Whether external subtitles are visible.
   final bool subtitlesEnabled;
 
-  /// 是否显示底栏截帧按钮 / Whether to show the screenshot button on chrome.
-  ///
-  /// Also requires [onScreenshot]; otherwise the button is hidden.
+  /// Capture-button flag retained for host API compatibility. The two-row
+  /// chrome no longer renders a screenshot control.
   final bool showCaptureButton;
 
   /// Called with PNG bytes after a successful capture. Host owns saving
@@ -140,21 +161,60 @@ class GstVideoView extends StatefulWidget {
 
 class _GstVideoViewState extends State<GstVideoView> {
   late final ImmersiveControlsState _immersive;
+  late final PlayerChromeSettings _chromeSettings;
+  late GstPlayerStrings _strings;
   int _lastMediaGeneration = -1;
   Uint8List? _lastFramePng;
   bool _capturingLastFrame = false;
   PlayerState? _lastState;
+  bool _lastHideBlackBars = false;
+  bool _lastLightsOff = false;
 
   @override
   void initState() {
     super.initState();
+    _strings = GstPlayerStrings.of(widget.language);
+    _chromeSettings = PlayerChromeSettings();
+    _chromeSettings.addListener(_onChromeSettingsChanged);
     _immersive = ImmersiveControlsState(
       initialAspectRatioMode: widget.aspectRatioMode,
-      fullscreen: widget.fullscreen,
+      fullscreen: _effectiveFullscreen,
     );
     widget.controller.attachImmersive(_immersive);
     widget.controller.addListener(_onControllerChanged);
     _onControllerChanged();
+  }
+
+  VideoControlsFullscreenConfig get _effectiveFullscreen {
+    final fs = widget.fullscreen;
+    const defaultAspect = AspectRatioModeLabels();
+    const defaultOrient = VideoRotationLabels();
+    return VideoControlsFullscreenConfig(
+      seekStep: fs.seekStep,
+      desktopImmersive: fs.desktopImmersive,
+      aspectRatioLabels: fs.aspectRatioLabels == defaultAspect
+          ? _strings.aspectRatioLabels
+          : fs.aspectRatioLabels,
+      overlaySlots: fs.overlaySlots,
+      showOrientationMenu: fs.showOrientationMenu,
+      orientationLabels: fs.orientationLabels == defaultOrient
+          ? _strings.orientationLabels
+          : fs.orientationLabels,
+    );
+  }
+
+  void _onChromeSettingsChanged() {
+    if (_chromeSettings.hideBlackBars != _lastHideBlackBars) {
+      _lastHideBlackBars = _chromeSettings.hideBlackBars;
+      _immersive.aspectRatioMode = _lastHideBlackBars
+          ? AspectRatioMode.fill
+          : AspectRatioMode.fit;
+    }
+    if (_chromeSettings.lightsOff != _lastLightsOff) {
+      _lastLightsOff = _chromeSettings.lightsOff;
+      widget.onLightsOffChanged?.call(_lastLightsOff);
+    }
+    if (mounted) setState(() {});
   }
 
   void _onControllerChanged() {
@@ -163,7 +223,9 @@ class _GstVideoViewState extends State<GstVideoView> {
       _lastMediaGeneration = generation;
       _lastFramePng = null;
       if (generation > 0) {
-        _immersive.aspectRatioMode = AspectRatioMode.fit;
+        _immersive.aspectRatioMode = _chromeSettings.hideBlackBars
+            ? AspectRatioMode.fill
+            : AspectRatioMode.fit;
       }
     }
 
@@ -173,6 +235,12 @@ class _GstVideoViewState extends State<GstVideoView> {
         _lastState != PlayerState.completed &&
         !_capturingLastFrame) {
       unawaited(_captureLastFrame());
+    }
+    if (state == PlayerState.completed &&
+        _lastState != PlayerState.completed &&
+        !widget.controller.looping &&
+        _chromeSettings.playNextOnEnd) {
+      widget.onPlayNext?.call();
     }
     if (state != PlayerState.completed && _lastFramePng != null) {
       // Cleared on replay / new media via generation; also clear when leaving completed.
@@ -209,11 +277,21 @@ class _GstVideoViewState extends State<GstVideoView> {
       widget.controller.addListener(_onControllerChanged);
       _onControllerChanged();
     }
-    if (oldWidget.aspectRatioMode != widget.aspectRatioMode) {
+    if (oldWidget.language != widget.language) {
+      _strings = GstPlayerStrings.of(widget.language);
+    }
+    if (oldWidget.language != widget.language ||
+        oldWidget.fullscreen != widget.fullscreen) {
+      _immersive.fullscreen = _effectiveFullscreen;
+    }
+    if (oldWidget.aspectRatioMode != widget.aspectRatioMode &&
+        !_chromeSettings.hideBlackBars) {
       _immersive.aspectRatioMode = widget.aspectRatioMode;
     }
-    if (oldWidget.fullscreen != widget.fullscreen) {
-      _immersive.fullscreen = widget.fullscreen;
+    // Keep screenshot API fields reachable without rendering a chrome button.
+    if (oldWidget.showCaptureButton != widget.showCaptureButton ||
+        oldWidget.onScreenshot != widget.onScreenshot) {
+      // no-op: two-row chrome does not show capture.
     }
   }
 
@@ -221,6 +299,8 @@ class _GstVideoViewState extends State<GstVideoView> {
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
     widget.controller.detachImmersive();
+    _chromeSettings.removeListener(_onChromeSettingsChanged);
+    _chromeSettings.dispose();
     _immersive.dispose();
     super.dispose();
   }
@@ -252,6 +332,7 @@ class _GstVideoViewState extends State<GstVideoView> {
       onDanmakuSend: widget.onDanmakuSend,
       onDanmakuEnabledChanged: widget.onDanmakuEnabledChanged,
       onSubtitlesEnabledChanged: widget.onSubtitlesEnabledChanged,
+      danmakuHint: _strings.danmakuHint,
     );
   }
 
@@ -266,15 +347,23 @@ class _GstVideoViewState extends State<GstVideoView> {
           alignment: Alignment.center,
           children: [
             ListenableBuilder(
-              listenable: _immersive,
+              listenable: Listenable.merge([_immersive, _chromeSettings]),
               builder: (context, _) {
                 return PlaybackPresentation(
                   model: widget.controller,
                   aspectRatioMode: _immersive.aspectRatioMode,
                   controlsStyle: widget.controlsStyle,
+                  mirrored: _chromeSettings.mirrored,
+                  forcedAspectRatio: _chromeSettings.forcedAspectRatio,
                 );
               },
             ),
+            if (_chromeSettings.lightsOff)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: ColoredBox(color: Color(0x99000000)),
+                ),
+              ),
             if (_showPoster && widget.poster != null)
               Positioned.fill(
                 child: IgnorePointer(
@@ -312,11 +401,11 @@ class _GstVideoViewState extends State<GstVideoView> {
               VideoControls(
                 model: widget.controller,
                 immersive: _immersive,
+                strings: _strings,
+                settings: _chromeSettings,
                 style: widget.controlsStyle,
                 scrubPreview: widget.scrubPreview,
                 overlayControls: _overlayControls,
-                showCaptureButton: widget.showCaptureButton,
-                onScreenshot: widget.onScreenshot,
               ),
           ],
         ),

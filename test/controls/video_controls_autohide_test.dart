@@ -1,14 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gstplayer/src/controls/controls_overlay_slots.dart';
 import 'package:gstplayer/src/controls/fullscreen_config.dart';
 import 'package:gstplayer/src/controls/immersive_controls_state.dart';
-import 'package:gstplayer/src/controls/video_controls.dart';
+import 'package:gstplayer/src/controls/player_chrome_settings.dart';
 import 'package:gstplayer/src/domain/player_events.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../support/fake_playback_controls_model.dart';
+import '../support/test_chrome.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -16,9 +17,11 @@ void main() {
   group('VideoControls auto-hide', () {
     late FakePlaybackControlsModel model;
     late ImmersiveControlsState immersive;
+    late PlayerChromeSettings settings;
 
     setUp(() {
       model = FakePlaybackControlsModel(initialState: PlayerState.playing);
+      settings = PlayerChromeSettings();
       immersive = ImmersiveControlsState(
         initialAspectRatioMode: AspectRatioMode.fit,
         fullscreen: const VideoControlsFullscreenConfig(
@@ -35,6 +38,7 @@ void main() {
     tearDown(() {
       model.dispose();
       immersive.dispose();
+      settings.dispose();
     });
 
     Future<void> pumpControls(
@@ -49,9 +53,10 @@ void main() {
               height: 450,
               child: Stack(
                 children: [
-                  VideoControls(
+                  testVideoControls(
                     model: model,
                     immersive: immersive,
+                    settings: settings,
                     autoHide: autoHide,
                   ),
                 ],
@@ -87,12 +92,12 @@ void main() {
           await tester.pump(const Duration(milliseconds: 200)); // fade
 
           expect(opacityChrome(tester).opacity, 0.0);
-          final ignore = tester.widget<IgnorePointer>(
+          final ignore = tester.widgetList<IgnorePointer>(
             find.descendant(
               of: find.byKey(const ValueKey('video-controls-opacity')),
               matching: find.byType(IgnorePointer),
             ),
-          );
+          ).first;
           expect(ignore.ignoring, isTrue);
         } finally {
           debugDefaultTargetPlatformOverride = null;

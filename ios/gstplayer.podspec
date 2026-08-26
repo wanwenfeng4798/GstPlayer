@@ -20,7 +20,7 @@ broad format support for local and network video, powered by GStreamer
   s.platform = :ios, '13.0'
   s.swift_version = '5.0'
 
-  gst_ver = ENV.fetch('GST_VER', '1.28.5')
+  gst_ver = ENV.fetch('GST_VER', '1.28.6')
   cache_ios = File.expand_path("~/Library/Caches/gstplayer/gstreamer/#{gst_ver}/ios/iPhone.sdk")
 
   gst_root = ENV['GSTREAMER_ROOT_IOS']

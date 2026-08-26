@@ -1,3 +1,38 @@
+## 0.0.3
+
+### UI (Flutter 3.44 / `material_ui`)
+
+- Dart widgets import `package:material_ui/material_ui.dart` instead of
+  `package:flutter/material.dart`.
+- Removed `chat_context_menu`; speed and top-bar menus use a first-party Overlay.
+- Example no longer depends on `cupertino_icons`.
+
+### Bottom chrome & settings
+
+- Two-row Bilibili chrome: transport (play, position, progress, remaining time,
+  speed, settings, volume, fullscreen) plus danmaku / send / CC.
+- Two-level settings popup: mirror, single-episode loop, autoplay, play-next,
+  16:9 / 4:3, hide black bars, lights-off, audio tracks.
+- Chrome copy via `GstVideoView.language` (`GstPlayerLanguage.zh` / `.en`).
+- Screenshot is no longer on the chrome (`showCaptureButton` kept for API
+  compatibility; hosts can still use `onScreenshot` / `captureCurrentFrame`).
+
+### `GstVideoView`
+
+- New: `language`, `onPlayNext`, `onLightsOffChanged`.
+- EOS with looping off and play-next enabled calls `onPlayNext`.
+- Mirror, forced aspect, hide-black-bars, and lights-off overlay follow chrome
+  settings.
+
+### Darwin / Swift Package Manager
+
+- Example iOS and macOS are SPM-only (no CocoaPods `Podfile`).
+- Plugin `pubspec.yaml` sets `enable-swift-package-manager: true` so `pub get`
+  does not recreate a Podfile when the global Flutter config has SPM disabled.
+- SPM macOS hosts embed `GStreamer.framework` with an Xcode Run Script
+  (`macos/scripts/embed_gstreamer_framework.sh`). CocoaPods hosts can still use
+  `macos/gstreamer_podfile_helper.rb`.
+
 ## 0.0.2
 
 ### Playback stability (Android)

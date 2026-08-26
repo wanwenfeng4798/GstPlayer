@@ -28,7 +28,7 @@ broad format support for local and network video, powered by GStreamer
   # via vendored_frameworks + CocoaPods [CP] Embed Pods Frameworks.
   #
   # Set GSTPLAYER_ALLOW_HOMEBREW_GSTREAMER=1 for local Homebrew-only dev (not MAS).
-  gst_ver = ENV.fetch('GST_VER', '1.28.5')
+  gst_ver = ENV.fetch('GST_VER', '1.28.6')
   cache_root = File.expand_path("~/Library/Caches/gstplayer/gstreamer/#{gst_ver}")
   use_homebrew = ENV['GSTPLAYER_ALLOW_HOMEBREW_GSTREAMER'] == '1'
 

@@ -4,7 +4,7 @@
 import Foundation
 import PackageDescription
 
-let gstVer = Context.environment["GST_VER"] ?? "1.28.5"
+let gstVer = Context.environment["GST_VER"] ?? "1.28.6"
 let home = Context.environment["HOME"] ?? NSHomeDirectory()
 let gstCache = "\(home)/Library/Caches/gstplayer/gstreamer/\(gstVer)"
 

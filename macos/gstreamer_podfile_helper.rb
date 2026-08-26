@@ -65,7 +65,7 @@ def install_gstreamer_embed_script!(installer)
     return
   end
 
-  gst_ver = ENV.fetch('GST_VER', '1.28.5')
+  gst_ver = ENV.fetch('GST_VER', '1.28.6')
   default_cache_sdk = File.expand_path(
     "~/Library/Caches/gstplayer/gstreamer/#{gst_ver}/GStreamer.framework/Versions/Current",
   )

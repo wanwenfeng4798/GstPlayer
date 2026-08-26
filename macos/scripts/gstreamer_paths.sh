@@ -12,7 +12,7 @@ if [[ -z "${HOME:-}" ]]; then
   export HOME
 fi
 
-GST_VER="${GST_VER:-1.28.5}"
+GST_VER="${GST_VER:-1.28.6}"
 
 _default_cache_root="${HOME}/Library/Caches/gstplayer/gstreamer/${GST_VER}"
 

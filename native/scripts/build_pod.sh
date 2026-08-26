@@ -42,7 +42,7 @@ CFLAGS=(
 )
 
 # Prefer GStreamer.framework headers from cache / env.
-GST_VER="${GST_VER:-1.28.5}"
+GST_VER="${GST_VER:-1.28.6}"
 GST_CACHE="${HOME}/Library/Caches/gstplayer/gstreamer/${GST_VER}"
 if [[ -n "${GSTREAMER_FRAMEWORK_ROOT:-}" ]]; then
   GST_CACHE="${GSTREAMER_FRAMEWORK_ROOT}"

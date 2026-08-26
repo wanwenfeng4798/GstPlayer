@@ -66,19 +66,22 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 - Local files, Flutter assets, and network URLs (`http(s)://`, `rtsp://`, ...).
 - Play / pause / stop / seek / looping.
 - Volume (popup vertical slider with live **0–100** readout), mute, and playback speed.
-- Bilibili-inspired control chrome: pink progress track (`#FB7299`), progress row above the tool row, auto-hiding bar.
+- Bilibili-inspired two-row chrome: pink progress (`#FB7299`), remaining time,
+  speed / settings / volume / fullscreen, then danmaku input + CC; auto-hiding.
+- Two-level settings: mirror, loop, autoplay, play-next, 16:9 / 4:3, hide black
+  bars, lights-off, audio tracks. Chrome copy is zh / en via `language`.
 - Mobile surface gestures (**inline and fullscreen**): horizontal seek, left brightness / right volume (HUD shows percent).
-- Progress-bar scrub thumbnail preview (debounced `captureThumbnail`).
+- Progress-bar scrub thumbnail preview (external WebVTT + sprite / frame list).
 - Poster image and keep-last-frame after EOS.
 - External subtitle overlay (SRT/WebVTT via `SubtitleParser`) plus embedded subtitle track selection API/UI.
 - Danmaku (bullet comment) overlay driven by app-supplied `DanmakuItem` cues.
-- Frame capture (`captureCurrentFrame` / chrome `onScreenshot` — host saves PNG) and one-shot covers (`captureThumbnail`).
+- Frame capture (`captureCurrentFrame` / `onScreenshot` — host saves PNG) and one-shot covers (`captureThumbnail`). Built-in chrome no longer shows a screenshot button.
 - Reactive state via [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
   plain getters: state, position, duration, video size, aspect ratio, buffering %,
   volume, speed, looping, muted, and errors. Rebuild with `ListenableBuilder` /
   `addListener`.
 - A drop-in `GstVideoView` widget with a built-in, auto-hiding, themeable
-  control bar (Material / Cupertino / adaptive; default theme accent matches Bilibili pink).
+  control bar (Material / Cupertino / adaptive via `material_ui`; default theme accent matches Bilibili pink).
 - GPU-friendly video via Flutter `Texture` (Android GL into `SurfaceProducer`; Apple/desktop pixel-buffer textures fed from GStreamer `appsink`).
 
 ## Platform support
@@ -87,7 +90,7 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 | --- | --- | --- | --- |
 | Android | API 24 (7.0) | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` | **Auto** on first build |
 | iOS | 13.0 | Physical `arm64` device (**no Simulator**) | **Auto** on first SPM resolve / build |
-| macOS | 10.13 | x86_64 / arm64 | **Auto** on first `pod install` / SPM resolve |
+| macOS | 10.13 | x86_64 / arm64 | **Auto** on first SPM resolve / build |
 | Windows | 10+ | x86_64 | Install once on the machine ([below](#windows--linux-host-sdk)) |
 | Linux | — | x86_64 | Install once on the machine ([below](#windows--linux-host-sdk)) |
 
@@ -151,8 +154,8 @@ Also required:
 
 - [Xcode](https://developer.apple.com/xcode/)
 - First build downloads the official universal `GStreamer.framework` automatically
-- If Flutter uses SPM for plugins: one-time Podfile embed helper (see
-  [Installation](#installation))
+- Enable Swift Package Manager in the host `pubspec.yaml` (see
+  [Installation](#installation)); no CocoaPods `Podfile` is required
 
 ### Windows / Linux
 
@@ -164,7 +167,7 @@ Host GStreamer + `pkg-config` — see [Windows & Linux host SDK](#windows--linux
 
 ```yaml
 dependencies:
-  gstplayer: ^0.0.2
+  gstplayer: ^0.0.3
 ```
 
 ```bash
@@ -187,26 +190,41 @@ That is enough for **Android / iOS / macOS** (after [Prerequisites](#prerequisit
 
 **iOS:** use a physical device (`flutter run -d <device>`). Simulator is not supported.
 
-**macOS (one-time, only if Flutter uses SPM for plugins):** add this to
-`macos/Podfile` `post_install` so the slim runtime is copied into the `.app`:
+Enable Swift Package Manager in the **host** `pubspec.yaml` (the plugin already
+sets this for its own package):
 
-```ruby
-require 'json'
-plugins = JSON.parse(File.read(File.expand_path('../.flutter-plugins-dependencies', __dir__)))
-gstp = plugins.dig('plugins', 'macos')&.find { |p| p['name'] == 'gstplayer' }
-raise 'gstplayer not found; run flutter pub get first' unless gstp
-require File.expand_path('macos/gstreamer_podfile_helper.rb', gstp['path'])
-
-post_install do |installer|
-  installer.pods_project.targets.each do |target|
-    flutter_additional_macos_build_settings(target)
-  end
-  install_gstreamer_embed_script!(installer)
-end
+```yaml
+flutter:
+  config:
+    enable-swift-package-manager: true
 ```
 
-Then `cd macos && pod install` once. CocoaPods-only hosts already get the framework
-via `vendored_frameworks` and can skip this.
+The example app is **SPM-only** (no `ios/Podfile` or `macos/Podfile`).
+
+**macOS (SPM, one-time):** Package.swift links `GStreamer.framework`, but nothing
+copies it into the `.app`. Add an Xcode **Run Script** build phase on Runner
+named `[gstplayer] Embed GStreamer Framework` (after *Embed Frameworks*):
+
+```bash
+set -euo pipefail
+PLUGINS_JSON="${SRCROOT}/../.flutter-plugins-dependencies"
+PLUGIN_MACOS="$(python3 -c "
+import json, sys
+plugins = json.load(open(sys.argv[1]))['plugins']['macos']
+print(next(p['path'] for p in plugins if p['name'] == 'gstplayer') + '/macos')
+" "$PLUGINS_JSON")"
+# shellcheck source=/dev/null
+source "${PLUGIN_MACOS}/scripts/gstreamer_paths.sh"
+bash "${PLUGIN_MACOS}/scripts/embed_gstreamer_framework.sh"
+```
+
+Set the phase input to the two scripts under `macos/scripts/` and the output to
+`${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GStreamer.framework`. See
+`example/macos/Runner.xcodeproj`.
+
+**CocoaPods-only hosts** still get the framework via `vendored_frameworks`. If a
+host keeps a `macos/Podfile` under SPM hybrid mode, `install_gstreamer_embed_script!`
+in `macos/gstreamer_podfile_helper.rb` injects the same Run Script.
 
 **Windows / Linux:** install the host GStreamer SDK once — see
 [Windows & Linux host SDK](#windows--linux-host-sdk).
@@ -216,7 +234,7 @@ via `vendored_frameworks` and can skip this.
 ```dart
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:gstplayer/gstplayer.dart';
 
 Future<void> main() async {
@@ -255,7 +273,10 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GstVideoView(controller: controller),
+      body: GstVideoView(
+        controller: controller,
+        language: GstPlayerLanguage.zh, // or GstPlayerLanguage.en
+      ),
     );
   }
 }
@@ -330,8 +351,8 @@ automatically.
 
 One-shot cover extraction via a headless GStreamer pipeline in C
 (`gstp_thumbnail_capture`). Returns PNG `Uint8List`. Does not require an open
-controller. When `at` is null, native picks ~5% of duration (or 1s). Also used
-internally for progress-bar scrub preview.
+controller. When `at` is null, native picks ~5% of duration (or 1s). Progress-bar
+scrub preview uses `scrubPreview` (external VTT/sprite), not live capture.
 
 ### `GstPlayerController`
 
@@ -369,7 +390,7 @@ or after `addListener`):
 ### `GstVideoView`
 
 Embeds a Flutter `Texture` for the controller's video and, by default, an
-auto-hiding Bilibili-style control bar (progress row + tool row).
+auto-hiding two-row Bilibili-style control bar.
 
 | Parameter | Default | Description |
 | --- | --- | --- |
@@ -379,14 +400,21 @@ auto-hiding Bilibili-style control bar (progress row + tool row).
 | `showControls` | `true` | Overlay the built-in control bar. |
 | `controlsStyle` | `adaptive` | `adaptive` / `material` / `cupertino`. |
 | `fullscreen` | `VideoControlsFullscreenConfig()` | Immersive / fullscreen chrome options. |
+| `language` | `GstPlayerLanguage.zh` | Chrome copy: `zh` or `en`. |
+| `onPlayNext` | `null` | Called at EOS when looping is off and play-next is enabled in settings. |
+| `onLightsOffChanged` | `null` | Lights-off / theater mode changed. |
 | `poster` | `null` | `ImageProvider` shown before frames / while idle. |
 | `keepLastFrame` | `true` | Capture and keep the last frame after EOS. |
+| `scrubPreview` | `null` | External WebVTT / sprite / frame list; time-only if null. |
 | `danmaku` | `[]` | App-supplied `DanmakuItem` list. |
 | `danmakuEnabled` | `false` | Toggle danmaku overlay. |
+| `onDanmakuSend` | `null` | Bottom-bar send; shows the input row when non-null. |
+| `onDanmakuEnabledChanged` | `null` | Danmaku toggle from chrome. |
+| `onSubtitlesEnabledChanged` | `null` | CC toggle from chrome. |
 | `subtitles` | `[]` | External `SubtitleCue` list (e.g. from `SubtitleParser`). |
 | `subtitlesEnabled` | `true` | Toggle external subtitle overlay. |
-| `showCaptureButton` | `true` | Show chrome capture button (also needs `onScreenshot`). |
-| `onScreenshot` | `null` | Host receives PNG bytes and owns saving (gallery / path). Plugin does not write disk or show a preview dialog. |
+| `showCaptureButton` | `true` | Kept for API compatibility; two-row chrome does **not** render a screenshot button. |
+| `onScreenshot` | `null` | Host receives PNG bytes and owns saving. Plugin does not write disk or show a preview dialog. |
 
 Example with poster, subtitles, and danmaku:
 
@@ -406,9 +434,17 @@ GstVideoView(
 
 ### Controls, gestures, and theming
 
-**Bottom chrome (Bilibili-inspired):** pink progress track on its own row; tool row
-with play, time, volume popup, capture (via `onScreenshot`), loop, speed / captions,
-fullscreen. The plugin only delivers PNG bytes; the host app saves them (e.g. gallery).
+**Bottom chrome (Bilibili-inspired):**
+
+- **Row 1:** play / pause, current time, progress, remaining time, speed, settings
+  gear, volume popup, fullscreen.
+- **Row 2:** danmaku toggle, capsule input + send, CC. Input/send disable when
+  danmaku is off.
+- **Settings (two pages):** mirror, single-episode loop, autoplay; then play-next
+  vs pause-at-end, 16:9 / 4:3, hide black bars, lights-off, audio tracks.
+
+The plugin does not draw a screenshot button on this chrome. Use
+`controller.captureCurrentFrame()` or `onScreenshot` from the host if needed.
 
 **Volume popup:** tap the speaker icon for a vertical pink slider; the live
 **0–100** value is shown above the track. Long-press toggles mute.
@@ -422,8 +458,8 @@ fullscreen. The plugin only delivers PNG bytes; the host app saves them (e.g. ga
 | Horizontal | Drag | Seek preview / seek |
 
 **Scrub preview:** while dragging or hovering the progress bar, a thumbnail
-bubble appears (via `GstPlayer.captureThumbnail` on the open `mediaSource`).
-Live sources may show time only.
+bubble appears when `scrubPreview` is set (GSY-style WebVTT + sprite / frames).
+Without a track, only time is shown. Live sources may show time only.
 
 Register a `VideoControlsTheme` in `ThemeData.extensions`, or use presets
 `material()` / `cupertino()` / **`bilibili()`** (pink `#FB7299`):
@@ -440,6 +476,7 @@ MaterialApp(
 
 - `SubtitleParser.parse(String)` / `SubtitleParser.loadAsset(String)` → `List<SubtitleCue>`
 - `DanmakuItem({at, text, color, duration})` — supply to `GstVideoView.danmaku`
+- `GstPlayerLanguage.zh` / `.en` — `GstVideoView.language` chrome copy
 
 ## Architecture
 
@@ -507,13 +544,17 @@ before build/publish:
   compile (first build downloads ~870MB into
   `~/Library/Caches/gstplayer/gstreamer/<ver>/`). Manual fix:
   `sh macos/scripts/ensure_gstreamer_macos.sh`, then rebuild.
-- **macOS `Library not loaded: ...GStreamer.framework`:** SPM hosts must wire
-  `install_gstreamer_embed_script!(installer)` in `macos/Podfile` (see
-  [Installation](#installation)), then `pod install` and rebuild. Confirm
+- **macOS `Library not loaded: ...GStreamer.framework`:** SPM hosts must add the
+  `[gstplayer] Embed GStreamer Framework` Run Script (see
+  [Installation](#installation)) and rebuild. Confirm
   `YourApp.app/Contents/Frameworks/GStreamer.framework` exists.
+- **`flutter pub get` recreates `ios/Podfile` / `macos/Podfile`:** enable SPM in
+  the host `pubspec.yaml` (`flutter.config.enable-swift-package-manager: true`).
+  A global `flutter config --no-enable-swift-package-manager` otherwise wins for
+  the plugin package itself unless that key is set.
 - **Release crash: `Failed to lookup symbol 'gstp_init'` (iOS/macOS):** set Runner
-  **Strip Style = Non-Global Symbols** for Release/Profile. CocoaPods usually
-  injects this after `pod install`; SPM hosts set it in Xcode. See
+  **Strip Style = Non-Global Symbols** for Release/Profile (the example already
+  does). See
   [Flutter C interop — Stripping symbols](https://docs.flutter.dev/platform-integration/ios/c-interop).
 - **Link error: `undefined symbol: _gstp_*` (path / SPM):** run
   `./tool/native_core.sh sync`, then `flutter clean` and rebuild.

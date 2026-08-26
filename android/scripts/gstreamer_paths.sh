@@ -2,7 +2,7 @@
 # Shared path resolution for Android GStreamer integration.
 # Source this file from other scripts; do not execute directly.
 
-GST_VER="${GST_VER:-1.28.5}"
+GST_VER="${GST_VER:-1.28.6}"
 
 GSTPLAYER_GSTREAMER_ANDROID_ROOT_IS_CUSTOM=0
 if [[ -n "${GSTREAMER_ROOT_ANDROID:-}" ]]; then

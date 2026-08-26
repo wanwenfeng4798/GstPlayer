@@ -62,18 +62,21 @@ Apple/桌面：`appsink` BGRA 帧）。
 - 支持本地文件、Flutter 资源（asset）以及网络地址（`http(s)://`、`rtsp://` 等）。
 - 播放 / 暂停 / 停止 / 跳转 / 循环。
 - 音量（竖向弹出滑条，滑动时显示 **0–100** 数值）、静音、倍速。
-- B 站风格底栏：粉色进度条（`#FB7299`）、进度行在工具行上方、自动隐藏。
+- B 站风格两行底栏：粉色进度条（`#FB7299`）、剩余时间、倍速 / 设置 / 音量 / 全屏，
+  以及弹幕输入 + CC；自动隐藏。
+- 两级设置：镜像、循环、自动播放、播完切下一集、16:9 / 4:3、隐藏黑边、关灯、音轨。
+  控件文案通过 `language` 支持中/英。
 - 移动端画面手势（**非全屏与全屏均可用**）：水平快进/快退，左侧亮度 / 右侧音量（HUD 显示百分比）。
-- 进度条拖拽缩略图预览（防抖 `captureThumbnail`）。
+- 进度条拖拽缩略图预览（外挂 WebVTT + 雪碧图 / 帧列表）。
 - 封面图与播完保留最后一帧。
 - 外挂字幕叠层（SRT/WebVTT，`SubtitleParser`）以及内嵌字幕轨选择 API/UI。
 - 弹幕叠层（由 App 注入 `DanmakuItem` 时间轴数据）。
-- 当前帧截图（`onScreenshot` 交给宿主保存）与一次性抽封面。
+- 当前帧截图（`onScreenshot` 交给宿主保存）与一次性抽封面。内置底栏不再显示截图按钮。
 - 基于 [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
   普通 getter 的响应式状态：播放状态、进度、时长、视频尺寸、宽高比、缓冲百分比、
   音量、倍速、循环、静音、错误等。用 `ListenableBuilder` / `addListener` 订阅重建。
 - 开箱即用的 `GstVideoView` 组件，内置可自动隐藏、可主题化的控制条
-  （Material / Cupertino / 自适应；默认强调色贴近 B 站粉）。
+  （Material / Cupertino / 自适应，控件走 `material_ui`；默认强调色贴近 B 站粉）。
 - 通过 Flutter `Texture` 渲染（Android GL 写入 `SurfaceProducer`；Apple/桌面由 `appsink` 供帧）。
 
 ## 平台支持
@@ -82,7 +85,7 @@ Apple/桌面：`appsink` BGRA 帧）。
 | --- | --- | --- | --- |
 | Android | API 24（7.0） | `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` | **首次构建自动下载** |
 | iOS | 13.0 | 真机 `arm64`（**不支持模拟器**） | **首次 SPM resolve / 构建自动下载** |
-| macOS | 10.13 | x86_64 / arm64 | **首次 `pod install` / SPM resolve 自动下载** |
+| macOS | 10.13 | x86_64 / arm64 | **首次 SPM resolve / 构建自动下载** |
 | Windows | 10+ | x86_64 | 本机安装一次（[见下](#windows--linux-本机-sdk)） |
 | Linux | — | x86_64 | 本机安装一次（[见下](#windows--linux-本机-sdk)） |
 
@@ -144,7 +147,7 @@ rustup target add \
 
 - [Xcode](https://developer.apple.com/xcode/)
 - 首次构建会自动下载官方 universal `GStreamer.framework`
-- 若 Flutter 用 SPM 集成插件：需一次性配置 Podfile embed（见 [安装](#安装)）
+- 宿主 `pubspec.yaml` 需开启 Swift Package Manager（见 [安装](#安装)），无需 CocoaPods `Podfile`
 
 ### Windows / Linux
 
@@ -156,7 +159,7 @@ rustup target add \
 
 ```yaml
 dependencies:
-  gstplayer: ^0.0.2
+  gstplayer: ^0.0.3
 ```
 
 ```bash
@@ -179,26 +182,36 @@ flutter run
 
 **iOS：** 请使用真机（`flutter run -d <device>`）。不支持模拟器。
 
-**macOS（仅当 Flutter 用 SPM 集成插件时，一次性）：** 在 `macos/Podfile` 的
-`post_install` 中加入下面片段，以便把 slim runtime 拷进 `.app`：
+宿主 **`pubspec.yaml`** 需开启 Swift Package Manager（插件自身已设置）：
 
-```ruby
-require 'json'
-plugins = JSON.parse(File.read(File.expand_path('../.flutter-plugins-dependencies', __dir__)))
-gstp = plugins.dig('plugins', 'macos')&.find { |p| p['name'] == 'gstplayer' }
-raise 'gstplayer not found; run flutter pub get first' unless gstp
-require File.expand_path('macos/gstreamer_podfile_helper.rb', gstp['path'])
-
-post_install do |installer|
-  installer.pods_project.targets.each do |target|
-    flutter_additional_macos_build_settings(target)
-  end
-  install_gstreamer_embed_script!(installer)
-end
+```yaml
+flutter:
+  config:
+    enable-swift-package-manager: true
 ```
 
-然后执行一次 `cd macos && pod install`。纯 CocoaPods 宿主已通过
-`vendored_frameworks` 嵌入，可跳过。
+示例工程为 **仅 SPM**（没有 `ios/Podfile` 或 `macos/Podfile`）。
+
+**macOS（SPM，一次性）：** Package.swift 会链接 `GStreamer.framework`，但不会把它拷进 `.app`。请在 Runner 上增加名为 `[gstplayer] Embed GStreamer Framework` 的 **Run Script** 构建阶段（放在 *Embed Frameworks* 之后）：
+
+```bash
+set -euo pipefail
+PLUGINS_JSON="${SRCROOT}/../.flutter-plugins-dependencies"
+PLUGIN_MACOS="$(python3 -c "
+import json, sys
+plugins = json.load(open(sys.argv[1]))['plugins']['macos']
+print(next(p['path'] for p in plugins if p['name'] == 'gstplayer') + '/macos')
+" "$PLUGINS_JSON")"
+# shellcheck source=/dev/null
+source "${PLUGIN_MACOS}/scripts/gstreamer_paths.sh"
+bash "${PLUGIN_MACOS}/scripts/embed_gstreamer_framework.sh"
+```
+
+输入文件为 `macos/scripts/` 下上述两个脚本，输出为
+`${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GStreamer.framework`。可参考
+`example/macos/Runner.xcodeproj`。
+
+**仅 CocoaPods 的宿主** 仍可通过 `vendored_frameworks` 嵌入。若宿主在 SPM 混合模式下仍保留 `macos/Podfile`，可用 `macos/gstreamer_podfile_helper.rb` 中的 `install_gstreamer_embed_script!` 注入同一脚本。
 
 **Windows / Linux：** 需在本机安装一次 GStreamer，见
 [Windows / Linux 本机 SDK](#windows--linux-本机-sdk)。
@@ -208,7 +221,7 @@ end
 ```dart
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:gstplayer/gstplayer.dart';
 
 Future<void> main() async {
@@ -247,7 +260,10 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GstVideoView(controller: controller),
+      body: GstVideoView(
+        controller: controller,
+        language: GstPlayerLanguage.zh, // 或 GstPlayerLanguage.en
+      ),
     );
   }
 }
@@ -317,7 +333,7 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 
 无头 GStreamer 管线一次性抽封面（`gstp_thumbnail_capture`），返回 PNG
 `Uint8List`。无需已打开的 controller。`at` 为 null 时由 native 约取时长 5%（或
-1 秒）。进度条 scrub 预览也复用此 API。
+1 秒）。进度条 scrub 预览使用 `scrubPreview`（外挂 VTT/雪碧图），不实时抽帧。
 
 ### `GstPlayerController`
 
@@ -354,8 +370,7 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 
 ### `GstVideoView`
 
-为控制器嵌入 `Texture` 视频画面，并默认叠加可自动隐藏的 B 站风格控制条
-（进度行 + 工具行）。
+为控制器嵌入 `Texture` 视频画面，并默认叠加可自动隐藏的 B 站风格**两行**控制条。
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -365,13 +380,20 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 | `showControls` | `true` | 是否叠加内置控制条。 |
 | `controlsStyle` | `adaptive` | `adaptive` / `material` / `cupertino`。 |
 | `fullscreen` | `VideoControlsFullscreenConfig()` | 沉浸 / 全屏顶栏等配置。 |
+| `language` | `GstPlayerLanguage.zh` | 控件文案：`zh` 或 `en`。 |
+| `onPlayNext` | `null` | 非循环且设置里开启播完切下一集时，EOS 回调。 |
+| `onLightsOffChanged` | `null` | 关灯模式变化。 |
 | `poster` | `null` | 开播前 / 空闲时封面 `ImageProvider`。 |
 | `keepLastFrame` | `true` | EOS 后截取并保留最后一帧。 |
+| `scrubPreview` | `null` | 外挂 WebVTT / 雪碧图 / 帧列表；为 null 时仅显示时间。 |
 | `danmaku` | `[]` | App 注入的 `DanmakuItem` 列表。 |
 | `danmakuEnabled` | `false` | 是否显示弹幕。 |
+| `onDanmakuSend` | `null` | 底栏发送弹幕；非 null 时显示输入行。 |
+| `onDanmakuEnabledChanged` | `null` | 底栏弹幕开关。 |
+| `onSubtitlesEnabledChanged` | `null` | 底栏 CC 开关。 |
 | `subtitles` | `[]` | 外挂 `SubtitleCue`（可用 `SubtitleParser` 解析）。 |
 | `subtitlesEnabled` | `true` | 是否显示外挂字幕。 |
-| `showCaptureButton` | `true` | 是否显示底栏截图按钮（还需提供 `onScreenshot`）。 |
+| `showCaptureButton` | `true` | 仅为 API 兼容保留；两行底栏**不**再绘制截图按钮。 |
 | `onScreenshot` | `null` | 截图成功后回调 PNG；由宿主保存（相册/路径）。插件不落盘、不弹预览。 |
 
 封面 / 字幕 / 弹幕示例：
@@ -392,7 +414,13 @@ GstVideoView(
 
 ### 控制条、手势与主题
 
-**底栏（B 站风格）：** 粉色进度条单独一行；工具行含播放、时间、音量弹出、截图（`onScreenshot`）、循环、倍速/字幕、全屏。插件只交出 PNG 字节，由宿主负责保存（如相册）。
+**底栏（B 站风格）：**
+
+- **第一行：** 播放 / 暂停、当前时间、进度条、剩余时间、倍速、设置齿轮、音量弹出、全屏。
+- **第二行：** 弹幕开关、胶囊输入 + 发送、CC。弹幕关闭后输入/发送禁用。
+- **设置（两页）：** 镜像、单集循环、自动播放；再进入播完切下一集 / 播放暂停、16:9 / 4:3、隐藏黑边、关灯、音轨。
+
+底栏不再绘制截图按钮。如需截图，请由宿主调用 `controller.captureCurrentFrame()` 或使用 `onScreenshot`。
 
 **音量弹出：** 点击喇叭图标弹出竖向粉色滑条，上方实时显示 **0–100** 数值；长按切换静音。
 
@@ -404,8 +432,7 @@ GstVideoView(
 | 右侧约 40% | 竖滑 | 播放器音量 + HUD 百分比 |
 | 水平 | 拖拽 | 进退预览 / seek |
 
-**进度条预览：** 拖拽或悬停进度条时出现缩略图气泡（对当前 `mediaSource` 调用
-`GstPlayer.captureThumbnail`）。直播源可能仅显示时间。
+**进度条预览：** 拖拽或悬停进度条时，若设置了 `scrubPreview`（GSY 风格 WebVTT + 雪碧图 / 帧列表）会出现缩略图气泡。未提供轨时仅显示时间。直播源可能仅显示时间。
 
 在 `ThemeData.extensions` 中注册 `VideoControlsTheme`，或使用预设
 `material()` / `cupertino()` / **`bilibili()`**（粉 `#FB7299`）：
@@ -422,6 +449,7 @@ MaterialApp(
 
 - `SubtitleParser.parse(String)` / `SubtitleParser.loadAsset(String)` → `List<SubtitleCue>`
 - `DanmakuItem({at, text, color, duration})` — 传给 `GstVideoView.danmaku`
+- `GstPlayerLanguage.zh` / `.en` — `GstVideoView.language` 控件文案
 
 ## 架构
 
@@ -480,12 +508,15 @@ dart run ffigen --config ffigen.yaml
   `EnsureGStreamerMacOS` 构建插件在编译前执行 `ensure_gstreamer_macos.sh`（首次约
   870MB，缓存于 `~/Library/Caches/gstplayer/gstreamer/<ver>/`）。可手动执行
   `sh macos/scripts/ensure_gstreamer_macos.sh` 后重编。
-- **macOS `Library not loaded: ...GStreamer.framework`：** SPM 宿主需在 `macos/Podfile`
-  中接入 `install_gstreamer_embed_script!(installer)`（见 [安装](#安装)），再
-  `pod install` 并重新构建。确认 `.app/Contents/Frameworks/GStreamer.framework` 存在。
+- **macOS `Library not loaded: ...GStreamer.framework`：** SPM 宿主需添加
+  `[gstplayer] Embed GStreamer Framework` Run Script（见 [安装](#安装)）并重新构建。
+  确认 `.app/Contents/Frameworks/GStreamer.framework` 存在。
+- **`flutter pub get` 又生成了 `ios/Podfile` / `macos/Podfile`：** 在宿主 `pubspec.yaml`
+  中开启 SPM（`flutter.config.enable-swift-package-manager: true`）。全局
+  `flutter config --no-enable-swift-package-manager` 会作用于插件包本身，除非插件
+  `pubspec` 也写了该开关。
 - **Release 报 `Failed to lookup symbol 'gstp_init'`（iOS/macOS）：** Runner 的
-  **Strip Style** 设为 **Non-Global Symbols**。CocoaPods 一般在 `pod install` 后注入；
-  SPM 请在 Xcode 中设置。参见
+  **Strip Style** 设为 **Non-Global Symbols**（示例工程已设置）。参见
   [Flutter C interop — Stripping symbols](https://docs.flutter.dev/platform-integration/ios/c-interop)。
 - **链接报 `undefined symbol: _gstp_*`：** 执行 `./tool/native_core.sh sync`，再
   `flutter clean` 后重建。

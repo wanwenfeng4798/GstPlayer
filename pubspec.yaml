@@ -1,6 +1,6 @@
 name: gstplayer
 description: "A polished, all-in-one Flutter video player powered by GStreamer — beautiful built-in controls and broad format support for local and network video on mobile and desktop."
-version: 0.0.2
+version: 0.0.3
 homepage: https://github.com/wanwenfeng4798/GstPlayer
 repository: https://github.com/wanwenfeng4798/GstPlayer
 issue_tracker: https://github.com/wanwenfeng4798/GstPlayer/issues

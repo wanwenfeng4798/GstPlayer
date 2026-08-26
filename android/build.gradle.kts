@@ -8,7 +8,7 @@ import java.util.LinkedHashSet
 group = "com.gstplayer"
 version = "1.0.0"
 
-val gstVer: String = System.getenv("GST_VER") ?: "1.28.5"
+val gstVer: String = System.getenv("GST_VER") ?: "1.28.6"
 
 fun defaultGstreamerAndroidCacheRoot(): String {
     val home = System.getProperty("user.home")

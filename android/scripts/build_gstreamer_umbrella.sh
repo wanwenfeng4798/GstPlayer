@@ -8,7 +8,7 @@
 #
 # Environment:
 #   GSTREAMER_ROOT_ANDROID  — SDK root (see gstreamer_paths.sh)
-#   GST_VER                 — GStreamer version (default 1.28.5)
+#   GST_VER                 — GStreamer version (default 1.28.6)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

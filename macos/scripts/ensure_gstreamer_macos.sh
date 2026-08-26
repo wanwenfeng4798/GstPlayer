@@ -25,7 +25,7 @@ if [[ -n "${GSTREAMER_FRAMEWORK_SRC:-}" ]]; then
       HOME="$(eval echo "~$(id -un)")"
     fi
   fi
-  _default_framework="${HOME}/Library/Caches/gstplayer/gstreamer/${GST_VER:-1.28.5}/GStreamer.framework"
+  _default_framework="${HOME}/Library/Caches/gstplayer/gstreamer/${GST_VER:-1.28.6}/GStreamer.framework"
   if [[ "${GSTREAMER_FRAMEWORK_SRC}" != "${_default_framework}" ]]; then
     USER_SET_FRAMEWORK_SRC="${GSTREAMER_FRAMEWORK_SRC}"
   fi

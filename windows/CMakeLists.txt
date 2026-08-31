@@ -17,7 +17,7 @@ endif()
 
 set(ENV{PKG_CONFIG_PATH} "${GSTREAMER_ROOT}/lib/pkgconfig")
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
+pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0 gstreamer-pbutils-1.0)
 
 set(PLUGIN_NAME "gst_player_plugin")
 set(NATIVE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../native")
@@ -27,9 +27,12 @@ add_library(${PLUGIN_NAME} SHARED
   "gstplayer_texture.cpp"
   "${NATIVE_ROOT}/src/runtime.c"
   "${NATIVE_ROOT}/src/bus.c"
+  "${NATIVE_ROOT}/src/discoverer.c"
   "${NATIVE_ROOT}/src/frame.c"
   "${NATIVE_ROOT}/src/pipeline.c"
   "${NATIVE_ROOT}/src/thumbnail.c"
+  "${NATIVE_ROOT}/src/http_source.c"
+  "${NATIVE_ROOT}/src/http_user_agent.c"
   "${NATIVE_ROOT}/src/gstp_player.c"
   "${NATIVE_ROOT}/src/windows_env.c"
 )
@@ -58,7 +61,7 @@ target_link_directories(${PLUGIN_NAME} PRIVATE
   "${GSTREAMER_ROOT}/lib"
 )
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
-target_link_libraries(${PLUGIN_NAME} PRIVATE ${GST_LIBRARIES})
+target_link_libraries(${PLUGIN_NAME} PRIVATE ${GST_LIBRARIES} urlmon)
 
 file(GLOB GSTREAMER_RUNTIME_DLLS "${GSTREAMER_ROOT}/bin/*.dll")
 

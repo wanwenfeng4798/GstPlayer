@@ -8,6 +8,7 @@ class PlaybackSliderSnapshot {
   const PlaybackSliderSnapshot({
     required this.displayValue,
     required this.enabled,
+    required this.canSeek,
     required this.onSeekStart,
     required this.onSeekChanged,
     required this.onSeekEnd,
@@ -16,8 +17,11 @@ class PlaybackSliderSnapshot {
   /// 滑块显示值 0.0–1.0 / Slider display value 0.0–1.0.
   final double displayValue;
 
-  /// 是否可 seek / Whether seeking is enabled.
+  /// 是否有时长信息，可绘制已播放进度 / Whether a timeline exists for progress paint.
   final bool enabled;
+
+  /// 是否允许拖拽 seek / Whether scrubbing seeks playback.
+  final bool canSeek;
 
   final VoidCallback? onSeekStart;
 
@@ -50,19 +54,20 @@ class PlaybackProgressSlider extends StatelessWidget {
       builder: (context, _) {
         final dur = model.duration.inMilliseconds.toDouble();
         final pos = model.position.inMilliseconds.toDouble();
-        final seekable = model.isSeekable;
-        final enabled = seekable && dur > 0;
+        final hasTimeline = dur > 0;
+        final canSeek = model.isSeekable && hasTimeline;
         final value = scrub.sliderValue(dur, pos);
 
         PlaybackSliderSnapshot snapshotFor(double v) {
           return PlaybackSliderSnapshot(
             displayValue: v,
-            enabled: enabled,
-            onSeekStart: enabled ? scrub.onSeekStart : null,
-            onSeekChanged: enabled
+            enabled: hasTimeline,
+            canSeek: canSeek,
+            onSeekStart: canSeek ? scrub.onSeekStart : null,
+            onSeekChanged: canSeek
                 ? (fraction) => scrub.onSeekChanged(fraction, dur)
                 : null,
-            onSeekEnd: enabled
+            onSeekEnd: canSeek
                 ? (fraction) => scrub.onSeekEnd(fraction, dur)
                 : null,
           );

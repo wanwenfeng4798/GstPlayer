@@ -1,6 +1,7 @@
 package com.gstplayer;
 
 import android.content.Context;
+import android.webkit.WebSettings;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -54,6 +55,14 @@ public class GstPlayerPlugin implements FlutterPlugin, MethodChannel.MethodCallH
 
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
+        if ("getDefaultUserAgent".equals(call.method)) {
+            if (appContext == null) {
+                result.error("not_ready", "Application context unavailable", null);
+                return;
+            }
+            result.success(WebSettings.getDefaultUserAgent(appContext));
+            return;
+        }
         long playerId = playerIdFromCall(call);
         if (playerId == 0L) {
             result.error("invalid_args", "playerId required", null);

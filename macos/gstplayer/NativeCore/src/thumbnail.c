@@ -1,4 +1,5 @@
 #include "gstp_internal.h"
+#include "http_source.h"
 
 #include <gst/app/gstappsink.h>
 #include <gst/video/video.h>
@@ -23,6 +24,7 @@ typedef struct {
   const char *uri;
   int64_t position_ms;
   int32_t max_width;
+  GHashTable *http_headers;
   uint8_t **out_bgra;
   uint32_t *out_len;
   int32_t *out_width;
@@ -31,31 +33,16 @@ typedef struct {
   int32_t result;
 } GstpThumbnailOp;
 
-static void gstp_thumb_configure_http(GstElement *element) {
-  if (!element) {
-    return;
-  }
-  GObjectClass *klass = G_OBJECT_GET_CLASS(element);
-  if (g_object_class_find_property(klass, "ssl-strict")) {
-    g_object_set(element, "ssl-strict", FALSE, NULL);
-  }
-  if (g_object_class_find_property(klass, "tls-validation-flags")) {
-    g_object_set(element, "tls-validation-flags", 0, NULL);
-  }
-  if (g_object_class_find_property(klass, "user-agent")) {
-    g_object_set(element, "user-agent",
-                 "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
-                 "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 "
-                 "Mobile/15E148 Safari/604.1",
-                 NULL);
-  }
-}
-
 static void gstp_thumb_on_source_setup(GstElement *bin, GstElement *source,
                                        gpointer user_data) {
   (void)bin;
-  (void)user_data;
-  gstp_thumb_configure_http(source);
+  gstp_configure_http_source(source, (GHashTable *)user_data);
+}
+
+static void gstp_thumb_on_element_setup(GstElement *bin, GstElement *element,
+                                        gpointer user_data) {
+  (void)bin;
+  gstp_configure_http_source(element, (GHashTable *)user_data);
 }
 
 /* decodebin/uridecodebin: return FALSE to stop autoplugging this stream. */
@@ -113,12 +100,15 @@ static gint gstp_thumb_autoplug_select(GstElement *bin, GstPad *pad,
 }
 #endif
 
-static void gstp_thumb_connect_decodebin_signals(GstElement *src) {
+static void gstp_thumb_connect_decodebin_signals(GstElement *src,
+                                                 GHashTable *headers) {
   if (!src) {
     return;
   }
   g_signal_connect(src, "source-setup", G_CALLBACK(gstp_thumb_on_source_setup),
-                   NULL);
+                   headers);
+  g_signal_connect(src, "element-setup",
+                   G_CALLBACK(gstp_thumb_on_element_setup), headers);
   g_signal_connect(src, "autoplug-continue",
                    G_CALLBACK(gstp_thumb_autoplug_continue), NULL);
 #if defined(__ANDROID__)
@@ -193,9 +183,10 @@ static int32_t gstp_thumb_copy_sample(GstSample *sample, uint8_t **out_bgra,
 }
 
 static int32_t gstp_thumb_run(const char *uri, int64_t position_ms,
-                              int32_t max_width, uint8_t **out_bgra,
-                              uint32_t *out_len, int32_t *out_width,
-                              int32_t *out_height, int32_t *out_stride) {
+                              int32_t max_width, GHashTable *http_headers,
+                              uint8_t **out_bgra, uint32_t *out_len,
+                              int32_t *out_width, int32_t *out_height,
+                              int32_t *out_stride) {
   if (!uri || !*uri || !out_bgra || !out_len) {
     return GSTP_ERR_FAIL;
   }
@@ -227,7 +218,7 @@ static int32_t gstp_thumb_run(const char *uri, int64_t position_ms,
   }
 
   GstElement *src = gst_bin_get_by_name(GST_BIN(pipeline), "src");
-  gstp_thumb_connect_decodebin_signals(src);
+  gstp_thumb_connect_decodebin_signals(src, http_headers);
   if (src) {
     gst_object_unref(src);
   }
@@ -317,15 +308,17 @@ static int32_t gstp_thumb_run(const char *uri, int64_t position_ms,
 static gpointer gstp_thumb_thread_main(gpointer data) {
   GstpThumbnailOp *op = data;
   op->result = gstp_thumb_run(op->uri, op->position_ms, op->max_width,
-                              op->out_bgra, op->out_len, op->out_width,
-                              op->out_height, op->out_stride);
+                              op->http_headers, op->out_bgra, op->out_len,
+                              op->out_width, op->out_height, op->out_stride);
   return NULL;
 }
 
 int32_t gstp_thumbnail_capture(const char *uri, int64_t position_ms,
-                               int32_t max_width, uint8_t **out_bgra,
-                               uint32_t *out_len, int32_t *out_width,
-                               int32_t *out_height, int32_t *out_stride) {
+                               int32_t max_width,
+                               const char *http_headers_json,
+                               uint8_t **out_bgra, uint32_t *out_len,
+                               int32_t *out_width, int32_t *out_height,
+                               int32_t *out_stride) {
   if (gstp_init() != GSTP_ERR_OK) {
     return GSTP_ERR_FAIL;
   }
@@ -335,10 +328,13 @@ int32_t gstp_thumbnail_capture(const char *uri, int64_t position_ms,
   *out_bgra = NULL;
   *out_len = 0;
 
+  GHashTable *headers = gstp_http_headers_from_json(http_headers_json);
+
   /* Dedicated thread so blocking preroll/seek/pull does not stall gstp-gst. */
   GstpThumbnailOp op = {.uri = uri,
                         .position_ms = position_ms,
                         .max_width = max_width,
+                        .http_headers = headers,
                         .out_bgra = out_bgra,
                         .out_len = out_len,
                         .out_width = out_width,
@@ -347,9 +343,11 @@ int32_t gstp_thumbnail_capture(const char *uri, int64_t position_ms,
                         .result = GSTP_ERR_FAIL};
   GThread *thread = g_thread_new("gstp-thumb", gstp_thumb_thread_main, &op);
   if (!thread) {
+    gstp_http_headers_free(headers);
     return GSTP_ERR_FAIL;
   }
   g_thread_join(thread);
+  gstp_http_headers_free(headers);
   return op.result;
 }
 

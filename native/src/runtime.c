@@ -1,4 +1,5 @@
 #include "gstp_internal.h"
+#include "http_source.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -174,6 +175,8 @@ static int32_t gstp_runtime_start_unlocked(void) {
   gstp_setup_windows_env();
 #endif
   gstp_log_init_timing("native_env_setup", phase_us);
+
+  gstp_http_user_agent_init_platform();
 
   phase_us = g_get_monotonic_time();
   gst_init(NULL, NULL);

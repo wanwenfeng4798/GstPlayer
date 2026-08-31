@@ -109,6 +109,13 @@ GstFlowReturn gstp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
   g_mutex_unlock(&p->frame_mu);
 
   gst_buffer_unmap(buffer, &map);
+
+  GstClockTime pts = GST_BUFFER_PTS(buffer);
+  if (!GST_CLOCK_TIME_IS_VALID(pts)) {
+    pts = GST_BUFFER_DTS(buffer);
+  }
+  gstp_media_note_frame_pts(p, pts);
+
   gst_sample_unref(sample);
 
   if (cb) {

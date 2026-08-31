@@ -59,7 +59,7 @@ void main() {
       expect(find.byType(Slider), findsOneWidget);
     });
 
-    testWidgets('disables callbacks when not seekable', (tester) async {
+    testWidgets('disables seek callbacks when not seekable', (tester) async {
       final nonSeekable = FakePlaybackControlsModel(isSeekable: false);
       final localScrub = ScrubController(model: nonSeekable, onInteract: () {});
       addTearDown(() {
@@ -88,7 +88,8 @@ void main() {
       );
       await tester.pump();
 
-      expect(lastSnapshot!.enabled, isFalse);
+      expect(lastSnapshot!.enabled, isTrue);
+      expect(lastSnapshot!.canSeek, isFalse);
       expect(lastSnapshot!.onSeekStart, isNull);
       expect(lastSnapshot!.onSeekChanged, isNull);
       expect(lastSnapshot!.onSeekEnd, isNull);

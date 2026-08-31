@@ -111,6 +111,7 @@ broad format support for local and network video, powered by GStreamer
         '${PODS_TARGET_SRCROOT}/../native/src/pipeline.c',
         '${PODS_TARGET_SRCROOT}/../native/src/thumbnail.c',
         '${PODS_TARGET_SRCROOT}/../native/src/bus.c',
+        '${PODS_TARGET_SRCROOT}/../native/src/discoverer.c',
         '${PODS_TARGET_SRCROOT}/../native/src/gstp_player.c',
         '${PODS_TARGET_SRCROOT}/../native/src/gstp_ffi_keep.c',
       ],

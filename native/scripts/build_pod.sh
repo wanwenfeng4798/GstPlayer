@@ -11,9 +11,12 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH}"
 SRCS=(
   "${ROOT}/src/runtime.c"
   "${ROOT}/src/bus.c"
+  "${ROOT}/src/discoverer.c"
   "${ROOT}/src/frame.c"
   "${ROOT}/src/pipeline.c"
   "${ROOT}/src/thumbnail.c"
+  "${ROOT}/src/http_source.c"
+  "${ROOT}/src/http_user_agent.c"
   "${ROOT}/src/gstp_player.c"
   "${ROOT}/src/gstp_ffi_keep.c"
 )

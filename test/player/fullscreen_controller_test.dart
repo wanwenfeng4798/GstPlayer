@@ -45,12 +45,16 @@ void main() {
       }
     });
 
-    test('enterFullscreen is no-op on desktop', () {
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    test('enter and exit fullscreen on desktop (macOS / Windows / Linux)', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
       try {
         controller.attachImmersive(immersive);
-        controller.enterFullscreen();
 
+        controller.enterFullscreen();
+        expect(controller.isFullscreen, isTrue);
+        expect(immersive.landscapeLocked, isTrue);
+
+        controller.exitFullscreen();
         expect(controller.isFullscreen, isFalse);
         expect(immersive.landscapeLocked, isFalse);
       } finally {

@@ -85,13 +85,23 @@ GSTP_EXPORT int32_t gstp_init(void);
 GSTP_EXPORT void gstp_init_async(GstpInitDoneFn cb, void *ctx);
 GSTP_EXPORT void gstp_shutdown(void);
 
+/**
+ * Overrides the default HTTP User-Agent when custom headers omit User-Agent.
+ * Pass NULL or "" to revert to the platform-detected default.
+ */
+GSTP_EXPORT void gstp_set_default_user_agent(const char *ua);
+
+/** Platform-detected default; overridden by [gstp_set_default_user_agent]. */
+GSTP_EXPORT const char *gstp_get_default_user_agent(void);
+
 GSTP_EXPORT GstpPlayerId gstp_player_create(void);
 GSTP_EXPORT void gstp_player_dispose(GstpPlayerId id);
 GSTP_EXPORT void gstp_player_set_event_callback(GstpPlayerId id, void *ctx,
                                                 GstpEventCallback cb);
 
 GSTP_EXPORT int32_t gstp_player_load_uri(GstpPlayerId id, const char *uri,
-                                         bool auto_play);
+                                         bool auto_play,
+                                         const char *http_headers_json);
 GSTP_EXPORT int32_t gstp_player_load_asset(GstpPlayerId id,
                                            const char *asset_key,
                                            const char *package,
@@ -148,9 +158,9 @@ GSTP_EXPORT bool gstp_texture_copy_latest(int64_t player_id, uint8_t *dst,
  * On success *out_bgra is g_malloc'd BGRA; free with gstp_thumbnail_free.
  */
 GSTP_EXPORT int32_t gstp_thumbnail_capture(
-    const char *uri, int64_t position_ms, int32_t max_width, uint8_t **out_bgra,
-    uint32_t *out_len, int32_t *out_width, int32_t *out_height,
-    int32_t *out_stride);
+    const char *uri, int64_t position_ms, int32_t max_width,
+    const char *http_headers_json, uint8_t **out_bgra, uint32_t *out_len,
+    int32_t *out_width, int32_t *out_height, int32_t *out_stride);
 
 /** Copy the latest BGRA frame from an active player into a new buffer. */
 GSTP_EXPORT int32_t gstp_player_capture_frame(

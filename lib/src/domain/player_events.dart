@@ -20,7 +20,10 @@ sealed class MediaSourceDto {
   const MediaSourceDto();
 
   /// 网络或本地 URI，如 `https://...`、`file://...`
-  const factory MediaSourceDto.uri(String field0) = MediaSourceDto_Uri;
+  const factory MediaSourceDto.uri(
+    String uri, {
+    Map<String, String> httpHeaders,
+  }) = MediaSourceDto_Uri;
 
   /// Flutter 资源键，如 `assets/sample.mp4`
   const factory MediaSourceDto.flutterAsset(String field0) =
@@ -28,8 +31,12 @@ sealed class MediaSourceDto {
 }
 
 final class MediaSourceDto_Uri extends MediaSourceDto {
-  const MediaSourceDto_Uri(this.field0);
-  final String field0;
+  const MediaSourceDto_Uri(this.uri, {this.httpHeaders = const {}});
+  final String uri;
+  final Map<String, String> httpHeaders;
+
+  /// Back-compat alias used by existing call sites.
+  String get field0 => uri;
 }
 
 final class MediaSourceDto_FlutterAsset extends MediaSourceDto {

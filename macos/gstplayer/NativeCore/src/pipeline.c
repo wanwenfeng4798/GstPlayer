@@ -1,4 +1,5 @@
 #include "gstp_internal.h"
+#include "http_source.h"
 
 #include <glib/gstdio.h>
 #include <gst/video/video.h>
@@ -437,6 +438,11 @@ void gstp_android_apply_overlay(GstpPlayer *p) {
 static void gstp_reset_media_fields(GstpPlayer *p) {
   p->duration_ms = 0;
   p->position_ms = 0;
+  p->tag_duration_ms = -1;
+  p->discovered_duration_ms = -1;
+  p->last_frame_pts_ms = -1;
+  p->play_wall_origin_us = 0;
+  p->play_position_origin_ms = 0;
   p->width = 0;
   p->height = 0;
   p->fps = 0;
@@ -454,6 +460,7 @@ static void gstp_reset_media_fields(GstpPlayer *p) {
   p->color_matrix[0] = '\0';
   p->color_range[0] = '\0';
   p->hdr_format[0] = '\0';
+  p->media_uri[0] = '\0';
   gstp_frame_clear(p);
 }
 
@@ -473,6 +480,7 @@ static void gstp_clear_asset_temp(GstpPlayer *p) {
 static int32_t gstp_pipeline_set_state_sync(GstpPlayer *p, GstState state);
 
 void gstp_pipeline_destroy(GstpPlayer *p) {
+  gstp_discoverer_cancel(p);
   gstp_bus_detach(p);
   if (p->appsink) {
     gst_app_sink_set_callbacks(GST_APP_SINK(p->appsink), NULL, NULL, NULL);
@@ -542,52 +550,215 @@ static GstElement *gstp_make_playbin(void) {
   return pipeline;
 }
 
-/* Relax HTTPS cert checks and set a browser-like UA for souphttpsrc (and
- * similar HTTP sources). Required on iOS static GStreamer where the bundled
- * trust store is minimal; harmless on other platforms. */
-static void gstp_configure_http_source(GstElement *element) {
-  if (!element) {
+static gboolean gstp_uri_is_network(const char *uri) {
+  return uri &&
+         (g_str_has_prefix(uri, "http://") || g_str_has_prefix(uri, "https://") ||
+          g_str_has_prefix(uri, "rtsp://") || g_str_has_prefix(uri, "rtmp://"));
+}
+
+static void gstp_configure_playbin(GstpPlayer *p, GstElement *pipeline,
+                                   const char *uri) {
+  if (!pipeline) {
     return;
   }
+  GObjectClass *klass = G_OBJECT_GET_CLASS(pipeline);
+  if (gstp_uri_is_network(uri) &&
+      g_object_class_find_property(klass, "flags")) {
+    gint flags = 0;
+    g_object_get(pipeline, "flags", &flags, NULL);
+    /* GST_PLAY_FLAG_DOWNLOAD | GST_PLAY_FLAG_BUFFER */
+    flags |= (1 << 7) | (1 << 8);
+    g_object_set(pipeline, "flags", flags, NULL);
+  }
+  if (gstp_uri_is_network(uri) &&
+      g_object_class_find_property(klass, "download")) {
+    g_object_set(pipeline, "download", TRUE, NULL);
+  }
+}
+
+static void gstp_apply_segment_event_to_duration(GstpPlayer *p,
+                                                 GstEvent *event) {
+  if (!p || !event || GST_EVENT_TYPE(event) != GST_EVENT_SEGMENT) {
+    return;
+  }
+  const GstSegment *seg = NULL;
+  gst_event_parse_segment(event, &seg);
+  if (!seg || seg->format != GST_FORMAT_TIME) {
+    return;
+  }
+  if (!GST_CLOCK_TIME_IS_VALID(seg->stop) || seg->stop <= seg->start) {
+    return;
+  }
+  const gint64 max = (gint64)(7LL * 24 * 3600 * GST_SECOND);
+  if (seg->stop > max) {
+    return;
+  }
+  const int64_t ms = (int64_t)(seg->stop / GST_MSECOND);
+  if (ms <= 0) {
+    return;
+  }
+  gstp_media_set_duration_ms(p, ms);
+}
+
+static GstPadProbeReturn gstp_demux_segment_duration_probe(GstPad *pad,
+                                                           GstPadProbeInfo *info,
+                                                           gpointer user_data);
+
+static void gstp_attach_segment_probe_to_pad(GstpPlayer *p, GstPad *pad) {
+  if (!p || !pad || g_object_get_data(G_OBJECT(pad), "gstp-seg-dur")) {
+    return;
+  }
+  g_object_set_data(G_OBJECT(pad), "gstp-seg-dur", GINT_TO_POINTER(1));
+
+  guint sticky_idx = 0;
+  GstEvent *sticky = NULL;
+  while ((sticky = gst_pad_get_sticky_event(pad, GST_EVENT_SEGMENT,
+                                            sticky_idx)) != NULL) {
+    gstp_apply_segment_event_to_duration(p, sticky);
+    sticky_idx++;
+  }
+
+  gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
+                    gstp_demux_segment_duration_probe, p, NULL);
+}
+
+static GstPadProbeReturn gstp_demux_segment_duration_probe(GstPad *pad,
+                                                           GstPadProbeInfo *info,
+                                                           gpointer user_data) {
+  (void)pad;
+  GstpPlayer *p = user_data;
+  if (!p || !(info->type & GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM)) {
+    return GST_PAD_PROBE_OK;
+  }
+  GstEvent *event = GST_PAD_PROBE_INFO_EVENT(info);
+  gstp_apply_segment_event_to_duration(p, event);
+  return GST_PAD_PROBE_OK;
+}
+
+static gboolean gstp_foreach_demux_pad(GstElement *element, GstPad *pad,
+                                       gpointer user_data) {
+  (void)element;
+  gstp_attach_segment_probe_to_pad((GstpPlayer *)user_data, pad);
+  return TRUE;
+}
+
+static void gstp_on_demux_pad_added(GstElement *element, GstPad *pad,
+                                    gpointer user_data) {
+  (void)element;
+  gstp_attach_segment_probe_to_pad((GstpPlayer *)user_data, pad);
+}
+
+static void gstp_attach_demux_duration_probe(GstpPlayer *p, GstElement *element) {
+  GstElementFactory *factory = gst_element_get_factory(element);
+  if (!factory) {
+    return;
+  }
+  const gchar *fname =
+      gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory));
+  if (strcmp(fname, "qtdemux") != 0 && strcmp(fname, "movdemux") != 0) {
+    return;
+  }
+  if (g_object_get_data(G_OBJECT(element), "gstp-demux-probe")) {
+    gst_element_foreach_pad(element, gstp_foreach_demux_pad, p);
+    return;
+  }
+  g_object_set_data(G_OBJECT(element), "gstp-demux-probe", GINT_TO_POINTER(1));
+  g_signal_connect(element, "pad-added", G_CALLBACK(gstp_on_demux_pad_added), p);
+  gst_element_foreach_pad(element, gstp_foreach_demux_pad, p);
+}
+
+void gstp_ensure_demux_duration_probes(GstpPlayer *p) {
+  if (!p || !p->pipeline || !GST_IS_BIN(p->pipeline)) {
+    return;
+  }
+  GstIterator *it = gst_bin_iterate_recurse(GST_BIN(p->pipeline));
+  if (!it) {
+    return;
+  }
+  GValue item = G_VALUE_INIT;
+  GstIteratorResult res;
+  while ((res = gst_iterator_next(it, &item)) == GST_ITERATOR_OK) {
+    GstElement *element = GST_ELEMENT(g_value_get_object(&item));
+    if (element) {
+      gstp_attach_demux_duration_probe(p, element);
+    }
+    g_value_reset(&item);
+  }
+  g_value_unset(&item);
+  gst_iterator_free(it);
+}
+
+void gstp_configure_uri_child(GstpPlayer *p, GstElement *element) {
+  if (!element || !p) {
+    return;
+  }
+  gstp_configure_http_source(element, p->http_headers);
+
+  GstElementFactory *factory = gst_element_get_factory(element);
+  if (!factory) {
+    return;
+  }
+  const gchar *fname =
+      gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory));
   GObjectClass *klass = G_OBJECT_GET_CLASS(element);
-  if (g_object_class_find_property(klass, "ssl-strict")) {
-    g_object_set(element, "ssl-strict", FALSE, NULL);
+
+  if (gstp_uri_is_network(p->media_uri) &&
+      (strcmp(fname, "urisourcebin") == 0 || strcmp(fname, "uridecodebin") == 0 ||
+       strcmp(fname, "decodebin3") == 0 || strcmp(fname, "decodebin") == 0)) {
+    if (g_object_class_find_property(klass, "download")) {
+      g_object_set(element, "download", TRUE, NULL);
+    }
+    if (g_object_class_find_property(klass, "use-buffering")) {
+      g_object_set(element, "use-buffering", TRUE, NULL);
+    }
+    if (strcmp(fname, "urisourcebin") == 0 &&
+        g_object_class_find_property(klass, "parse-streams")) {
+      g_object_set(element, "parse-streams", TRUE, NULL);
+    }
   }
-  if (g_object_class_find_property(klass, "tls-validation-flags")) {
-    g_object_set(element, "tls-validation-flags", 0, NULL);
+}
+
+static void gstp_clear_http_headers(GstpPlayer *p) {
+  if (!p) {
+    return;
   }
-  if (g_object_class_find_property(klass, "user-agent")) {
-    g_object_set(element, "user-agent",
-                 "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
-                 "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 "
-                 "Mobile/15E148 Safari/604.1",
-                 NULL);
+  gstp_http_headers_free(p->http_headers);
+  p->http_headers = NULL;
+}
+
+static void gstp_set_http_headers_json(GstpPlayer *p, const char *json) {
+  gstp_clear_http_headers(p);
+  if (!json || !*json) {
+    return;
   }
+  p->http_headers = gstp_http_headers_from_json(json);
 }
 
 static void gstp_on_source_setup(GstElement *playbin, GstElement *source,
                                  gpointer user_data) {
   (void)playbin;
-  (void)user_data;
-  gstp_configure_http_source(source);
+  GstpPlayer *p = (GstpPlayer *)user_data;
+  gstp_configure_uri_child(p, source);
 }
 
 static void gstp_on_element_setup(GstElement *bin, GstElement *element,
                                   gpointer user_data) {
   (void)bin;
-  (void)user_data;
-  gstp_configure_http_source(element);
+  GstpPlayer *p = (GstpPlayer *)user_data;
+  gstp_configure_uri_child(p, element);
+  gstp_attach_demux_duration_probe(p, element);
 }
 
-static void gstp_attach_http_source_handlers(GstElement *pipeline) {
+static void gstp_attach_http_source_handlers(GstElement *pipeline,
+                                             GstpPlayer *p) {
   if (!pipeline) {
     return;
   }
   g_signal_connect(pipeline, "source-setup", G_CALLBACK(gstp_on_source_setup),
-                   NULL);
+                   p);
   /* playbin3 / urisourcebin may create souphttpsrc as a nested child. */
   g_signal_connect(pipeline, "element-setup", G_CALLBACK(gstp_on_element_setup),
-                   NULL);
+                   p);
 }
 
 static void gstp_attach_video_sink(GstpPlayer *p, GstElement *pipeline) {
@@ -658,15 +829,18 @@ static gboolean gstp_deferred_play_cb(gpointer data) {
 }
 #endif
 
-int32_t gstp_pipeline_load_uri(GstpPlayer *p, const char *uri, bool auto_play) {
+int32_t gstp_pipeline_load_uri(GstpPlayer *p, const char *uri, bool auto_play,
+                               const char *http_headers_json) {
   if (!uri || !*uri) {
     return GSTP_ERR_FAIL;
   }
   gstp_pipeline_destroy(p);
   gstp_reset_media_fields(p);
+  gstp_set_http_headers_json(p, http_headers_json);
   /* Drop stale UI state so early apply_overlay does not play before PAUSED. */
   gstp_player_set_state(p, GSTP_STATE_IDLE);
-  p->is_uri = true;
+  g_strlcpy(p->media_uri, uri, sizeof(p->media_uri));
+  p->is_uri = gstp_uri_is_network(uri);
   p->desired_playing = auto_play;
   p->pending_auto_play = auto_play;
 
@@ -676,7 +850,8 @@ int32_t gstp_pipeline_load_uri(GstpPlayer *p, const char *uri, bool auto_play) {
   }
 
   g_object_set(pipeline, "uri", uri, NULL);
-  gstp_attach_http_source_handlers(pipeline);
+  gstp_configure_playbin(p, pipeline, uri);
+  gstp_attach_http_source_handlers(pipeline, p);
   gstp_attach_video_sink(p, pipeline);
   gstp_attach_audio_sink(pipeline);
 
@@ -685,6 +860,9 @@ int32_t gstp_pipeline_load_uri(GstpPlayer *p, const char *uri, bool auto_play) {
   g_object_set(pipeline, "mute", p->muted, NULL);
 
   gstp_bus_attach(p);
+  if (p->is_uri) {
+    gstp_discoverer_schedule(p);
+  }
 
   /* Optimistic buffering before blocking PAUSED preroll (network open UI). */
   p->buffering_percent = 0;
@@ -751,6 +929,7 @@ int32_t gstp_pipeline_load_uri(GstpPlayer *p, const char *uri, bool auto_play) {
   gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
 
   gstp_player_set_state(p, GSTP_STATE_READY);
+  gstp_media_update_timing(p);
 
   if (auto_play) {
     return gstp_pipeline_play(p);
@@ -790,7 +969,7 @@ int32_t gstp_pipeline_load_asset(GstpPlayer *p, const uint8_t *bytes,
     return GSTP_ERR_FAIL;
   }
 
-  int32_t rc = gstp_pipeline_load_uri(p, file_uri, auto_play);
+  int32_t rc = gstp_pipeline_load_uri(p, file_uri, auto_play, NULL);
   g_free(file_uri);
   if (rc != GSTP_ERR_OK) {
     /* If the pipeline was created and may still be reading the file, keep the
@@ -845,12 +1024,14 @@ int32_t gstp_pipeline_play(GstpPlayer *p) {
   }
   int32_t rc = gstp_pipeline_set_state_sync(p, GST_STATE_PLAYING);
   if (rc == GSTP_ERR_OK) {
+    gstp_media_sync_wall_clock(p);
     gstp_player_set_state(p, GSTP_STATE_PLAYING);
   }
   return rc;
 }
 
 int32_t gstp_pipeline_pause(GstpPlayer *p) {
+  gstp_media_update_timing(p);
   p->desired_playing = false;
   p->pending_auto_play = false;
   int32_t rc = gstp_pipeline_set_state_sync(p, GST_STATE_PAUSED);
@@ -885,6 +1066,7 @@ int32_t gstp_pipeline_seek(GstpPlayer *p, int64_t position_ms) {
   }
   p->position_ms = position_ms;
   p->at_eos = false;
+  gstp_media_sync_wall_clock(p);
   /* Local/fully-buffered seeks often emit no BUFFERING messages; clear any
    * sticky buffering so Dart does not stay on the loading overlay. */
   p->buffering_percent = 100;

@@ -208,6 +208,9 @@ class BiliBottomChrome extends StatelessWidget {
                           elevation: 1,
                         ),
                         padding: const EdgeInsets.symmetric(horizontal: 8),
+                        disabledActiveTrackColor: theme.activeTrackColor,
+                        disabledInactiveTrackColor: theme.inactiveTrackColor,
+                        disabledThumbColor: theme.thumbColor,
                       ),
                       child: ProgressBarWithPreview(
                         model: model,
@@ -218,11 +221,11 @@ class BiliBottomChrome extends StatelessWidget {
                         previewBarHeight: 72,
                         builder: (context, snap) => Slider(
                           value: snap.displayValue,
-                          onChangeStart: snap.enabled
+                          onChangeStart: snap.canSeek
                               ? (_) => snap.onSeekStart?.call()
                               : null,
-                          onChanged: snap.onSeekChanged,
-                          onChangeEnd: snap.onSeekEnd,
+                          onChanged: snap.canSeek ? snap.onSeekChanged : null,
+                          onChangeEnd: snap.canSeek ? snap.onSeekEnd : null,
                         ),
                       ),
                     ),
@@ -363,9 +366,11 @@ class _TimeLabel extends StatelessWidget {
         final durMs = model.duration.inMilliseconds;
         final posMs = model.position.inMilliseconds;
         final fraction = scrub.sliderValue(durMs.toDouble(), posMs.toDouble());
-        final displayPos = Duration(
-          milliseconds: (fraction * durMs).round().clamp(0, durMs),
-        );
+        final displayPos = durMs > 0
+            ? Duration(
+                milliseconds: (fraction * durMs).round().clamp(0, durMs),
+              )
+            : model.position;
         final text = remaining
             ? formatDuration(
                 model.duration - displayPos < Duration.zero

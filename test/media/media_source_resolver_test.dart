@@ -12,7 +12,35 @@ void main() {
         VideoSource.network('  https://example.com/v.mp4  '),
       );
       expect(dto, isA<MediaSourceDto_Uri>());
-      expect((dto as MediaSourceDto_Uri).field0, 'https://example.com/v.mp4');
+      expect((dto as MediaSourceDto_Uri).uri, 'https://example.com/v.mp4');
+      expect(dto.httpHeaders, isEmpty);
+    });
+
+    test('network source with http headers', () {
+      final dto = resolver.resolve(
+        VideoSource.network(
+          'https://example.com/v.mp4',
+          httpHeaders: const {
+            'Referer': 'https://example.com/',
+            'Authorization': 'Bearer token',
+          },
+        ),
+      );
+      expect(dto, isA<MediaSourceDto_Uri>());
+      final uriDto = dto as MediaSourceDto_Uri;
+      expect(uriDto.uri, 'https://example.com/v.mp4');
+      expect(uriDto.httpHeaders, {
+        'Referer': 'https://example.com/',
+        'Authorization': 'Bearer token',
+      });
+    });
+
+    test('file source ignores http headers on VideoSource', () {
+      final dto = resolver.resolve(
+        VideoSource.file('/tmp/video.mp4'),
+      );
+      expect(dto, isA<MediaSourceDto_Uri>());
+      expect((dto as MediaSourceDto_Uri).httpHeaders, isEmpty);
     });
 
     test('asset source maps to flutterAsset', () {

@@ -95,10 +95,12 @@ class FfiPlayerCommandPort implements PlayerCommandPort {
   }) async {
     try {
       switch (source) {
-        case MediaSourceDto_Uri(:final field0):
+        case MediaSourceDto_Uri(:final uri, :final httpHeaders):
           _check(
-            await _native<int>(FfiLoadUriRequest(_id, field0, autoPlay)),
-            'load_uri($field0)',
+            await _native<int>(
+              FfiLoadUriRequest(_id, uri, autoPlay, httpHeaders),
+            ),
+            'load_uri($uri)',
           );
         case MediaSourceDto_FlutterAsset(:final field0):
           final data = await rootBundle.load(field0);

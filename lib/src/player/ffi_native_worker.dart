@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:isolate';
 import 'dart:typed_data';
@@ -8,6 +9,14 @@ import 'package:ffi/ffi.dart';
 import '../domain/player_events.dart';
 import '../ffi/init_timing.dart';
 import '../ffi/gstp_library.dart';
+
+/// Serializes [headers] to JSON for the native HTTP source layer.
+Pointer<Char>? encodeHttpHeadersJson(Map<String, String> headers) {
+  if (headers.isEmpty) {
+    return nullptr;
+  }
+  return jsonEncode(headers).toNativeUtf8().cast();
+}
 
 /// Long-lived isolate that serializes blocking `gstp_player_*` FFI calls.
 ///
@@ -127,22 +136,33 @@ final class FfiDisposeRequest extends FfiRequest {
 }
 
 final class FfiLoadUriRequest extends FfiRequest {
-  const FfiLoadUriRequest(this.playerId, this.uri, this.autoPlay);
+  const FfiLoadUriRequest(
+    this.playerId,
+    this.uri,
+    this.autoPlay,
+    this.httpHeaders,
+  );
   final int playerId;
   final String uri;
   final bool autoPlay;
+  final Map<String, String> httpHeaders;
 
   @override
   Object? execute() {
     final ptr = uri.toNativeUtf8();
+    final headersPtr = encodeHttpHeadersJson(httpHeaders);
     try {
       return GstpLibrary.instance.bindings.gstp_player_load_uri(
         playerId,
         ptr.cast(),
         autoPlay,
+        headersPtr ?? nullptr,
       );
     } finally {
       malloc.free(ptr);
+      if (headersPtr != null) {
+        malloc.free(headersPtr);
+      }
     }
   }
 }
@@ -385,15 +405,18 @@ final class FfiThumbnailCaptureRequest extends FfiRequest {
     required this.uri,
     required this.positionMs,
     required this.maxWidth,
+    this.httpHeaders = const {},
   });
 
   final String uri;
   final int positionMs;
   final int maxWidth;
+  final Map<String, String> httpHeaders;
 
   @override
   Object? execute() {
     final uriPtr = uri.toNativeUtf8();
+    final headersPtr = encodeHttpHeadersJson(httpHeaders);
     try {
       return _readCapturedFrame(
         op: 'gstp_thumbnail_capture($uri)',
@@ -402,6 +425,7 @@ final class FfiThumbnailCaptureRequest extends FfiRequest {
             uriPtr.cast(),
             positionMs,
             maxWidth,
+            headersPtr ?? nullptr,
             outPtr,
             outLen,
             outW,
@@ -412,6 +436,9 @@ final class FfiThumbnailCaptureRequest extends FfiRequest {
       );
     } finally {
       malloc.free(uriPtr);
+      if (headersPtr != null) {
+        malloc.free(headersPtr);
+      }
     }
   }
 }

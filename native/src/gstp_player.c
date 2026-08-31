@@ -1,4 +1,5 @@
 #include "gstp_internal.h"
+#include "http_source.h"
 
 #include <string.h>
 
@@ -81,6 +82,8 @@ static gboolean gstp_op_dispose(gpointer data) {
   gstp_android_clear_overlay(p);
 #endif
   gstp_pipeline_destroy(p);
+  gstp_http_headers_free(p->http_headers);
+  p->http_headers = NULL;
   gstp_frame_clear(p);
   p->event_cb = NULL;
   p->frame_cb = NULL;
@@ -111,6 +114,7 @@ typedef struct {
   GstpPlayerId id;
   char *uri;
   bool auto_play;
+  char *http_headers_json;
   int32_t result;
 } GstpLoadUriOp;
 
@@ -121,11 +125,13 @@ static gboolean gstp_op_load_uri(gpointer data) {
     op->result = GSTP_ERR_BAD_ID;
     return G_SOURCE_REMOVE;
   }
-  op->result = gstp_pipeline_load_uri(p, op->uri, op->auto_play);
+  op->result = gstp_pipeline_load_uri(p, op->uri, op->auto_play,
+                                      op->http_headers_json);
   return G_SOURCE_REMOVE;
 }
 
-int32_t gstp_player_load_uri(GstpPlayerId id, const char *uri, bool auto_play) {
+int32_t gstp_player_load_uri(GstpPlayerId id, const char *uri, bool auto_play,
+                             const char *http_headers_json) {
   if (!gstp_player_lookup(id)) {
     return GSTP_ERR_BAD_ID;
   }
@@ -133,10 +139,15 @@ int32_t gstp_player_load_uri(GstpPlayerId id, const char *uri, bool auto_play) {
       .id = id,
       .uri = g_strdup(uri ? uri : ""),
       .auto_play = auto_play,
+      .http_headers_json =
+          (http_headers_json && *http_headers_json)
+              ? g_strdup(http_headers_json)
+              : NULL,
       .result = GSTP_ERR_FAIL,
   };
   gstp_runtime_invoke_sync(gstp_op_load_uri, &op);
   g_free(op.uri);
+  g_free(op.http_headers_json);
   return op.result;
 }
 

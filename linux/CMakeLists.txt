@@ -8,6 +8,7 @@ pkg_check_modules(GST REQUIRED
   gstreamer-1.0
   gstreamer-app-1.0
   gstreamer-video-1.0
+  gstreamer-pbutils-1.0
 )
 pkg_check_modules(GTK REQUIRED gtk+-3.0)
 
@@ -19,9 +20,12 @@ add_library(${PLUGIN_NAME} SHARED
   "gstplayer_texture.cc"
   "${NATIVE_ROOT}/src/runtime.c"
   "${NATIVE_ROOT}/src/bus.c"
+  "${NATIVE_ROOT}/src/discoverer.c"
   "${NATIVE_ROOT}/src/frame.c"
   "${NATIVE_ROOT}/src/pipeline.c"
   "${NATIVE_ROOT}/src/thumbnail.c"
+  "${NATIVE_ROOT}/src/http_source.c"
+  "${NATIVE_ROOT}/src/http_user_agent.c"
   "${NATIVE_ROOT}/src/gstp_player.c"
 )
 apply_standard_settings(${PLUGIN_NAME})

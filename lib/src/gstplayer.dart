@@ -14,6 +14,7 @@ import 'enum/video_source_type.dart';
 import 'domain/player_events.dart';
 import 'player/ffi_native_worker.dart';
 import 'player/ffi_thumbnail_worker.dart';
+import 'utils/device_user_agent.dart';
 
 /// 插件入口：加载原生库并初始化 GStreamer 运行时。
 ///
@@ -90,6 +91,10 @@ class GstPlayer {
         'plugin_worker_spawn',
         FfiNativeWorker.ensureStarted,
       );
+      final userAgentFuture = gstpTimedAsync(
+        'plugin_user_agent',
+        configureDefaultHttpUserAgent,
+      );
 
       final code = await gstpTimedAsync('plugin_gstp_init', () async {
         final done = Completer<int>();
@@ -109,6 +114,7 @@ class GstPlayer {
       });
 
       await workerFuture;
+      await userAgentFuture;
 
       if (code != 0) {
         throw StateError('gstp_init failed with code $code');
@@ -147,6 +153,7 @@ class GstPlayer {
           uri: resolved.uri,
           positionMs: at?.inMilliseconds ?? -1,
           maxWidth: maxWidth,
+          httpHeaders: resolved.httpHeaders,
         ),
       );
       return await CapturedBgraFrame.fromMap(map).toPng();
@@ -166,20 +173,28 @@ class GstPlayer {
     }
   }
 
-  static Future<({String uri, File? tempFile})> _resolveThumbnailUri(
+  static Future<
+      ({String uri, File? tempFile, Map<String, String> httpHeaders})>
+  _resolveThumbnailUri(
     VideoSource source,
   ) async {
     switch (source.type) {
       case VideoSourceType.network:
       case VideoSourceType.file:
         final dto = const MediaSourceResolver().resolve(source);
-        final uri = switch (dto) {
-          MediaSourceDto_Uri(:final field0) => field0,
+        return switch (dto) {
+          MediaSourceDto_Uri(
+            :final uri,
+            :final httpHeaders,
+          ) => (
+            uri: uri,
+            tempFile: null,
+            httpHeaders: httpHeaders,
+          ),
           MediaSourceDto_FlutterAsset() => throw StateError(
             'unexpected asset dto',
           ),
         };
-        return (uri: uri, tempFile: null);
       case VideoSourceType.asset:
         final key = source.uri.trim();
         final data = await rootBundle.load(key);
@@ -196,7 +211,11 @@ class GstPlayer {
           'gstp_thumb_${DateTime.now().microsecondsSinceEpoch}_$safe',
         );
         await file.writeAsBytes(bytes, flush: true);
-        return (uri: Uri.file(file.path).toString(), tempFile: file);
+        return (
+          uri: Uri.file(file.path).toString(),
+          tempFile: file,
+          httpHeaders: const <String, String>{},
+        );
     }
   }
 }

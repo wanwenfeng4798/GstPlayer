@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:gstplayer/gstplayer.dart';
 
 import 'screenshot_saver.dart';
+import 'custom_url_dialog.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -151,6 +152,15 @@ class _PlayerPageState extends State<PlayerPage> {
     await _controller.open(_assetSource, autoPlay: true);
   }
 
+  Future<void> _openCustomUrl() async {
+    final result = await showCustomUrlDialog(context);
+    if (result == null || !mounted) return;
+    await _controller.open(
+      VideoSource.network(result.url, httpHeaders: result.headers),
+      autoPlay: true,
+    );
+  }
+
   void _playNext() {
     _networkIndex = (_networkIndex + 1) % _networkSamples.length;
     _controller.open(
@@ -207,6 +217,14 @@ class _PlayerPageState extends State<PlayerPage> {
                         padding: EdgeInsets.symmetric(horizontal: 12),
                         child: Text('网络'),
                       ),
+                    ),
+                    TextButton(
+                      onPressed: _openCustomUrl,
+                      style: TextButton.styleFrom(
+                        tapTargetSize: .shrinkWrap,
+                        visualDensity: .compact,
+                      ),
+                      child: const Text('自定义'),
                     ),
                     TextButton(
                       onPressed: _openAsset,

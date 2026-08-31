@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import WebKit
 
 @_silgen_name("gstp_ffi_retain_symbols")
 func gstp_ffi_retain_symbols()
@@ -27,6 +28,20 @@ public class GstPlayerPlugin: NSObject, FlutterPlugin {
     }
 
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        switch call.method {
+        case "getDefaultUserAgent":
+            DispatchQueue.main.async {
+                let webView = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+                if let ua = webView.value(forKey: "userAgent") as? String, !ua.isEmpty {
+                    result(ua)
+                } else {
+                    result(nil)
+                }
+            }
+            return
+        default:
+            break
+        }
         let args = call.arguments as? [String: Any]
         let playerId = (args?["playerId"] as? NSNumber)?.int64Value ?? 0
         switch call.method {

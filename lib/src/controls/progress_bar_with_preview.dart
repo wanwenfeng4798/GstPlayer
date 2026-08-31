@@ -87,6 +87,7 @@ class _ProgressBarWithPreviewState extends State<ProgressBarWithPreview> {
         final wrapped = PlaybackSliderSnapshot(
           displayValue: snap.displayValue,
           enabled: snap.enabled,
+          canSeek: snap.canSeek,
           onSeekStart: snap.onSeekStart == null
               ? null
               : () {

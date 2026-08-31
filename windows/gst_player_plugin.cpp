@@ -7,6 +7,10 @@
 
 #include "gstplayer_texture.h"
 
+extern "C" {
+#include "gstp_player.h"
+}
+
 namespace {
 
 constexpr char kTextureChannelName[] = "gstplayer/texture";
@@ -49,6 +53,15 @@ class GstPlayerPlugin : public flutter::Plugin {
     channel_->SetMethodCallHandler(
         [textures = textures_](const auto& call, auto result) {
           const std::string& method = call.method_name();
+          if (method == "getDefaultUserAgent") {
+            const char* ua = gstp_get_default_user_agent();
+            if (ua && ua[0] != '\0') {
+              result->Success(flutter::EncodableValue(std::string(ua)));
+            } else {
+              result->Success();
+            }
+            return;
+          }
           const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
           if (!args) {
             result->Error("invalid_args", "Expected map arguments");

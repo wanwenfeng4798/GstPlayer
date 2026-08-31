@@ -261,9 +261,7 @@ class _VideoControlsState extends State<VideoControls> {
       case VideoControlsStyle.cupertino:
         return true;
       case VideoControlsStyle.adaptive:
-        final platform = Theme.of(context).platform;
-        return platform == TargetPlatform.iOS ||
-            platform == TargetPlatform.macOS;
+        return useCupertinoAdaptiveControls;
     }
   }
 

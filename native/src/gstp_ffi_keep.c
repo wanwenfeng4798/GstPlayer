@@ -12,6 +12,8 @@ void gstp_ffi_retain_symbols(void) {
       (void *)gstp_init,
       (void *)gstp_init_async,
       (void *)gstp_shutdown,
+      (void *)gstp_set_default_user_agent,
+      (void *)gstp_get_default_user_agent,
       (void *)gstp_player_create,
       (void *)gstp_player_dispose,
       (void *)gstp_player_set_event_callback,

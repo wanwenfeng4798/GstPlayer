@@ -6,6 +6,10 @@
 
 #include "gstplayer_texture.h"
 
+extern "C" {
+#include "gstp_player.h"
+}
+
 struct _GstPlayerPlugin {
   GObject parent_instance;
   FlMethodChannel* texture_channel;
@@ -84,22 +88,33 @@ static void texture_method_call_cb(FlMethodChannel* channel,
   g_autoptr(FlMethodResponse) response = nullptr;
   const gchar* method = fl_method_call_get_name(method_call);
   FlValue* args = fl_method_call_get_args(method_call);
-  const int64_t player_id = PlayerIdFromValue(args);
 
-  if (g_strcmp0(method, "createTexture") == 0) {
-    const int64_t texture_id = CreateTexture(self, player_id);
-    if (texture_id < 0) {
-      response = FL_METHOD_RESPONSE(fl_method_error_response_new(
-          "create_failed", "Failed to create texture", nullptr));
-    } else {
+  if (g_strcmp0(method, "getDefaultUserAgent") == 0) {
+    const char* ua = gstp_get_default_user_agent();
+    if (ua && *ua) {
       response = FL_METHOD_RESPONSE(
-          fl_method_success_response_new(fl_value_new_int(texture_id)));
+          fl_method_success_response_new(fl_value_new_string(ua)));
+    } else {
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
     }
-  } else if (g_strcmp0(method, "disposeTexture") == 0) {
-    DisposeTexture(self, player_id);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else {
-    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+    const int64_t player_id = PlayerIdFromValue(args);
+
+    if (g_strcmp0(method, "createTexture") == 0) {
+      const int64_t texture_id = CreateTexture(self, player_id);
+      if (texture_id < 0) {
+        response = FL_METHOD_RESPONSE(fl_method_error_response_new(
+            "create_failed", "Failed to create texture", nullptr));
+      } else {
+        response = FL_METHOD_RESPONSE(
+            fl_method_success_response_new(fl_value_new_int(texture_id)));
+      }
+    } else if (g_strcmp0(method, "disposeTexture") == 0) {
+      DisposeTexture(self, player_id);
+      response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+    } else {
+      response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+    }
   }
 
   g_autoptr(GError) error = nullptr;

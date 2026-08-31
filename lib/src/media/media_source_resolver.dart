@@ -19,6 +19,10 @@ class MediaSourceResolver {
       case VideoSourceType.asset:
         return MediaSourceDto.flutterAsset(source.uri.trim());
       case VideoSourceType.network:
+        return MediaSourceDto.uri(
+          _resolveGstUri(source),
+          httpHeaders: source.httpHeaders,
+        );
       case VideoSourceType.file:
         return MediaSourceDto.uri(_resolveGstUri(source));
     }

@@ -8,6 +8,7 @@ import '../domain/player_events.dart';
 import '../surface/texture_surface.dart';
 import '../surface/video_surface_handle.dart';
 import '../theme/video_controls_theme.dart';
+import '../utils/platform_util.dart';
 import 'playback_presentation_model.dart';
 
 /// 深度呈现模块：平台表面嵌入、宽高比布局、缓冲 UI / Deep presentation: platform surface embed, aspect layout, buffering chrome.
@@ -196,9 +197,7 @@ class _BufferingOverlay extends StatelessWidget {
       case VideoControlsStyle.cupertino:
         return true;
       case VideoControlsStyle.adaptive:
-        final platform = Theme.of(context).platform;
-        return platform == TargetPlatform.iOS ||
-            platform == TargetPlatform.macOS;
+        return useCupertinoAdaptiveControls;
     }
   }
 

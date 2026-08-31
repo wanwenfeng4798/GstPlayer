@@ -10,9 +10,12 @@ set(NATIVE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../native)
 add_library(gstplayer SHARED
   ${NATIVE_ROOT}/src/runtime.c
   ${NATIVE_ROOT}/src/bus.c
+  ${NATIVE_ROOT}/src/discoverer.c
   ${NATIVE_ROOT}/src/frame.c
   ${NATIVE_ROOT}/src/pipeline.c
   ${NATIVE_ROOT}/src/thumbnail.c
+  ${NATIVE_ROOT}/src/http_source.c
+  ${NATIVE_ROOT}/src/http_user_agent.c
   ${NATIVE_ROOT}/src/gstp_player.c
   ${NATIVE_ROOT}/src/android_jni.c
 )

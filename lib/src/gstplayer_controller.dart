@@ -10,7 +10,6 @@ import 'model/video_source.dart';
 import 'player/command_port.dart';
 import 'player/playback_session.dart';
 import 'domain/player_events.dart';
-import 'utils/platform_util.dart';
 
 export 'enum/video_rotation.dart';
 export 'domain/player_events.dart'
@@ -65,8 +64,7 @@ class GstPlayerController extends ChangeNotifier
   void _onSessionChanged() => notifyListeners();
 
   void _syncFullscreenFromImmersive() {
-    final next =
-        isMobilePlatform && (_immersive?.landscapeLocked ?? false);
+    final next = _immersive?.landscapeLocked ?? false;
     if (_isFullscreen == next) return;
     _isFullscreen = next;
     notifyListeners();
@@ -141,10 +139,9 @@ class GstPlayerController extends ChangeNotifier
   @override
   VideoRotation get videoRotation => _session.videoRotation;
 
-  /// 是否处于移动端全屏（横屏锁定）/ Whether mobile landscape fullscreen is active.
+  /// 是否处于全屏 / Whether fullscreen is active (landscape lock on all platforms).
   ///
-  /// 未 [attachImmersive] 或桌面端恒为 `false`。
-  /// Always `false` on desktop or before [attachImmersive].
+  /// 未 [attachImmersive] 时恒为 `false`。
   bool get isFullscreen => _isFullscreen;
 
   /// 是否正在播放（`state == playing`）/ Whether playback is active.
@@ -183,15 +180,13 @@ class GstPlayerController extends ChangeNotifier
     }
   }
 
-  /// 进入移动端全屏（横屏锁定）/ Enters mobile landscape fullscreen.
+  /// 进入全屏（移动端横屏锁定；桌面端同步控件全屏态）/ Enters fullscreen.
   void enterFullscreen() {
-    if (!isMobilePlatform) return;
     _immersive?.landscapeLocked = true;
   }
 
-  /// 退出移动端全屏 / Exits mobile landscape fullscreen.
+  /// 退出全屏 / Exits fullscreen.
   void exitFullscreen() {
-    if (!isMobilePlatform) return;
     _immersive?.landscapeLocked = false;
   }
 

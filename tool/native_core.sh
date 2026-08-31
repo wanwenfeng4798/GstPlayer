@@ -75,7 +75,7 @@ verify_platform() {
   fi
 
   local ok=0
-  for required in gstp_player.c gstp_ffi_keep.c frame.c; do
+  for required in gstp_player.c gstp_ffi_keep.c frame.c pipeline.c; do
     local f="${src}/${required}"
     if [[ ! -f "${f}" ]]; then
       echo "error: ${platform} NativeCore missing src/${required}" >&2

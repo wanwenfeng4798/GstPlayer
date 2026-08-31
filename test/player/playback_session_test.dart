@@ -374,6 +374,10 @@ void main() {
 
     test('play after eos restarts from beginning', () async {
       await session.initialize();
+      await session.open(
+        VideoSource.network('https://example.com/sample.avi'),
+        autoPlay: true,
+      );
       port.emit(event(kind: PlayerEventKind.durationChanged, durationMs: 5000));
       await Future<void>.delayed(Duration.zero);
       port.emit(event(kind: PlayerEventKind.eos));
@@ -383,20 +387,28 @@ void main() {
       await session.togglePlayPause();
       await Future<void>.delayed(Duration.zero);
       expect(session.state, PlayerState.buffering);
-      expect(session.isPlaying, isTrue);
+      expect(session.isPlaying, isFalse);
       expect(session.position, Duration.zero);
+      expect(port.loadSourceCallCount, 2);
+      expect(port.playCallCount, 0);
 
+      port.emit(
+        event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
+      );
       port.emit(
         event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
       );
       await Future<void>.delayed(const Duration(milliseconds: 250));
 
-      expect(port.playCallCount, 1);
       expect(session.state, PlayerState.playing);
     });
 
-    test('replay ignores stale end position until rewind lands', () async {
+    test('replay reload ignores stale end position during load', () async {
       await session.initialize();
+      await session.open(
+        VideoSource.network('https://example.com/sample.avi'),
+        autoPlay: true,
+      );
       port.emit(event(kind: PlayerEventKind.durationChanged, durationMs: 5000));
       await Future<void>.delayed(Duration.zero);
       port.emit(event(kind: PlayerEventKind.eos));
@@ -411,12 +423,54 @@ void main() {
       expect(session.position, Duration.zero);
 
       port.emit(
+        event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
+      );
+      port.emit(
         event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
+      );
+      port.emit(
+        event(
+          kind: PlayerEventKind.videoSize,
+          width: 640,
+          height: 360,
+        ),
       );
       port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 120));
       await Future<void>.delayed(Duration.zero);
       expect(session.state, PlayerState.playing);
       expect(session.position, const Duration(milliseconds: 120));
+    });
+
+    test('replay reload shows buffering during network preroll', () async {
+      await session.initialize();
+      await session.open(
+        VideoSource.network('https://example.com/sample.avi'),
+        autoPlay: true,
+      );
+      port.emit(event(kind: PlayerEventKind.durationChanged, durationMs: 5000));
+      await Future<void>.delayed(Duration.zero);
+      port.emit(event(kind: PlayerEventKind.eos));
+      await Future<void>.delayed(Duration.zero);
+
+      unawaited(session.play());
+      await Future<void>.delayed(Duration.zero);
+
+      port.emit(
+        event(kind: PlayerEventKind.buffering, bufferingPercent: 4),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.state, PlayerState.buffering);
+      expect(session.bufferingPercent, 4);
+
+      port.emit(
+        event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
+      );
+      port.emit(
+        event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.state, PlayerState.playing);
+      expect(session.bufferingPercent, 100);
     });
 
     test('metadataChanged drives aspectRatio', () async {
@@ -541,6 +595,89 @@ void main() {
       expect(session.state, PlayerState.playing);
     });
 
+    test('loading period ignores bogus preroll position', () async {
+      await session.initialize();
+      await session.open(VideoSource.network('https://example.com/b.mp4'));
+      expect(session.position, Duration.zero);
+
+      port.emit(
+        event(kind: PlayerEventKind.positionChanged, positionMs: 5000),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.position, Duration.zero);
+
+      port.emit(
+        event(kind: PlayerEventKind.durationChanged, durationMs: 60000),
+      );
+      await Future<void>.delayed(Duration.zero);
+      port.emit(
+        event(kind: PlayerEventKind.positionChanged, positionMs: 5000),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.position, Duration.zero);
+
+      port.emit(
+        event(kind: PlayerEventKind.videoSize, width: 640, height: 360),
+      );
+      await Future<void>.delayed(Duration.zero);
+      port.emit(
+        event(kind: PlayerEventKind.positionChanged, positionMs: 5000),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.position, Duration.zero);
+
+      port.emit(
+        event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
+      );
+      port.emit(
+        event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
+      );
+      await Future<void>.delayed(Duration.zero);
+      port.emit(
+        event(kind: PlayerEventKind.positionChanged, positionMs: 5000),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.position, const Duration(seconds: 5));
+    });
+
+    test('hideVideoSurface until playing with full buffer', () async {
+      await session.initialize();
+      await session.open(VideoSource.network('https://example.com/b.mp4'));
+      expect(session.hideVideoSurface, isTrue);
+
+      port.emit(
+        event(kind: PlayerEventKind.videoSize, width: 640, height: 360),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.hideVideoSurface, isTrue);
+
+      port.emit(
+        event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
+      );
+      port.emit(
+        event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.hideVideoSurface, isFalse);
+    });
+
+    test('looping eos reloads source via open', () async {
+      await session.initialize();
+      await session.open(
+        VideoSource.network('https://example.com/sample.avi'),
+        autoPlay: true,
+      );
+      await session.setLooping(true);
+      port.emit(event(kind: PlayerEventKind.durationChanged, durationMs: 5000));
+      await Future<void>.delayed(Duration.zero);
+      port.emit(event(kind: PlayerEventKind.eos));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(port.loadSourceCallCount, 2);
+      expect(session.state, isNot(PlayerState.completed));
+      expect(session.hideVideoSurface, isTrue);
+    });
+
     test('open resets video rotation after prior rotation', () async {
       await session.initialize();
       await session.setVideoRotation(VideoRotation.deg90);
@@ -583,7 +720,13 @@ void main() {
             PlayerEventFixtures.stateChanged(state: PlayerState.playing),
           );
           port.emit(
+            event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
+          );
+          port.emit(
             event(kind: PlayerEventKind.durationChanged, durationMs: 10000),
+          );
+          port.emit(
+            event(kind: PlayerEventKind.videoSize, width: 640, height: 360),
           );
           port.emit(
             event(kind: PlayerEventKind.positionChanged, positionMs: 3000),
@@ -612,6 +755,9 @@ void main() {
 
           port.emit(
             PlayerEventFixtures.stateChanged(state: PlayerState.playing),
+          );
+          port.emit(
+            event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
           );
           await Future<void>.delayed(Duration.zero);
 

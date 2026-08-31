@@ -100,6 +100,7 @@ GstFlowReturn gstp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
       p->par_n = 1;
       p->par_d = 1;
     }
+    p->suppress_timing_emit = false;
     gstp_player_emit(p, GSTP_EVENT_VIDEO_SIZE, "");
     gstp_player_emit(p, GSTP_EVENT_METADATA_CHANGED, "");
   }

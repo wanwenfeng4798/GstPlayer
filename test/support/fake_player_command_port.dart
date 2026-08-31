@@ -32,6 +32,7 @@ class FakePlayerCommandPort implements PlayerCommandPort {
   int setAspectRatioModeCallCount = 0;
   int playCallCount = 0;
   int pauseCallCount = 0;
+  int loadSourceCallCount = 0;
   int getTracksCallCount = 0;
   final List<String> transportLog = <String>[];
 
@@ -66,6 +67,7 @@ class FakePlayerCommandPort implements PlayerCommandPort {
     MediaSourceDto source, {
     required bool autoPlay,
   }) async {
+    loadSourceCallCount++;
     if (failLoad) {
       throw StateError('load failed');
     }

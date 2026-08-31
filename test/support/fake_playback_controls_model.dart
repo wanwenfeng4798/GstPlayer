@@ -69,6 +69,9 @@ class FakePlaybackControlsModel extends ChangeNotifier
   bool get isPlaying => _state == PlayerState.playing;
 
   @override
+  final int mediaGeneration = 0;
+
+  @override
   PlayerState get state => _state;
 
   @override

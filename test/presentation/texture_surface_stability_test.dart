@@ -120,6 +120,7 @@ void main() {
 
         model.setState(PlayerState.buffering);
         model.setBufferingPercent(40);
+        model.setHideVideoSurface(true);
         await tester.pumpAndSettle();
         expect(find.byType(CircularProgressIndicator), findsOneWidget);
         expect(createTextureCount, 1);
@@ -127,6 +128,7 @@ void main() {
 
         model.setState(PlayerState.playing);
         model.setBufferingPercent(100);
+        model.setHideVideoSurface(false);
         await tester.pumpAndSettle();
         expect(createTextureCount, 1);
         expect(disposeTextureCount, 0);

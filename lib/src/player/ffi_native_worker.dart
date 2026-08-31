@@ -299,7 +299,7 @@ final class FfiIntOpRequest extends FfiRequest {
       case 'stop':
         return b.gstp_player_stop(playerId);
       case 'seek':
-        return b.gstp_player_seek(playerId, arg0! as int);
+        return b.gstp_player_seek(playerId, arg0! as int, arg1 as bool? ?? false);
       case 'set_volume':
         return b.gstp_player_set_volume(playerId, arg0! as double);
       case 'set_mute':

@@ -10,12 +10,27 @@
 - Removed discoverer path, deep position MAX query, and init-timing debug logs.
 - playbin3 `playsink` duration/position queries; position clamping for startup
   anomalies on network MOV.
+- **Replay (manual + looping):** application layer reloads the current
+  [VideoSource] via `open()` / `load_uri` — same path as switching network
+  sources (fixes network AVI/MOV replay). Native EOS no longer in-pipeline
+  rewinds when looping; Dart handles loop via `open()` on EOS.
+- **Seek / scrub:** user seek uses `flush_seek_with_ready_fallback` (READY →
+  PAUSED → retry) for qtdemux/avidemux/MOV/AVI; merged C API to
+  `gstp_player_seek(id, ms, accurate)`.
+- Removed redundant replay paths: `_replayFromCompleted`, 8s replay watchdog,
+  `gstp_force_resume_after_replay`, `gstp_player_seek_ex`.
+- Linux: `GIO_MODULE_DIR` probe aligned with Windows/macOS TLS module
+  discovery.
 
 ### UI
 
 - Screenshot restored in the settings popup on all platforms (`onScreenshot`).
 - Danmaku Ticker interpolation; fixed-width time labels; progress bar jitter
   fixes (no transport-row FittedBox scale; skip tween on large position jumps).
+- **Source switch / replay load:** black cover sits above Texture for the full
+  load period; loading spinner until `videoSize` + buffering 100% + PLAYING
+  (no flash of previous frame; mid-playback rebuffer still does not occlude).
+- Scrub resets on `mediaGeneration`; loading gate ignores stale preroll position.
 
 ### Docs
 

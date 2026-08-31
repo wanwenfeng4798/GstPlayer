@@ -78,7 +78,7 @@ void main() {
       expect(preview.visible, isFalse);
       expect(tester.takeException(), isNull);
 
-      await tester.pump(const Duration(milliseconds: 1600));
+      await tester.pump(const Duration(milliseconds: 3100));
       expect(tester.takeException(), isNull);
     });
   });

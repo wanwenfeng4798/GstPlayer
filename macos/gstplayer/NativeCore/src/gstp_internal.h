@@ -47,6 +47,7 @@ typedef struct GstpPlayer {
   GstElement *orient_element; /* videoflip or glvideoflip; owned by sink bin */
   guint bus_watch_id;
   guint position_timer_id;
+  guint position_emit_idle_id;
 
   GstpEventCallback event_cb;
   void *event_ctx;
@@ -64,6 +65,9 @@ typedef struct GstpPlayer {
   bool looping;
   bool desired_playing;
   bool at_eos;
+  bool replay_preroll;
+  gint64 replay_preroll_since_us;
+  bool suppress_timing_emit;
   bool is_uri;
   bool seekable;
   bool pending_rate_seek;
@@ -77,6 +81,8 @@ typedef struct GstpPlayer {
   int64_t last_frame_pts_ms;
   int64_t play_wall_origin_us;
   int64_t play_position_origin_ms;
+  int64_t scrub_hold_target_ms;
+  gint64 scrub_hold_until_us;
   int32_t width;
   int32_t height;
   double fps;
@@ -159,6 +165,9 @@ int32_t gstp_pipeline_play(GstpPlayer *p);
 int32_t gstp_pipeline_pause(GstpPlayer *p);
 int32_t gstp_pipeline_stop(GstpPlayer *p);
 int32_t gstp_pipeline_seek(GstpPlayer *p, int64_t position_ms);
+int32_t gstp_pipeline_seek_at(GstpPlayer *p, int64_t position_ms, bool accurate);
+int32_t gstp_media_rewind(GstpPlayer *p);
+void gstp_replay_begin_resume(GstpPlayer *p);
 int32_t gstp_pipeline_set_volume(GstpPlayer *p, double volume);
 int32_t gstp_pipeline_set_mute(GstpPlayer *p, bool mute);
 int32_t gstp_pipeline_set_speed(GstpPlayer *p, double speed);
@@ -176,11 +185,13 @@ void gstp_bus_attach(GstpPlayer *p);
 void gstp_bus_detach(GstpPlayer *p);
 void gstp_media_update_timing(GstpPlayer *p);
 void gstp_media_note_frame_pts(GstpPlayer *p, GstClockTime pts);
+void gstp_schedule_position_emit(GstpPlayer *p);
 void gstp_media_sync_wall_clock(GstpPlayer *p);
 void gstp_media_set_duration_ms(GstpPlayer *p, int64_t duration_ms);
 void gstp_configure_uri_child(GstpPlayer *p, GstElement *element);
 void gstp_ensure_demux_duration_probes(GstpPlayer *p);
 void gstp_media_set_position_ms(GstpPlayer *p, int64_t position_ms);
+gboolean gstp_query_position_on_playsink(GstpPlayer *p, gint64 *pos);
 
 void gstp_frame_init(GstpPlayer *p);
 void gstp_frame_clear(GstpPlayer *p);

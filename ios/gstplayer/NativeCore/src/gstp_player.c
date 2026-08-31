@@ -7,7 +7,14 @@
 #include <android/native_window.h>
 #endif
 
-void gstp_player_emit(GstpPlayer *p, int32_t kind, const char *message) {
+typedef struct {
+  GstpPlayerId id;
+  int32_t kind;
+  char message[512];
+} GstpEmitJob;
+
+static void gstp_player_emit_impl(GstpPlayer *p, int32_t kind,
+                                  const char *message) {
   if (!p || !p->event_cb) {
     return;
   }
@@ -20,6 +27,37 @@ void gstp_player_emit(GstpPlayer *p, int32_t kind, const char *message) {
               p->height, p->buffering_percent, p->player_state, p->event_message,
               p->fps, p->par_n, p->par_d, p->dar_n, p->dar_d, p->interlaced,
               p->color_matrix, p->color_range, p->hdr_format, p->seekable);
+}
+
+static gboolean gstp_emit_job_cb(gpointer data) {
+  GstpEmitJob *job = data;
+  GstpPlayer *p = gstp_player_lookup(job->id);
+  if (p) {
+    gstp_player_emit_impl(p, job->kind, job->message);
+  }
+  g_free(job);
+  return G_SOURCE_REMOVE;
+}
+
+void gstp_player_emit(GstpPlayer *p, int32_t kind, const char *message) {
+  if (!p || !p->event_cb) {
+    return;
+  }
+  /* appsink and other GStreamer streaming threads must not call Dart FFI
+   * directly — marshal onto the dedicated gstp-gst main context first. */
+  GstpRuntime *rt = gstp_runtime();
+  if (rt->initialized && rt->ctx != NULL &&
+      !g_main_context_is_owner(rt->ctx)) {
+    GstpEmitJob *job = g_new0(GstpEmitJob, 1);
+    job->id = p->id;
+    job->kind = kind;
+    if (message && message[0] != '\0') {
+      strncpy(job->message, message, sizeof(job->message) - 1);
+    }
+    gstp_runtime_invoke_async(gstp_emit_job_cb, job);
+    return;
+  }
+  gstp_player_emit_impl(p, kind, message);
 }
 
 void gstp_player_set_state(GstpPlayer *p, int32_t state) {
@@ -215,6 +253,7 @@ GSTP_DEFINE_SIMPLE_OP(stop, gstp_pipeline_stop(p))
 typedef struct {
   GstpPlayerId id;
   int64_t position_ms;
+  bool accurate;
   int32_t result;
 } GstpSeekOp;
 
@@ -225,16 +264,18 @@ static gboolean gstp_op_seek(gpointer data) {
     op->result = GSTP_ERR_BAD_ID;
     return G_SOURCE_REMOVE;
   }
-  op->result = gstp_pipeline_seek(p, op->position_ms);
+  op->result = gstp_pipeline_seek_at(p, op->position_ms, op->accurate);
   return G_SOURCE_REMOVE;
 }
 
-int32_t gstp_player_seek(GstpPlayerId id, int64_t position_ms) {
+int32_t gstp_player_seek(GstpPlayerId id, int64_t position_ms, bool accurate) {
   if (!gstp_player_lookup(id)) {
     return GSTP_ERR_BAD_ID;
   }
-  GstpSeekOp op = {
-      .id = id, .position_ms = position_ms, .result = GSTP_ERR_FAIL};
+  GstpSeekOp op = {.id = id,
+                   .position_ms = position_ms,
+                   .accurate = accurate,
+                   .result = GSTP_ERR_FAIL};
   gstp_runtime_invoke_sync(gstp_op_seek, &op);
   return op.result;
 }

@@ -156,7 +156,19 @@ class GstPlayerController extends ChangeNotifier
   double get aspectRatio => _session.aspectRatio;
 
   /// 媒体打开代数；每次 [open] 递增 / Media open generation; increments on each [open].
+  @override
   int get mediaGeneration => _session.mediaGeneration;
+
+  /// 加载中且尚无视频尺寸时隐藏 Texture / Hide texture while loading with no video size yet.
+  @override
+  bool get hideVideoSurface => _session.hideVideoSurface;
+
+  /// 切源/重播加载期显示 loading / Loading overlay during source switch or replay.
+  bool get showLoadingOverlay => _session.showLoadingOverlay;
+
+  /// 当前视频帧尺寸 / Decoded video frame size.
+  @override
+  Size get presentationVideoSize => _session.presentationVideoSize;
 
   /// 当前已打开的媒体源 / Currently open media source.
   @override

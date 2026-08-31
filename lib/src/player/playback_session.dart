@@ -72,11 +72,23 @@ class PlaybackSession extends ChangeNotifier
   int? _sentTransportGen;
   Future<void>? _transportFlush;
 
-  /// True while replaying after EOS; ignores stale end-of-stream position ticks.
-  bool _replayFromCompleted = false;
+  /// True after [open] until first frame is playable; ignores bogus preroll position.
+  bool _loadingMedia = false;
 
   /// 每次 [open] 递增；供 View 在切换媒体时重置 UI 状态 / Increments on each [open]; lets views reset UI state on media switch.
   int get mediaGeneration => _mediaGeneration;
+
+  /// 加载期遮挡视频表面（切源/重播），rebuffer 不遮挡 / Covers video during load; not mid-playback rebuffer.
+  @override
+  bool get hideVideoSurface => _loadingMedia;
+
+  /// 与 [hideVideoSurface] 同生命周期，驱动 loading 指示器 / Loading spinner during initial load.
+  @override
+  bool get showLoadingOverlay => _loadingMedia;
+
+  /// 当前视频帧尺寸 / Decoded video frame size.
+  @override
+  Size get presentationVideoSize => _videoSize;
 
   /// 是否正在播放 / Whether playback should show as playing (honors pending intent).
   @override
@@ -194,11 +206,13 @@ class PlaybackSession extends ChangeNotifier
     });
   }
 
-  /// 播放；EOS 后手动 replay 会将 [speed] 重置为 1.0 并从 0 起播 / Plays; resets speed and position after EOS replay.
+  /// 播放；EOS 后手动 replay 与 [open] 相同路径重新加载当前源 / Plays; after EOS, reloads current source like [open].
   Future<void> play() {
     if (_state == PlayerState.completed) {
-      _beginReplayFromCompleted();
-      return _flushTransport();
+      final source = _mediaSource;
+      if (source != null) {
+        return open(source, autoPlay: true);
+      }
     }
     _setWantPlaying(true);
     return _flushTransport();
@@ -245,24 +259,10 @@ class PlaybackSession extends ChangeNotifier
     notifyListeners();
   }
 
-  /// EOS replay: keep transport intent but stay in buffering until native PLAYING.
-  /// Avoids danmaku wall-clock extrapolation ahead of prerolling video.
-  void _beginReplayFromCompleted() {
-    _speed = 1.0;
-    _position = Duration.zero;
-    _replayFromCompleted = true;
-    _wantPlaying = true;
-    _wantGen = ++_transportGen;
-    _state = PlayerState.buffering;
-    _bufferingPercent = 0;
-    notifyListeners();
-  }
-
   void _clearTransportIntent() {
     _wantPlaying = null;
     _wantGen = null;
     _sentTransportGen = null;
-    _replayFromCompleted = false;
   }
 
   Future<void> _flushTransport() {
@@ -441,6 +441,7 @@ class PlaybackSession extends ChangeNotifier
   void _resetForOpen() {
     _error = null;
     _clearTransportIntent();
+    _loadingMedia = true;
     // Optimistic loading UI until native BUFFERING / READY / PLAYING events.
     _bufferingPercent = 0;
     _videoSize = Size.zero;
@@ -453,10 +454,19 @@ class PlaybackSession extends ChangeNotifier
     _isSeekable = true;
     _volume = 1.0;
     _muted = false;
-    _looping = false;
+    // Preserve [_looping] — EOS loop reload uses open() without toggling loop off.
     _videoRotation = VideoRotation.deg0;
     _mediaGeneration++;
     notifyListeners();
+  }
+
+  /// Clears load gate once video size, buffering, and PLAYING are all ready.
+  void _clearLoadingMediaIfReady() {
+    if (!_loadingMedia) return;
+    if (_videoSize.width <= 0 || _videoSize.height <= 0) return;
+    if (_bufferingPercent < 100) return;
+    if (_state != PlayerState.playing) return;
+    _loadingMedia = false;
   }
 
   static const Duration _maxPosition = Duration(hours: 24);
@@ -473,9 +483,11 @@ class PlaybackSession extends ChangeNotifier
       ms = 0;
     }
     if (duration <= Duration.zero) {
-      // Preroll before duration is known — hide bogus playbin timestamps.
-      if (ms > 60000) {
+      // Reject one-shot bogus preroll; allow monotonic advance before duration.
+      if (_position.inMilliseconds <= 0 && ms > 120000) {
         ms = 0;
+      } else if (ms > _position.inMilliseconds + 15000) {
+        ms = _position.inMilliseconds;
       }
     }
     final maxMs = _maxPosition.inMilliseconds;
@@ -497,16 +509,8 @@ class PlaybackSession extends ChangeNotifier
         _duration = Duration(milliseconds: event.durationMs);
         _isSeekable = event.isSeekable;
       case PlayerEventKind.positionChanged:
-        if (_replayFromCompleted) {
-          final durMs = _duration.inMilliseconds;
-          final ms = event.positionMs;
-          // Native may still report EOS position until rewind preroll finishes.
-          if (durMs > 0 && ms >= durMs - 50) {
-            break;
-          }
-          if (ms <= 1000) {
-            _replayFromCompleted = false;
-          }
+        if (_loadingMedia) {
+          break;
         }
         _position = _clampPosition(
           Duration(milliseconds: event.positionMs),
@@ -517,6 +521,7 @@ class PlaybackSession extends ChangeNotifier
           event.width.toDouble(),
           event.height.toDouble(),
         );
+        _clearLoadingMediaIfReady();
       case PlayerEventKind.metadataChanged:
         _videoMetadata = VideoMetadata(
           width: event.width,
@@ -538,9 +543,9 @@ class PlaybackSession extends ChangeNotifier
           switch (event.state) {
             case PlayerState.playing:
               if (_wantPlaying == true) {
-                _replayFromCompleted = false;
                 _clearTransportIntent();
                 _state = event.state;
+                _clearLoadingMediaIfReady();
               }
             case PlayerState.paused:
               if (_wantPlaying == false) {
@@ -548,6 +553,7 @@ class PlaybackSession extends ChangeNotifier
                 _state = event.state;
               }
             case PlayerState.ready:
+              break;
             case PlayerState.stopped:
               break;
             case PlayerState.completed:
@@ -560,24 +566,32 @@ class PlaybackSession extends ChangeNotifier
           }
         } else {
           _state = event.state;
+          _clearLoadingMediaIfReady();
         }
       case PlayerEventKind.buffering:
         _bufferingPercent = event.bufferingPercent;
-        // Native may pause during rebuffer; restore transport state from the event.
+        // Mid-playback rebuffer: keep playing state so video surface stays visible.
         if (event.bufferingPercent < 100) {
-          _state = PlayerState.buffering;
+          if (_loadingMedia || _videoSize == Size.zero) {
+            _state = PlayerState.buffering;
+          }
         } else if (_wantPlaying != null) {
           _state = _wantPlaying!
               ? PlayerState.playing
               : PlayerState.paused;
-        } else {
+        } else if (!_loadingMedia) {
           // Buffering finished but native may still be waiting for surface /
           // deferred play — do not fake playing (masks "not actually playing").
           _state = event.state == PlayerState.buffering
               ? PlayerState.ready
               : event.state;
         }
+        _clearLoadingMediaIfReady();
       case PlayerEventKind.eos:
+        if (_looping && _mediaSource != null) {
+          unawaited(open(_mediaSource!, autoPlay: true));
+          break;
+        }
         _clearTransportIntent();
         _state = PlayerState.completed;
         _position = _duration;
@@ -598,7 +612,7 @@ class PlaybackSession extends ChangeNotifier
     _error = message;
     _state = PlayerState.error;
     _bufferingPercent = 100;
-    _replayFromCompleted = false;
+    _loadingMedia = false;
     notifyListeners();
   }
 
@@ -609,8 +623,32 @@ class PlaybackSession extends ChangeNotifier
     notifyListeners();
   }
 
+  Duration _clampSeekPreview(Duration position) {
+    var ms = position.inMilliseconds;
+    if (ms < 0) {
+      ms = 0;
+    }
+    final duration = _duration;
+    if (duration <= Duration.zero) {
+      if (ms > 60000) {
+        ms = 0;
+      }
+    }
+    final maxMs = _maxPosition.inMilliseconds;
+    if (ms > maxMs) {
+      ms = maxMs;
+    }
+    if (duration > Duration.zero) {
+      final durMs = duration.inMilliseconds;
+      if (ms > durMs) {
+        ms = durMs;
+      }
+    }
+    return Duration(milliseconds: ms);
+  }
+
   void _previewSeek(Duration position, {required bool showBuffering}) {
-    _position = position;
+    _position = _clampSeekPreview(position);
     if (showBuffering) {
       _state = PlayerState.buffering;
     }

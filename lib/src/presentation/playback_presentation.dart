@@ -103,6 +103,10 @@ class PlaybackPresentation extends StatelessWidget {
                 },
               ),
             ),
+            if (model.hideVideoSurface)
+              const Positioned.fill(
+                child: ColoredBox(color: Color(0xFF000000)),
+              ),
             _BufferingOverlay(model: model, controlsStyle: controlsStyle),
           ],
         );
@@ -214,8 +218,8 @@ class _BufferingOverlay extends StatelessWidget {
       listenable: model,
       builder: (context, _) {
         final buffering = model.bufferingPercent;
-        final state = model.state;
-        if (buffering >= 100 && state != PlayerState.buffering) {
+        final waitingForFirstFrame = model.showLoadingOverlay;
+        if (!waitingForFirstFrame) {
           return const SizedBox.shrink();
         }
         return BufferingIndicator(

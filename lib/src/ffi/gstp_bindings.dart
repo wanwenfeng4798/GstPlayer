@@ -361,16 +361,18 @@ class GstpBindings {
   late final _gstp_player_play = _gstp_player_playPtr
       .asFunction<int Function(int)>();
 
-  int gstp_player_seek(int id, int position_ms) {
-    return _gstp_player_seek(id, position_ms);
+  int gstp_player_seek(int id, int position_ms, bool accurate) {
+    return _gstp_player_seek(id, position_ms, accurate);
   }
 
   late final _gstp_player_seekPtr =
-      _lookup<ffi.NativeFunction<ffi.Int32 Function(GstpPlayerId, ffi.Int64)>>(
+      _lookup<
+          ffi.NativeFunction<
+              ffi.Int32 Function(GstpPlayerId, ffi.Int64, ffi.Bool)>>(
         'gstp_player_seek',
       );
   late final _gstp_player_seek = _gstp_player_seekPtr
-      .asFunction<int Function(int, int)>();
+      .asFunction<int Function(int, int, bool)>();
 
   int gstp_player_select_track(
     int id,

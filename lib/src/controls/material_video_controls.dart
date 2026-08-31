@@ -55,6 +55,7 @@ class MaterialVideoControls extends StatefulWidget {
 class _MaterialVideoControlsState extends State<MaterialVideoControls> {
   late final ScrubController _scrub;
   late final ScrubPreviewController _preview;
+  int _lastMediaGeneration = 0;
 
   @override
   void initState() {
@@ -64,10 +65,21 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
       onInteract: widget.onInteract,
     );
     _preview = ScrubPreviewController();
+    _lastMediaGeneration = widget.model.mediaGeneration;
+    widget.model.addListener(_onMediaGenerationChanged);
+  }
+
+  void _onMediaGenerationChanged() {
+    final gen = widget.model.mediaGeneration;
+    if (gen != _lastMediaGeneration) {
+      _lastMediaGeneration = gen;
+      _scrub.reset();
+    }
   }
 
   @override
   void dispose() {
+    widget.model.removeListener(_onMediaGenerationChanged);
     _scrub.dispose();
     _preview.dispose();
     super.dispose();

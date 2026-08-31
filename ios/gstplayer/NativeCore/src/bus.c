@@ -20,15 +20,15 @@ static int32_t map_gst_state(GstpPlayer *p, GstState state) {
     return GSTP_STATE_READY;
   case GST_STATE_PAUSED:
     /* playbin pauses itself while download-buffering; keep BUFFERING visible. */
-    if (p->buffering_percent < 100 && p->desired_playing) {
+    if (p->is_uri && p->buffering_percent < 100 && p->desired_playing) {
       return GSTP_STATE_BUFFERING;
     }
-    if (p->player_state == GSTP_STATE_BUFFERING) {
+    if (p->is_uri && p->player_state == GSTP_STATE_BUFFERING) {
       return GSTP_STATE_BUFFERING;
     }
     return GSTP_STATE_PAUSED;
   case GST_STATE_PLAYING:
-    if (p->buffering_percent < 100 && p->desired_playing) {
+    if (p->is_uri && p->buffering_percent < 100 && p->desired_playing) {
       return GSTP_STATE_BUFFERING;
     }
     return GSTP_STATE_PLAYING;
@@ -115,7 +115,7 @@ static GstElement *gstp_get_playsink(GstpPlayer *p) {
   return sink;
 }
 
-static gboolean gstp_query_position_on_playsink(GstpPlayer *p, gint64 *pos) {
+gboolean gstp_query_position_on_playsink(GstpPlayer *p, gint64 *pos) {
   GstElement *sink = gstp_get_playsink(p);
   gboolean ok = gstp_query_position_on_element(sink, pos);
   if (sink) {
@@ -149,10 +149,12 @@ static gboolean gstp_position_ms_sane(const GstpPlayer *p, int64_t ms) {
   if (ms > max_abs) {
     return (gboolean)0;
   }
-  /* Before duration is known, playbin often reports bogus preroll timestamps
-   * (notably network MOV). Reject large values until demux segment arrives. */
+  /* Before duration is known, playbin may report bogus preroll timestamps
+   * (notably network MOV). Allow monotonic playback advance; reject spikes. */
   if (p->duration_ms <= 0 && ms > 60000) {
-    return (gboolean)0;
+    if (p->position_ms <= 0 || ms > p->position_ms + 15000) {
+      return (gboolean)0;
+    }
   }
   if (p->duration_ms > 0) {
     const int64_t slack = p->duration_ms / 20 + 500;
@@ -186,6 +188,9 @@ void gstp_media_set_position_ms(GstpPlayer *p, int64_t position_ms) {
   }
   p->position_ms = ms;
   gstp_media_sync_wall_clock(p);
+  if (p->suppress_timing_emit) {
+    return;
+  }
   gstp_player_emit(p, GSTP_EVENT_POSITION_CHANGED, "");
 }
 
@@ -194,6 +199,9 @@ void gstp_media_set_duration_ms(GstpPlayer *p, int64_t duration_ms) {
     return;
   }
   p->duration_ms = duration_ms;
+  if (p->is_uri && p->pipeline) {
+    gstp_pipeline_update_seekable(p);
+  }
   gstp_player_emit(p, GSTP_EVENT_DURATION_CHANGED, "");
 }
 
@@ -245,7 +253,16 @@ static gboolean gstp_query_position_from_clock(GstpPlayer *p, gint64 *pos) {
 }
 
 static gboolean gstp_query_position_from_wall_clock(GstpPlayer *p, gint64 *pos) {
-  if (!p->desired_playing) {
+  if (!p->pipeline || !p->desired_playing) {
+    return (gboolean)0;
+  }
+  /* Do not extrapolate ahead of the first decoded frame at stream start. */
+  if (p->last_frame_pts_ms < 0 && p->position_ms <= 0) {
+    return (gboolean)0;
+  }
+  GstState state = GST_STATE_NULL;
+  gst_element_get_state(p->pipeline, &state, NULL, 0);
+  if (state != GST_STATE_PLAYING) {
     return (gboolean)0;
   }
   int64_t elapsed_ms = (g_get_monotonic_time() - p->play_wall_origin_us) / 1000;
@@ -259,51 +276,66 @@ static gboolean gstp_query_position_from_wall_clock(GstpPlayer *p, gint64 *pos) 
   return (gboolean)1;
 }
 
-static gboolean gstp_query_stream_position(GstpPlayer *p, gint64 *pos) {
-#if !defined(__ANDROID__)
-  if (p->last_frame_pts_ms >= 0 &&
-      gstp_position_ms_sane(p, p->last_frame_pts_ms)) {
-    *pos = p->last_frame_pts_ms * GST_MSECOND;
-    return (gboolean)1;
+static int64_t gstp_pick_display_position_ms(GstpPlayer *p) {
+  const gint64 now = g_get_monotonic_time();
+  if (p->scrub_hold_until_us > 0 && now < p->scrub_hold_until_us) {
+    return p->scrub_hold_target_ms;
   }
-#endif
-  if (gstp_query_position_from_wall_clock(p, pos)) {
-    const int64_t ms = (int64_t)(*pos / GST_MSECOND);
+
+  const bool have_pts = p->last_frame_pts_ms >= 0 &&
+                        gstp_position_ms_sane(p, p->last_frame_pts_ms);
+  if (have_pts) {
+    return p->last_frame_pts_ms;
+  }
+
+  gint64 pos = GST_CLOCK_TIME_NONE;
+  if (gstp_query_position_on_playsink(p, &pos)) {
+    const int64_t ms = (int64_t)(pos / GST_MSECOND);
     if (gstp_position_ms_sane(p, ms)) {
-      return (gboolean)1;
+      return ms;
     }
   }
-  /* Until duration is known, playbin/playsink position is unreliable. */
-  if (p->duration_ms <= 0) {
+  pos = GST_CLOCK_TIME_NONE;
+  if (gstp_query_position_on_element(p->pipeline, &pos)) {
+    const int64_t ms = (int64_t)(pos / GST_MSECOND);
+    if (gstp_position_ms_sane(p, ms)) {
+      return ms;
+    }
+  }
+#if !defined(__ANDROID__)
+  pos = GST_CLOCK_TIME_NONE;
+  if (p->appsink && gstp_query_position_on_element(p->appsink, &pos)) {
+    const int64_t ms = (int64_t)(pos / GST_MSECOND);
+    if (gstp_position_ms_sane(p, ms)) {
+      return ms;
+    }
+  }
+#endif
+  gint64 wall_ns = GST_CLOCK_TIME_NONE;
+  if (gstp_query_position_from_wall_clock(p, &wall_ns) &&
+      GST_CLOCK_TIME_IS_VALID(wall_ns)) {
+    const int64_t ms = (int64_t)(wall_ns / GST_MSECOND);
+    if (gstp_position_ms_sane(p, ms)) {
+      return ms;
+    }
+  }
+  pos = GST_CLOCK_TIME_NONE;
+  if (gstp_query_position_from_clock(p, &pos)) {
+    const int64_t ms = (int64_t)(pos / GST_MSECOND);
+    if (gstp_position_ms_sane(p, ms)) {
+      return ms;
+    }
+  }
+  return (int64_t)-1;
+}
+
+static gboolean gstp_query_stream_position(GstpPlayer *p, gint64 *pos) {
+  const int64_t ms = gstp_pick_display_position_ms(p);
+  if (ms < 0) {
     return (gboolean)0;
   }
-  if (gstp_query_position_on_element(p->pipeline, pos)) {
-    const int64_t ms = (int64_t)(*pos / GST_MSECOND);
-    if (gstp_position_ms_sane(p, ms)) {
-      return (gboolean)1;
-    }
-  }
-  if (gstp_query_position_on_playsink(p, pos)) {
-    const int64_t ms = (int64_t)(*pos / GST_MSECOND);
-    if (gstp_position_ms_sane(p, ms)) {
-      return (gboolean)1;
-    }
-  }
-#if !defined(__ANDROID__)
-  if (p->appsink && gstp_query_position_on_element(p->appsink, pos)) {
-    const int64_t ms = (int64_t)(*pos / GST_MSECOND);
-    if (gstp_position_ms_sane(p, ms)) {
-      return (gboolean)1;
-    }
-  }
-#endif
-  if (gstp_query_position_from_clock(p, pos)) {
-    const int64_t ms = (int64_t)(*pos / GST_MSECOND);
-    if (gstp_position_ms_sane(p, ms)) {
-      return (gboolean)1;
-    }
-  }
-  return (gboolean)0;
+  *pos = ms * GST_MSECOND;
+  return (gboolean)1;
 }
 
 void gstp_media_sync_wall_clock(GstpPlayer *p) {
@@ -319,8 +351,49 @@ void gstp_media_note_frame_pts(GstpPlayer *p, GstClockTime pts) {
     return;
   }
   const int64_t ms = (int64_t)(pts / GST_MSECOND);
+  /* Drop pre-seek frames still in the appsink queue after FLUSH. */
+  if (p->scrub_hold_until_us == 0 && p->position_ms > 1000 &&
+      ms + 1000 < p->position_ms) {
+    return;
+  }
+  if (p->scrub_hold_until_us > 0) {
+    const int64_t delta = ms > p->scrub_hold_target_ms
+                              ? ms - p->scrub_hold_target_ms
+                              : p->scrub_hold_target_ms - ms;
+    if (delta <= 2000) {
+      p->scrub_hold_until_us = 0;
+    }
+  }
   p->last_frame_pts_ms = ms;
-  gstp_media_set_position_ms(p, ms);
+  /* Do not touch position_ms here — that prevents position_tick from emitting.
+   * Coalesce a safe emit onto the gstp-gst main context instead. */
+  gstp_schedule_position_emit(p);
+}
+
+static gboolean gstp_position_emit_idle_cb(gpointer user_data) {
+  GstpPlayer *p = user_data;
+  p->position_emit_idle_id = 0;
+  if (!p->suppress_timing_emit) {
+    gstp_media_update_timing(p);
+  }
+  return G_SOURCE_REMOVE;
+}
+
+void gstp_schedule_position_emit(GstpPlayer *p) {
+  if (!p || p->suppress_timing_emit) {
+    return;
+  }
+  if (p->position_emit_idle_id != 0) {
+    return;
+  }
+  GstpRuntime *rt = gstp_runtime();
+  if (!rt->initialized || rt->ctx == NULL) {
+    return;
+  }
+  GSource *source = g_idle_source_new();
+  g_source_set_callback(source, gstp_position_emit_idle_cb, p, NULL);
+  p->position_emit_idle_id = g_source_attach(source, rt->ctx);
+  g_source_unref(source);
 }
 
 void gstp_media_update_timing(GstpPlayer *p) {
@@ -345,7 +418,9 @@ void gstp_media_update_timing(GstpPlayer *p) {
 
 static gboolean gstp_position_tick(gpointer user_data) {
   GstpPlayer *p = user_data;
-  gstp_media_update_timing(p);
+  if (!p->suppress_timing_emit) {
+    gstp_media_update_timing(p);
+  }
   return G_SOURCE_CONTINUE;
 }
 
@@ -384,14 +459,15 @@ static gboolean gstp_bus_on_message(GstBus *bus, GstMessage *msg,
         (p->duration_ms <= 0 || p->position_ms > p->duration_ms)) {
       gstp_media_set_duration_ms(p, p->position_ms);
     }
-    if (p->looping) {
-      gstp_pipeline_play(p);
-    } else {
+    /* App layer handles looping via open(); always emit EOS. */
+    if (!p->looping) {
       p->desired_playing = false;
       p->pending_auto_play = false;
+      p->replay_preroll = false;
+      p->replay_preroll_since_us = 0;
       gstp_player_set_state(p, GSTP_STATE_COMPLETED);
-      gstp_player_emit(p, GSTP_EVENT_EOS, "");
     }
+    gstp_player_emit(p, GSTP_EVENT_EOS, "");
     break;
   case GST_MESSAGE_STATE_CHANGED: {
     if (GST_MESSAGE_SRC(msg) != GST_OBJECT(p->pipeline)) {
@@ -405,9 +481,25 @@ static gboolean gstp_bus_on_message(GstBus *bus, GstMessage *msg,
       gstp_pipeline_refresh_tracks(p);
       gstp_pipeline_update_seekable(p);
       if (new_s == GST_STATE_PLAYING) {
-        gstp_media_sync_wall_clock(p);
+        p->suppress_timing_emit = false;
+        if (p->replay_preroll &&
+            (!p->is_uri || p->buffering_percent >= 100)) {
+          p->replay_preroll = false;
+          p->replay_preroll_since_us = 0;
+          p->buffering_percent = 100;
+          gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
+        }
+        if (p->position_ms <= 0 && p->last_frame_pts_ms < 0) {
+          p->position_ms = 0;
+          p->play_position_origin_ms = 0;
+          p->play_wall_origin_us = g_get_monotonic_time();
+        } else {
+          gstp_media_sync_wall_clock(p);
+        }
       }
-      gstp_media_update_timing(p);
+      if (!p->suppress_timing_emit) {
+        gstp_media_update_timing(p);
+      }
     }
     gstp_player_set_state(p, map_gst_state(p, new_s));
     break;
@@ -420,15 +512,27 @@ static gboolean gstp_bus_on_message(GstBus *bus, GstMessage *msg,
     } else if (percent > 100) {
       percent = 100;
     }
+    /* Local/asset pipelines do not enable use-buffering; spurious 0–99%
+     * messages after rewind would stick UI on loading forever. */
+    if (!p->is_uri) {
+      if (percent >= 100) {
+        p->buffering_percent = 100;
+        gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
+      }
+      break;
+    }
     p->buffering_percent = percent;
     if (percent < 100) {
-      /* Match playbin usage: force PAUSED only for URI/network-style buffering.
-       * Local/asset transient buffering should not interrupt decode state. */
-      if (p->is_uri && p->desired_playing && p->pipeline) {
+      /* Standard playbin network buffering: pause until cached, then resume. */
+      if (p->desired_playing && p->pipeline) {
         gst_element_set_state(p->pipeline, GST_STATE_PAUSED);
       }
       gstp_player_set_state(p, GSTP_STATE_BUFFERING);
     } else if (p->desired_playing) {
+      if (p->replay_preroll) {
+        p->replay_preroll = false;
+        p->replay_preroll_since_us = 0;
+      }
       if (p->pending_rate_seek) {
         p->pending_rate_seek = false;
         (void)gstp_pipeline_apply_rate(p);
@@ -525,7 +629,7 @@ void gstp_bus_attach(GstpPlayer *p) {
   gst_object_unref(bus);
 
   if (p->position_timer_id == 0) {
-    GSource *timer = g_timeout_source_new(200);
+    GSource *timer = g_timeout_source_new(100);
     g_source_set_callback(timer, gstp_position_tick, p, NULL);
     p->position_timer_id = g_source_attach(timer, rt->ctx);
     g_source_unref(timer);
@@ -549,4 +653,5 @@ void gstp_bus_detach(GstpPlayer *p) {
   GstpRuntime *rt = gstp_runtime();
   gstp_source_remove_on_ctx(rt->ctx, &p->bus_watch_id);
   gstp_source_remove_on_ctx(rt->ctx, &p->position_timer_id);
+  gstp_source_remove_on_ctx(rt->ctx, &p->position_emit_idle_id);
 }

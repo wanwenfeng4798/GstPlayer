@@ -21,7 +21,7 @@ class ScrubController extends ChangeNotifier {
   static const dragSafetyMs = 300;
 
   /// seek 落定超时（毫秒）/ Seek settle timeout in milliseconds.
-  static const seekSettleMs = 1500;
+  static const seekSettleMs = 3000;
 
   final PlaybackControlsModel model;
   final VoidCallback onInteract;
@@ -31,7 +31,8 @@ class ScrubController extends ChangeNotifier {
   bool _seeking = false;
   Timer? _seekTimeout;
 
-  double _seekToleranceMs(double durMs) => math.max(400.0, durMs * 0.01);
+  double _seekToleranceMs(double durMs) =>
+      math.max(2500.0, durMs * 0.05);
 
   bool _isNearPosition(double fraction, double durMs, double posMs) {
     if (durMs <= 0) return true;
@@ -116,6 +117,11 @@ class ScrubController extends ChangeNotifier {
     _seeking = true;
     model.seek(Duration(milliseconds: (v * durMs).round()));
     _armSeekSettleTimeout();
+  }
+
+  /// 重置拖拽/seek 状态（切源时调用）/ Clears drag/seek state (call on media switch).
+  void reset() {
+    _clearSeek();
   }
 
   /// 解除 model 监听并释放 / Removes model listener and disposes.

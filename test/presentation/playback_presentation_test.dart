@@ -94,6 +94,7 @@ void main() {
       model = FakePlaybackPresentationModel(
         state: PlayerState.buffering,
         bufferingPercent: 50,
+        hideVideoSurface: true,
       );
       aspectRatioMode = AspectRatioMode.fit;
 
@@ -132,19 +133,21 @@ void main() {
 
       model.setState(PlayerState.playing);
       model.setBufferingPercent(100);
+      model.setHideVideoSurface(false);
       await tester.pumpAndSettle();
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
       debugDefaultTargetPlatformOverride = null;
     });
 
-    testWidgets('shows loading chrome during rebuffer while playing', (
+    testWidgets('hides loading chrome during playing with partial buffering', (
       tester,
     ) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
       model = FakePlaybackPresentationModel(
         state: PlayerState.playing,
         bufferingPercent: 50,
+        presentationVideoSize: const Size(640, 360),
       );
       aspectRatioMode = AspectRatioMode.fit;
 
@@ -164,8 +167,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.text('50%'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
       debugDefaultTargetPlatformOverride = null;
     });
 
@@ -176,6 +178,7 @@ void main() {
       model = FakePlaybackPresentationModel(
         state: PlayerState.buffering,
         bufferingPercent: 42,
+        hideVideoSurface: true,
       );
       aspectRatioMode = AspectRatioMode.fit;
 
@@ -221,6 +224,7 @@ void main() {
       model = FakePlaybackPresentationModel(
         state: PlayerState.buffering,
         bufferingPercent: 50,
+        hideVideoSurface: true,
       );
       aspectRatioMode = AspectRatioMode.fit;
 
@@ -257,6 +261,7 @@ void main() {
       model = FakePlaybackPresentationModel(
         state: PlayerState.buffering,
         bufferingPercent: 50,
+        hideVideoSurface: true,
       );
       aspectRatioMode = AspectRatioMode.fit;
 
@@ -480,6 +485,35 @@ void main() {
       );
       expect(find.byType(FittedBox), findsOneWidget);
 
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('shows black cover while hideVideoSurface', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+      model = FakePlaybackPresentationModel(
+        hideVideoSurface: true,
+        state: PlayerState.buffering,
+        bufferingPercent: 0,
+      );
+      aspectRatioMode = AspectRatioMode.fit;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 180,
+              child: PlaybackPresentation(
+                model: model,
+                aspectRatioMode: aspectRatioMode,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ColoredBox), findsWidgets);
       debugDefaultTargetPlatformOverride = null;
     });
   });

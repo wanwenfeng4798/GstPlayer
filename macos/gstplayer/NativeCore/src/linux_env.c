@@ -69,6 +69,20 @@ void gstp_setup_linux_env(void) {
       break;
     }
   }
+
+  static const char *gio_paths[] = {
+      "/usr/lib/x86_64-linux-gnu/gio/modules",
+      "/usr/lib/aarch64-linux-gnu/gio/modules",
+      "/usr/lib/gio/modules",
+      "/usr/local/lib/gio/modules",
+      NULL,
+  };
+  for (int i = 0; gio_paths[i]; i++) {
+    if (gstp_dir_exists(gio_paths[i])) {
+      gstp_setenv_copy("GIO_MODULE_DIR", gio_paths[i]);
+      break;
+    }
+  }
 }
 
 #endif /* __linux__ && !__ANDROID__ */

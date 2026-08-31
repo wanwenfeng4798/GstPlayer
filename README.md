@@ -65,6 +65,9 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 
 - Local files, Flutter assets, and network URLs (`http(s)://`, `rtsp://`, ...).
 - Play / pause / stop / seek / looping.
+- EOS replay and looping use the same native rewind path for local files and
+  progressive network streams (MOV / AVI / MP4); scrub seeks use accurate
+  positioning by default.
 - Volume (popup vertical slider with live **0–100** readout), mute, and playback speed.
 - Bilibili-inspired two-row chrome: pink progress (`#FB7299`), remaining time,
   speed / settings / volume / fullscreen, then danmaku input + CC; auto-hiding.

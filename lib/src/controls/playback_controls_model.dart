@@ -9,6 +9,9 @@ import '../model/video_source.dart';
 /// 由 [GstPlayerController] 实现；[VideoControls] 及其子组件依赖此接口。
 /// Implemented by [GstPlayerController]; [VideoControls] and child widgets depend on it.
 abstract class PlaybackControlsModel implements Listenable {
+  /// 当前媒体代数；[open] 时递增，供 scrub 等 UI 重置 / Media generation; increments on [open].
+  int get mediaGeneration => 0;
+
   PlayerState get state;
   int get bufferingPercent;
   bool get isPlaying;

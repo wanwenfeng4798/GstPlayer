@@ -230,6 +230,9 @@ class _GstVideoViewState extends State<GstVideoView> {
     }
 
     final state = widget.controller.state;
+    if (state == PlayerState.buffering) {
+      _lastFramePng = null;
+    }
     if (widget.keepLastFrame &&
         state == PlayerState.completed &&
         _lastState != PlayerState.completed &&
@@ -384,7 +387,9 @@ class _GstVideoViewState extends State<GstVideoView> {
                   items: widget.danmaku,
                   position: widget.controller.position,
                   enabled: widget.danmakuEnabled,
-                  isPlaying: widget.controller.state == PlayerState.playing,
+                  isPlaying:
+                      widget.controller.state == PlayerState.playing &&
+                      widget.controller.bufferingPercent >= 100,
                 );
               },
             ),

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../domain/player_events.dart';
 import '../enum/video_rotation.dart';
@@ -25,6 +26,15 @@ abstract class PlaybackPresentationModel implements Listenable {
 
   /// 缓冲进度 0–100 / Buffering percent 0–100.
   int get bufferingPercent;
+
+  /// 加载中且尚无视频尺寸时隐藏 Texture / Hide texture while loading with no video size yet.
+  bool get hideVideoSurface;
+
+  /// 切源/重播加载期显示 buffering 指示器 / Loading spinner during source switch or replay reload.
+  bool get showLoadingOverlay;
+
+  /// 当前视频帧尺寸 / Decoded video frame size.
+  Size get presentationVideoSize;
 
   /// 同步宽高比模式至 native pipeline / Syncs aspect ratio mode to the native pipeline.
   Future<void> setAspectRatioMode(AspectRatioMode mode);

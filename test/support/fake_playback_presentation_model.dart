@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:gstplayer/src/enum/video_rotation.dart';
 import 'package:gstplayer/src/presentation/playback_presentation_model.dart';
 import 'package:gstplayer/src/domain/player_events.dart';
@@ -13,6 +14,8 @@ class FakePlaybackPresentationModel extends ChangeNotifier
     this.videoRotation = VideoRotation.deg0,
     this.state = PlayerState.idle,
     this.bufferingPercent = 100,
+    this.hideVideoSurface = false,
+    this.presentationVideoSize = Size.zero,
   });
 
   @override
@@ -33,6 +36,15 @@ class FakePlaybackPresentationModel extends ChangeNotifier
   @override
   int bufferingPercent;
 
+  @override
+  bool hideVideoSurface;
+
+  @override
+  bool get showLoadingOverlay => hideVideoSurface;
+
+  @override
+  Size presentationVideoSize;
+
   AspectRatioMode? lastAspectRatioMode;
   int setAspectRatioModeCallCount = 0;
 
@@ -40,6 +52,11 @@ class FakePlaybackPresentationModel extends ChangeNotifier
   Future<void> setAspectRatioMode(AspectRatioMode mode) async {
     setAspectRatioModeCallCount++;
     lastAspectRatioMode = mode;
+  }
+
+  void setHideVideoSurface(bool value) {
+    hideVideoSurface = value;
+    notifyListeners();
   }
 
   void setState(PlayerState value) {

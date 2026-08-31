@@ -111,7 +111,8 @@ GSTP_EXPORT int32_t gstp_player_load_asset(GstpPlayerId id,
 GSTP_EXPORT int32_t gstp_player_play(GstpPlayerId id);
 GSTP_EXPORT int32_t gstp_player_pause(GstpPlayerId id);
 GSTP_EXPORT int32_t gstp_player_stop(GstpPlayerId id);
-GSTP_EXPORT int32_t gstp_player_seek(GstpPlayerId id, int64_t position_ms);
+GSTP_EXPORT int32_t gstp_player_seek(GstpPlayerId id, int64_t position_ms,
+                                     bool accurate);
 GSTP_EXPORT int32_t gstp_player_set_volume(GstpPlayerId id, double volume);
 GSTP_EXPORT int32_t gstp_player_set_mute(GstpPlayerId id, bool mute);
 GSTP_EXPORT int32_t gstp_player_set_speed(GstpPlayerId id, double speed);

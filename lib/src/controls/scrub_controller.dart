@@ -32,7 +32,7 @@ class ScrubController extends ChangeNotifier {
   Timer? _seekTimeout;
 
   double _seekToleranceMs(double durMs) =>
-      math.max(2500.0, durMs * 0.05);
+      math.max(3000.0, durMs * 0.05);
 
   bool _isNearPosition(double fraction, double durMs, double posMs) {
     if (durMs <= 0) return true;
@@ -64,8 +64,37 @@ class ScrubController extends ChangeNotifier {
   void _armDragSafetyTimeout() {
     _seekTimeout?.cancel();
     _seekTimeout = Timer(const Duration(milliseconds: dragSafetyMs), () {
-      if (_dragging && !_seeking) _clearSeek();
+      if (!_dragging || _seeking) return;
+      final target = _dragValue;
+      final durMs = model.duration.inMilliseconds.toDouble();
+      if (target == null || durMs <= 0) {
+        _clearSeek();
+        return;
+      }
+      final posMs = model.position.inMilliseconds.toDouble();
+      if (_isNearPosition(target, durMs, posMs)) {
+        _clearSeek();
+      } else {
+        _commitSeek(target, durMs);
+      }
     });
+  }
+
+  void _commitSeek(double v, double durMs) {
+    _dragging = false;
+    _dragValue = v;
+    notifyListeners();
+    final pos = model.position.inMilliseconds.toDouble();
+    if (_isNearPosition(v, durMs, pos)) {
+      _clearSeek();
+      return;
+    }
+    _seeking = true;
+    model.seek(
+      Duration(milliseconds: (v * durMs).round()),
+      accurate: true,
+    );
+    _armSeekSettleTimeout();
   }
 
   void _armSeekSettleTimeout() {
@@ -84,12 +113,18 @@ class ScrubController extends ChangeNotifier {
   }
 
   /// 用户是否在拖拽或异步 seek 尚未落定 / Whether user is dragging or async seek is settling.
-  bool get isScrubbing => _dragValue != null;
+  bool get isScrubbing => _dragValue != null || _dragging;
 
   /// 开始拖拽 / Seek drag started.
   void onSeekStart() {
     onInteract();
     _dragging = true;
+    final durMs = model.duration.inMilliseconds.toDouble();
+    final posMs = model.position.inMilliseconds.toDouble();
+    if (durMs > 0) {
+      _dragValue = (posMs / durMs).clamp(0.0, 1.0);
+      notifyListeners();
+    }
     _armDragSafetyTimeout();
   }
 
@@ -106,17 +141,7 @@ class ScrubController extends ChangeNotifier {
   /// 松手并发起 seek / Drag ended; initiates seek.
   void onSeekEnd(double v, double durMs) {
     if (durMs <= 0) return;
-    _dragging = false;
-    _dragValue = v;
-    notifyListeners();
-    final pos = model.position.inMilliseconds.toDouble();
-    if (_isNearPosition(v, durMs, pos)) {
-      _clearSeek();
-      return;
-    }
-    _seeking = true;
-    model.seek(Duration(milliseconds: (v * durMs).round()));
-    _armSeekSettleTimeout();
+    _commitSeek(v, durMs);
   }
 
   /// 重置拖拽/seek 状态（切源时调用）/ Clears drag/seek state (call on media switch).

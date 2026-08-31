@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -75,7 +76,12 @@ class PlaybackSession extends ChangeNotifier
   /// True after [open] until first frame is playable; ignores bogus preroll position.
   bool _loadingMedia = false;
 
+  /// Pins UI position after user seek until native timing catches up.
+  int? _seekPinMs;
+  DateTime? _seekPinUntil;
+
   /// 每次 [open] 递增；供 View 在切换媒体时重置 UI 状态 / Increments on each [open]; lets views reset UI state on media switch.
+  @override
   int get mediaGeneration => _mediaGeneration;
 
   /// 加载期遮挡视频表面（切源/重播），rebuffer 不遮挡 / Covers video during load; not mid-playback rebuffer.
@@ -323,12 +329,20 @@ class PlaybackSession extends ChangeNotifier
   /// Soft-fails: a native seek error keeps optimistic position and does not
   /// promote the session to [PlayerState.error] (scrub must stay recoverable).
   @override
-  Future<void> seek(Duration position) async {
+  Future<void> seek(Duration position, {bool accurate = false}) async {
+    final beforeSeek = _position;
+    final ms = position.inMilliseconds;
+    _seekPinMs = ms;
+    _seekPinUntil = DateTime.now().add(const Duration(seconds: 5));
     _previewSeek(position, showBuffering: false);
     try {
-      await _port.seek(position);
+      await _port.seek(position, accurate: accurate);
     } catch (e) {
       debugPrint('gstplayer: seek soft-fail: $e');
+      _seekPinMs = null;
+      _seekPinUntil = null;
+      _position = beforeSeek;
+      notifyListeners();
     }
   }
 
@@ -451,6 +465,8 @@ class PlaybackSession extends ChangeNotifier
     _state = PlayerState.buffering;
     _position = Duration.zero;
     _duration = Duration.zero;
+    _seekPinMs = null;
+    _seekPinUntil = null;
     _isSeekable = true;
     _volume = 1.0;
     _muted = false;
@@ -512,8 +528,26 @@ class PlaybackSession extends ChangeNotifier
         if (_loadingMedia) {
           break;
         }
+        var eventMs = event.positionMs;
+        if (_seekPinMs != null && _seekPinUntil != null) {
+          if (DateTime.now().isBefore(_seekPinUntil!)) {
+            final pin = _seekPinMs!;
+            final delta = (eventMs - pin).abs();
+            final tol = math.max(3000, (_duration.inMilliseconds * 0.05).round());
+            if (delta > tol) {
+              break;
+            }
+            if (delta <= tol) {
+              _seekPinMs = null;
+              _seekPinUntil = null;
+            }
+          } else {
+            _seekPinMs = null;
+            _seekPinUntil = null;
+          }
+        }
         _position = _clampPosition(
-          Duration(milliseconds: event.positionMs),
+          Duration(milliseconds: eventMs),
           _duration,
         );
       case PlayerEventKind.videoSize:

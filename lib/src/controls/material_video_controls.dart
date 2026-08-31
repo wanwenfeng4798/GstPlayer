@@ -74,6 +74,7 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
     if (gen != _lastMediaGeneration) {
       _lastMediaGeneration = gen;
       _scrub.reset();
+      _preview.clear();
     }
   }
 

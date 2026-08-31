@@ -183,6 +183,16 @@ void gstp_media_set_position_ms(GstpPlayer *p, int64_t position_ms) {
     return;
   }
   const int64_t ms = gstp_clamp_position_ms(p, position_ms);
+  if (p->scrub_hold_until_us > 0 &&
+      g_get_monotonic_time() < p->scrub_hold_until_us) {
+    const int64_t delta = ms > p->scrub_hold_target_ms
+                              ? ms - p->scrub_hold_target_ms
+                              : p->scrub_hold_target_ms - ms;
+    if (delta > 3000) {
+      return;
+    }
+    p->scrub_hold_until_us = 0;
+  }
   if (ms == p->position_ms) {
     return;
   }
@@ -351,18 +361,17 @@ void gstp_media_note_frame_pts(GstpPlayer *p, GstClockTime pts) {
     return;
   }
   const int64_t ms = (int64_t)(pts / GST_MSECOND);
-  /* Drop pre-seek frames still in the appsink queue after FLUSH. */
-  if (p->scrub_hold_until_us == 0 && p->position_ms > 1000 &&
-      ms + 1000 < p->position_ms) {
-    return;
-  }
-  if (p->scrub_hold_until_us > 0) {
+  if (p->scrub_hold_until_us > 0 &&
+      g_get_monotonic_time() < p->scrub_hold_until_us) {
     const int64_t delta = ms > p->scrub_hold_target_ms
                               ? ms - p->scrub_hold_target_ms
                               : p->scrub_hold_target_ms - ms;
-    if (delta <= 2000) {
-      p->scrub_hold_until_us = 0;
+    if (delta > 3000) {
+      return;
     }
+    p->scrub_hold_until_us = 0;
+  } else if (p->position_ms > 1000 && ms + 1000 < p->position_ms) {
+    return;
   }
   p->last_frame_pts_ms = ms;
   /* Do not touch position_ms here — that prevents position_tick from emitting.
@@ -568,6 +577,23 @@ static gboolean gstp_bus_on_message(GstBus *bus, GstMessage *msg,
     break;
   case GST_MESSAGE_ASYNC_DONE:
     if (GST_MESSAGE_SRC(msg) == GST_OBJECT(p->pipeline)) {
+      if (p->scrub_hold_until_us > 0 &&
+          g_get_monotonic_time() < p->scrub_hold_until_us) {
+        gint64 pos = GST_CLOCK_TIME_NONE;
+        if (gstp_query_position_on_playsink(p, &pos) ||
+            gst_element_query_position(p->pipeline, GST_FORMAT_TIME, &pos)) {
+          if (GST_CLOCK_TIME_IS_VALID(pos)) {
+            const int64_t ms = (int64_t)(pos / GST_MSECOND);
+            p->scrub_hold_target_ms = ms;
+            p->position_ms = ms;
+            p->last_frame_pts_ms = -1;
+            gstp_media_sync_wall_clock(p);
+            if (!p->suppress_timing_emit) {
+              gstp_player_emit(p, GSTP_EVENT_POSITION_CHANGED, "");
+            }
+          }
+        }
+      }
       gstp_media_update_timing(p);
       gstp_pipeline_update_seekable(p);
     }

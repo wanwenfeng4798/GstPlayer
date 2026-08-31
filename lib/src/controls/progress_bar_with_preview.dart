@@ -45,13 +45,30 @@ class _ProgressBarWithPreviewState extends State<ProgressBarWithPreview> {
   void initState() {
     super.initState();
     widget.preview.setTrack(widget.scrubPreview);
+    widget.scrub.addListener(_onScrubStateChanged);
   }
 
   @override
   void didUpdateWidget(covariant ProgressBarWithPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.scrub != widget.scrub) {
+      oldWidget.scrub.removeListener(_onScrubStateChanged);
+      widget.scrub.addListener(_onScrubStateChanged);
+    }
     if (oldWidget.scrubPreview != widget.scrubPreview) {
       widget.preview.setTrack(widget.scrubPreview);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.scrub.removeListener(_onScrubStateChanged);
+    super.dispose();
+  }
+
+  void _onScrubStateChanged() {
+    if (!widget.scrub.isScrubbing) {
+      widget.preview.clear();
     }
   }
 

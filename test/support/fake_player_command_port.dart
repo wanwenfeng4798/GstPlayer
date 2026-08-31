@@ -25,6 +25,7 @@ class FakePlayerCommandPort implements PlayerCommandPort {
 
   MediaSourceDto? lastLoadedSource;
   Duration? lastSeekPosition;
+  bool? lastSeekAccurate;
   double? lastVolume;
   bool? lastMute;
   AspectRatioMode? lastAspectRatioMode;
@@ -119,11 +120,12 @@ class FakePlayerCommandPort implements PlayerCommandPort {
   Future<void> stop() async {}
 
   @override
-  Future<void> seek(Duration position) async {
+  Future<void> seek(Duration position, {bool accurate = false}) async {
     if (failSeek) {
       throw StateError('seek failed');
     }
     lastSeekPosition = position;
+    lastSeekAccurate = accurate;
   }
 
   @override

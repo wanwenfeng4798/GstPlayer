@@ -36,7 +36,7 @@ abstract class PlayerCommandPort {
   Future<void> stop();
 
   /// 跳转。
-  Future<void> seek(Duration position);
+  Future<void> seek(Duration position, {bool accurate = false});
 
   /// 设置音量 0.0–1.0。
   Future<void> setVolume(double volume);

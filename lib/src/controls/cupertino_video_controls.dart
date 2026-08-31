@@ -74,6 +74,7 @@ class _CupertinoVideoControlsState extends State<CupertinoVideoControls> {
     if (gen != _lastMediaGeneration) {
       _lastMediaGeneration = gen;
       _scrub.reset();
+      _preview.clear();
     }
   }
 

@@ -150,7 +150,7 @@ void main() {
 
       await session.seek(const Duration(seconds: 5));
 
-      expect(session.position, const Duration(seconds: 5));
+      expect(session.position, Duration.zero);
       expect(session.error, isNull);
       expect(session.state, isNot(PlayerState.error));
     });

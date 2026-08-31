@@ -164,6 +164,7 @@ class GstPlayerController extends ChangeNotifier
   bool get hideVideoSurface => _session.hideVideoSurface;
 
   /// 切源/重播加载期显示 loading / Loading overlay during source switch or replay.
+  @override
   bool get showLoadingOverlay => _session.showLoadingOverlay;
 
   /// 当前视频帧尺寸 / Decoded video frame size.
@@ -224,7 +225,8 @@ class GstPlayerController extends ChangeNotifier
 
   /// 跳转到 [position] / Seeks to [position].
   @override
-  Future<void> seek(Duration position) => _session.seek(position);
+  Future<void> seek(Duration position, {bool accurate = false}) =>
+      _session.seek(position, accurate: accurate);
 
   /// 设置音量 [volume]（0.0–1.0）/ Sets volume in 0.0–1.0.
   @override

@@ -81,5 +81,47 @@ void main() {
       await tester.pump(const Duration(milliseconds: 3100));
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('scrub reset hides preview bubble', (tester) async {
+      final theme = VideoControlsTheme.material();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 48,
+              child: ProgressBarWithPreview(
+                model: model,
+                scrub: scrub,
+                preview: preview,
+                theme: theme,
+                previewBarHeight: 48,
+                builder: (context, snap) => Slider(
+                  value: snap.displayValue,
+                  onChangeStart: snap.enabled
+                      ? (_) => snap.onSeekStart?.call()
+                      : null,
+                  onChanged: snap.onSeekChanged,
+                  onChangeEnd: snap.onSeekEnd,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      scrub.onSeekStart();
+      preview.updatePreview(
+        fraction: 0.5,
+        duration: const Duration(seconds: 60),
+      );
+      await tester.pump();
+      expect(preview.visible, isTrue);
+
+      scrub.reset();
+      await tester.pump();
+      expect(preview.visible, isFalse);
+    });
   });
 }

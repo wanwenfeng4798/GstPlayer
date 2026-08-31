@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:gstplayer/src/enum/video_rotation.dart';
 import 'package:gstplayer/src/presentation/playback_presentation_model.dart';

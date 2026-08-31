@@ -158,10 +158,10 @@ class FfiPlayerCommandPort implements PlayerCommandPort {
   }
 
   @override
-  Future<void> seek(Duration position) async {
+  Future<void> seek(Duration position, {bool accurate = false}) async {
     _check(
       await _native<int>(
-        FfiIntOpRequest('seek', _id, position.inMilliseconds, false),
+        FfiIntOpRequest('seek', _id, position.inMilliseconds, accurate),
       ),
       'seek',
     );

@@ -29,6 +29,13 @@ void main() {
       expect(scrub.sliderValue(100_000, 10_000), closeTo(0.1, 0.001));
     });
 
+    test('onSeekStart pins slider at current position before first move', () {
+      scrub.onSeekStart();
+
+      expect(scrub.isScrubbing, isTrue);
+      expect(scrub.sliderValue(100_000, 60_000), closeTo(0.1, 0.001));
+    });
+
     test('onSeekChanged pins slider value while dragging', () {
       scrub.onSeekStart();
       scrub.onSeekChanged(0.5, 100_000);
@@ -43,6 +50,7 @@ void main() {
 
       expect(model.seekCallCount, 1);
       expect(model.lastSeek, const Duration(seconds: 50));
+      expect(model.lastSeekAccurate, isTrue);
       expect(scrub.isScrubbing, isTrue);
     });
 
@@ -61,6 +69,26 @@ void main() {
 
       model.setPosition(const Duration(seconds: 50));
 
+      expect(scrub.isScrubbing, isFalse);
+    });
+
+    test('drag safety timeout commits seek when position is far from target', () async {
+      scrub.onSeekStart();
+      scrub.onSeekChanged(0.5, 100_000);
+      expect(model.seekCallCount, 0);
+
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+
+      expect(model.seekCallCount, 1);
+      expect(model.lastSeek, const Duration(seconds: 50));
+      expect(scrub.isScrubbing, isTrue);
+    });
+
+    test('drag safety timeout clears when target is near current position', () async {
+      scrub.onSeekStart();
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+
+      expect(model.seekCallCount, 0);
       expect(scrub.isScrubbing, isFalse);
     });
   });

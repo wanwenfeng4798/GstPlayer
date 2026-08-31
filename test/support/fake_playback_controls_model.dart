@@ -55,6 +55,7 @@ class FakePlaybackControlsModel extends ChangeNotifier
   List<MediaTrack> get tracks => List<MediaTrack>.unmodifiable(_tracks);
 
   Duration? lastSeek;
+  bool? lastSeekAccurate;
   int seekCallCount = 0;
   int togglePlayPauseCallCount = 0;
   VideoRotation? lastVideoRotation;
@@ -120,9 +121,10 @@ class FakePlaybackControlsModel extends ChangeNotifier
   }
 
   @override
-  Future<void> seek(Duration position) async {
+  Future<void> seek(Duration position, {bool accurate = false}) async {
     seekCallCount++;
     lastSeek = position;
+    lastSeekAccurate = accurate;
   }
 
   @override

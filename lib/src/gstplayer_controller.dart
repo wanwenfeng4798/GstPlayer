@@ -225,8 +225,7 @@ class GstPlayerController extends ChangeNotifier
 
   /// 跳转到 [position] / Seeks to [position].
   @override
-  Future<void> seek(Duration position, {bool accurate = false}) =>
-      _session.seek(position, accurate: accurate);
+  Future<void> seek(Duration position) => _session.seek(position);
 
   /// 设置音量 [volume]（0.0–1.0）/ Sets volume in 0.0–1.0.
   @override

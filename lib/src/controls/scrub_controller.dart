@@ -90,10 +90,7 @@ class ScrubController extends ChangeNotifier {
       return;
     }
     _seeking = true;
-    model.seek(
-      Duration(milliseconds: (v * durMs).round()),
-      accurate: true,
-    );
+    model.seek(Duration(milliseconds: (v * durMs).round()));
     _armSeekSettleTimeout();
   }
 

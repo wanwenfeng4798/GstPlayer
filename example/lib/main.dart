@@ -74,8 +74,8 @@ class _PlayerPageState extends State<PlayerPage> {
     'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
     'https://test-videos.co.uk/vids/bigbuckbunny/mkv/360/Big_Buck_Bunny_360_10s_1MB.mkv',
     'https://test-videos.co.uk/vids/bigbuckbunny/webm/vp9/360/Big_Buck_Bunny_360_10s_1MB.webm',
-    'https://filesamples.com/samples/video/mov/sample_640x360.mov',
-    'https://filesamples.com/samples/video/avi/sample_640x360.avi',
+    'https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mov-file.mov',
+    'https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-avi-file.avi',
     'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
   ];
 

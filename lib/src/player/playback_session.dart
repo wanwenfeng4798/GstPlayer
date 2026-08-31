@@ -329,14 +329,14 @@ class PlaybackSession extends ChangeNotifier
   /// Soft-fails: a native seek error keeps optimistic position and does not
   /// promote the session to [PlayerState.error] (scrub must stay recoverable).
   @override
-  Future<void> seek(Duration position, {bool accurate = false}) async {
+  Future<void> seek(Duration position) async {
     final beforeSeek = _position;
     final ms = position.inMilliseconds;
     _seekPinMs = ms;
     _seekPinUntil = DateTime.now().add(const Duration(seconds: 5));
     _previewSeek(position, showBuffering: false);
     try {
-      await _port.seek(position, accurate: accurate);
+      await _port.seek(position);
     } catch (e) {
       debugPrint('gstplayer: seek soft-fail: $e');
       _seekPinMs = null;

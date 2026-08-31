@@ -42,7 +42,7 @@ abstract class PlaybackControlsModel implements Listenable {
   Future<void> toggleMuted();
   Future<void> setLooping(bool looping);
   Future<void> setSpeed(double speed);
-  Future<void> seek(Duration position, {bool accurate = false});
+  Future<void> seek(Duration position);
 
   /// 设置音量 0.0–1.0 / Sets volume in 0.0–1.0.
   Future<void> setVolume(double volume);

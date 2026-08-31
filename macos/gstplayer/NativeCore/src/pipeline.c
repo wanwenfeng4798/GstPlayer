@@ -1103,7 +1103,7 @@ static gboolean gstp_flush_seek_with_ready_fallback(GstpPlayer *p, gint64 pos_ns
                                                     gdouble rate,
                                                     GstSeekFlags mode_flags,
                                                     gint64 tolerance_ns) {
-  if (gstp_flush_seek_verified(p, pos_ns, rate, mode_flags, tolerance_ns)) {
+  if (gstp_flush_seek(p, pos_ns, rate, mode_flags)) {
     return (gboolean)1;
   }
   /* qtdemux / avidemux keep demuxer EOS until the pipeline drops to READY. */
@@ -1113,7 +1113,13 @@ static gboolean gstp_flush_seek_with_ready_fallback(GstpPlayer *p, gint64 pos_ns
   if (!gstp_set_pipeline_state_and_wait(p->pipeline, GST_STATE_PAUSED)) {
     return (gboolean)0;
   }
-  return gstp_flush_seek_verified(p, pos_ns, rate, mode_flags, tolerance_ns);
+  if (gstp_flush_seek(p, pos_ns, rate, mode_flags)) {
+    return (gboolean)1;
+  }
+  if (tolerance_ns > 0) {
+    return gstp_flush_seek_verified(p, pos_ns, rate, mode_flags, tolerance_ns);
+  }
+  return (gboolean)0;
 }
 
 static void gstp_emit_rewind_position(GstpPlayer *p) {
@@ -1224,6 +1230,7 @@ int32_t gstp_pipeline_seek_at(GstpPlayer *p, int64_t position_ms, bool accurate)
   if (!p->pipeline) {
     return GSTP_ERR_NOT_READY;
   }
+  (void)accurate;
 
   const gdouble rate = p->speed > 0 ? p->speed : 1.0;
   gint64 pos_ns = (gint64)position_ms * GST_MSECOND;
@@ -1231,33 +1238,40 @@ int32_t gstp_pipeline_seek_at(GstpPlayer *p, int64_t position_ms, bool accurate)
     pos_ns = 0;
   }
 
-  /* Verified flush seek + READY fallback for qtdemux/avidemux (MOV/AVI).
-   * gst_element_seek_simple alone can return TRUE before the demuxer lands. */
-  GstSeekFlags mode = GST_SEEK_FLAG_KEY_UNIT;
-  gint64 land_tol = (gint64)(5 * GST_SECOND);
-  if (accurate) {
-    mode = GST_SEEK_FLAG_ACCURATE;
-    land_tol = (gint64)(500 * GST_MSECOND);
+  GstState pre_seek = GST_STATE_NULL;
+  (void)gst_element_get_state(p->pipeline, &pre_seek, NULL, 0);
+  const bool was_playing = pre_seek == GST_STATE_PLAYING;
+  const bool resume_playing = p->desired_playing || was_playing;
+
+  /* qtdemux/avidemux (MOV/AVI) are more reliable when paused for the seek. */
+  if (was_playing) {
+    (void)gst_element_set_state(p->pipeline, GST_STATE_PAUSED);
+    (void)gst_element_get_state(p->pipeline, NULL, NULL, 2 * GST_SECOND);
   }
 
-  gboolean ok = gstp_flush_seek_verified(p, pos_ns, rate, mode, land_tol);
+  /* Prefer ACCURATE; fall back to KEY_UNIT. Do not require a post-seek position
+   * query to land within a tight window — MOV/AVI often report stale timing. */
+  gboolean ok = gstp_flush_seek(p, pos_ns, rate, GST_SEEK_FLAG_ACCURATE);
   if (!ok) {
-    ok = gstp_flush_seek_with_ready_fallback(p, pos_ns, rate, mode, land_tol);
+    ok = gstp_flush_seek_with_ready_fallback(p, pos_ns, rate,
+                                             GST_SEEK_FLAG_ACCURATE,
+                                             (gint64)GST_SECOND);
   }
-  if (!ok && accurate) {
-    mode = GST_SEEK_FLAG_KEY_UNIT;
-    land_tol = (gint64)GST_SECOND;
-    ok = gstp_flush_seek_verified(p, pos_ns, rate, mode, land_tol);
+  if (!ok) {
+    ok = gstp_flush_seek(p, pos_ns, rate, GST_SEEK_FLAG_KEY_UNIT);
     if (!ok) {
-      ok = gstp_flush_seek_with_ready_fallback(p, pos_ns, rate, mode, land_tol);
+      ok = gstp_flush_seek_with_ready_fallback(p, pos_ns, rate,
+                                               GST_SEEK_FLAG_KEY_UNIT,
+                                               (gint64)GST_SECOND);
     }
   }
   if (!ok) {
+    if (was_playing && p->desired_playing) {
+      (void)gst_element_set_state(p->pipeline, GST_STATE_PLAYING);
+    }
     return GSTP_ERR_FAIL;
   }
 
-  /* Pin the user target until ASYNC_DONE reports the landed keyframe; an
-   * immediate position query still returns the pre-seek location. */
   gstp_begin_scrub_hold(p, position_ms);
   p->buffering_percent = 100;
   gstp_pipeline_update_seekable(p);
@@ -1265,6 +1279,16 @@ int32_t gstp_pipeline_seek_at(GstpPlayer *p, int64_t position_ms, bool accurate)
     gstp_player_emit(p, GSTP_EVENT_POSITION_CHANGED, "");
   }
   gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
+
+  if (resume_playing) {
+    p->desired_playing = true;
+    (void)gst_element_set_state(p->pipeline, GST_STATE_PLAYING);
+    gstp_media_sync_wall_clock(p);
+    gstp_player_set_state(p, GSTP_STATE_PLAYING);
+  } else if (p->player_state == GSTP_STATE_BUFFERING ||
+             p->player_state == GSTP_STATE_COMPLETED) {
+    gstp_player_set_state(p, GSTP_STATE_PAUSED);
+  }
   return GSTP_ERR_OK;
 }
 

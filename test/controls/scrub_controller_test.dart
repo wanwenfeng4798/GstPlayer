@@ -50,7 +50,6 @@ void main() {
 
       expect(model.seekCallCount, 1);
       expect(model.lastSeek, const Duration(seconds: 50));
-      expect(model.lastSeekAccurate, isTrue);
       expect(scrub.isScrubbing, isTrue);
     });
 

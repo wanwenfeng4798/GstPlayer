@@ -14,6 +14,9 @@ static int32_t map_gst_state(GstpPlayer *p, GstState state) {
         p->player_state == GSTP_STATE_PAUSED) {
       return p->player_state;
     }
+    if (p->player_state == GSTP_STATE_COMPLETED && p->desired_playing) {
+      return GSTP_STATE_PLAYING;
+    }
     return GSTP_STATE_READY;
   case GST_STATE_PAUSED:
     /* playbin pauses itself while download-buffering; keep BUFFERING visible. */
@@ -138,42 +141,52 @@ static gboolean gstp_duration_ns_sane(gint64 dur) {
   return dur <= max ? (gboolean)1 : (gboolean)0;
 }
 
-static gboolean gstp_query_factory_duration(GstpPlayer *p,
-                                            const char *factory_name,
-                                            gint64 *dur) {
-  if (!p->pipeline || !GST_IS_BIN(p->pipeline) || !factory_name) {
+static gboolean gstp_position_ms_sane(const GstpPlayer *p, int64_t ms) {
+  if (ms < 0) {
     return (gboolean)0;
   }
-  GstIterator *it = gst_bin_iterate_recurse(GST_BIN(p->pipeline));
-  if (!it) {
+  const int64_t max_abs = (int64_t)(7LL * 24 * 3600 * 1000);
+  if (ms > max_abs) {
     return (gboolean)0;
   }
-  gboolean found = (gboolean)0;
-  GValue item = G_VALUE_INIT;
-  GstIteratorResult res;
-  while ((res = gst_iterator_next(it, &item)) == GST_ITERATOR_OK) {
-    GstElement *element = GST_ELEMENT(g_value_get_object(&item));
-    GstElementFactory *factory =
-        element ? gst_element_get_factory(element) : NULL;
-    if (factory) {
-      const gchar *fname =
-          gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory));
-      if (strcmp(fname, factory_name) == 0) {
-        gint64 value = GST_CLOCK_TIME_NONE;
-        if (gstp_query_duration_on_element(element, &value) &&
-            gstp_duration_ns_sane(value)) {
-          *dur = value;
-          found = (gboolean)1;
-          g_value_reset(&item);
-          break;
-        }
-      }
+  /* Before duration is known, playbin often reports bogus preroll timestamps
+   * (notably network MOV). Reject large values until demux segment arrives. */
+  if (p->duration_ms <= 0 && ms > 60000) {
+    return (gboolean)0;
+  }
+  if (p->duration_ms > 0) {
+    const int64_t slack = p->duration_ms / 20 + 500;
+    if (ms > p->duration_ms + slack) {
+      return (gboolean)0;
     }
-    g_value_reset(&item);
   }
-  g_value_unset(&item);
-  gst_iterator_free(it);
-  return found;
+  return (gboolean)1;
+}
+
+static int64_t gstp_clamp_position_ms(GstpPlayer *p, int64_t ms) {
+  if (!gstp_position_ms_sane(p, ms)) {
+    if (p->duration_ms > 0) {
+      return ms < 0 ? 0 : p->duration_ms;
+    }
+    return ms < 0 ? 0 : 0;
+  }
+  if (p->duration_ms > 0 && ms > p->duration_ms) {
+    return p->duration_ms;
+  }
+  return ms < 0 ? 0 : ms;
+}
+
+void gstp_media_set_position_ms(GstpPlayer *p, int64_t position_ms) {
+  if (!p) {
+    return;
+  }
+  const int64_t ms = gstp_clamp_position_ms(p, position_ms);
+  if (ms == p->position_ms) {
+    return;
+  }
+  p->position_ms = ms;
+  gstp_media_sync_wall_clock(p);
+  gstp_player_emit(p, GSTP_EVENT_POSITION_CHANGED, "");
 }
 
 void gstp_media_set_duration_ms(GstpPlayer *p, int64_t duration_ms) {
@@ -185,16 +198,7 @@ void gstp_media_set_duration_ms(GstpPlayer *p, int64_t duration_ms) {
 }
 
 static gboolean gstp_pick_stream_duration(GstpPlayer *p, gint64 *dur) {
-  if (p->discovered_duration_ms > 0) {
-    *dur = p->discovered_duration_ms * GST_MSECOND;
-    return (gboolean)1;
-  }
   gint64 candidate = GST_CLOCK_TIME_NONE;
-  if (gstp_query_factory_duration(p, "qtdemux", &candidate) ||
-      gstp_query_factory_duration(p, "movdemux", &candidate)) {
-    *dur = candidate;
-    return (gboolean)1;
-  }
   if (gstp_query_duration_on_element(p->pipeline, &candidate) &&
       gstp_duration_ns_sane(candidate)) {
     *dur = candidate;
@@ -210,54 +214,6 @@ static gboolean gstp_pick_stream_duration(GstpPlayer *p, gint64 *dur) {
     return (gboolean)1;
   }
   return (gboolean)0;
-}
-
-typedef struct {
-  gint64 best;
-} GstpTimingSearch;
-
-static void gstp_timing_search_element(GstElement *element,
-                                       GstpTimingSearch *search,
-                                       gboolean query_duration) {
-  gint64 value = GST_CLOCK_TIME_NONE;
-  gboolean ok = query_duration
-                    ? gstp_query_duration_on_element(element, &value)
-                    : gstp_query_position_on_element(element, &value);
-  if (ok && GST_CLOCK_TIME_IS_VALID(value) && value > search->best) {
-    search->best = value;
-  }
-}
-
-static gboolean gstp_query_timing_deep(GstpPlayer *p, gint64 *value,
-                                     gboolean query_duration) {
-  if (!p->pipeline || !GST_IS_BIN(p->pipeline)) {
-    return (gboolean)0;
-  }
-  GstpTimingSearch search = {.best = GST_CLOCK_TIME_NONE};
-  GstIterator *it = gst_bin_iterate_recurse(GST_BIN(p->pipeline));
-  if (!it) {
-    return (gboolean)0;
-  }
-  GValue item = G_VALUE_INIT;
-  GstIteratorResult res;
-  while ((res = gst_iterator_next(it, &item)) == GST_ITERATOR_OK) {
-    GstElement *element = GST_ELEMENT(g_value_get_object(&item));
-    if (element) {
-      gstp_timing_search_element(element, &search, query_duration);
-    }
-    g_value_reset(&item);
-  }
-  g_value_unset(&item);
-  gst_iterator_free(it);
-  if (!GST_CLOCK_TIME_IS_VALID(search.best)) {
-    return (gboolean)0;
-  }
-  *value = search.best;
-  return (gboolean)1;
-}
-
-static gboolean gstp_query_position_deep(GstpPlayer *p, gint64 *pos) {
-  return gstp_query_timing_deep(p, pos, (gboolean)0);
 }
 
 static gboolean gstp_query_stream_duration(GstpPlayer *p, gint64 *dur) {
@@ -304,28 +260,50 @@ static gboolean gstp_query_position_from_wall_clock(GstpPlayer *p, gint64 *pos) 
 }
 
 static gboolean gstp_query_stream_position(GstpPlayer *p, gint64 *pos) {
-  if (gstp_query_position_on_element(p->pipeline, pos)) {
-    return (gboolean)1;
-  }
-  if (gstp_query_position_on_playsink(p, pos)) {
-    return (gboolean)1;
-  }
 #if !defined(__ANDROID__)
-  if (p->appsink && gstp_query_position_on_element(p->appsink, pos)) {
-    return (gboolean)1;
-  }
-  if (gstp_query_position_deep(p, pos)) {
-    return (gboolean)1;
-  }
-  if (p->last_frame_pts_ms >= 0) {
+  if (p->last_frame_pts_ms >= 0 &&
+      gstp_position_ms_sane(p, p->last_frame_pts_ms)) {
     *pos = p->last_frame_pts_ms * GST_MSECOND;
     return (gboolean)1;
   }
 #endif
-  if (gstp_query_position_from_clock(p, pos)) {
-    return (gboolean)1;
+  if (gstp_query_position_from_wall_clock(p, pos)) {
+    const int64_t ms = (int64_t)(*pos / GST_MSECOND);
+    if (gstp_position_ms_sane(p, ms)) {
+      return (gboolean)1;
+    }
   }
-  return gstp_query_position_from_wall_clock(p, pos);
+  /* Until duration is known, playbin/playsink position is unreliable. */
+  if (p->duration_ms <= 0) {
+    return (gboolean)0;
+  }
+  if (gstp_query_position_on_element(p->pipeline, pos)) {
+    const int64_t ms = (int64_t)(*pos / GST_MSECOND);
+    if (gstp_position_ms_sane(p, ms)) {
+      return (gboolean)1;
+    }
+  }
+  if (gstp_query_position_on_playsink(p, pos)) {
+    const int64_t ms = (int64_t)(*pos / GST_MSECOND);
+    if (gstp_position_ms_sane(p, ms)) {
+      return (gboolean)1;
+    }
+  }
+#if !defined(__ANDROID__)
+  if (p->appsink && gstp_query_position_on_element(p->appsink, pos)) {
+    const int64_t ms = (int64_t)(*pos / GST_MSECOND);
+    if (gstp_position_ms_sane(p, ms)) {
+      return (gboolean)1;
+    }
+  }
+#endif
+  if (gstp_query_position_from_clock(p, pos)) {
+    const int64_t ms = (int64_t)(*pos / GST_MSECOND);
+    if (gstp_position_ms_sane(p, ms)) {
+      return (gboolean)1;
+    }
+  }
+  return (gboolean)0;
 }
 
 void gstp_media_sync_wall_clock(GstpPlayer *p) {
@@ -340,13 +318,9 @@ void gstp_media_note_frame_pts(GstpPlayer *p, GstClockTime pts) {
   if (!p || !GST_CLOCK_TIME_IS_VALID(pts)) {
     return;
   }
-  int64_t ms = (int64_t)(pts / GST_MSECOND);
+  const int64_t ms = (int64_t)(pts / GST_MSECOND);
   p->last_frame_pts_ms = ms;
-  if (ms != p->position_ms) {
-    p->position_ms = ms;
-    gstp_media_sync_wall_clock(p);
-    gstp_player_emit(p, GSTP_EVENT_POSITION_CHANGED, "");
-  }
+  gstp_media_set_position_ms(p, ms);
 }
 
 void gstp_media_update_timing(GstpPlayer *p) {
@@ -360,11 +334,7 @@ void gstp_media_update_timing(GstpPlayer *p) {
 
   gint64 pos = GST_CLOCK_TIME_NONE;
   if (gstp_query_stream_position(p, &pos) && GST_CLOCK_TIME_IS_VALID(pos)) {
-    int64_t ms = (int64_t)(pos / GST_MSECOND);
-    if (ms != p->position_ms) {
-      p->position_ms = ms;
-      gstp_player_emit(p, GSTP_EVENT_POSITION_CHANGED, "");
-    }
+    gstp_media_set_position_ms(p, (int64_t)(pos / GST_MSECOND));
   }
 
   gint64 dur = GST_CLOCK_TIME_NONE;
@@ -376,12 +346,6 @@ void gstp_media_update_timing(GstpPlayer *p) {
 static gboolean gstp_position_tick(gpointer user_data) {
   GstpPlayer *p = user_data;
   gstp_media_update_timing(p);
-  return G_SOURCE_CONTINUE;
-}
-
-static gboolean gstp_bus_watch_dispatch(gpointer user_data) {
-  /* Unused: real handler is gstp_bus_on_message via gst_bus_create_watch. */
-  (void)user_data;
   return G_SOURCE_CONTINUE;
 }
 
@@ -421,9 +385,10 @@ static gboolean gstp_bus_on_message(GstBus *bus, GstMessage *msg,
       gstp_media_set_duration_ms(p, p->position_ms);
     }
     if (p->looping) {
-      gstp_pipeline_seek(p, 0);
       gstp_pipeline_play(p);
     } else {
+      p->desired_playing = false;
+      p->pending_auto_play = false;
       gstp_player_set_state(p, GSTP_STATE_COMPLETED);
       gstp_player_emit(p, GSTP_EVENT_EOS, "");
     }
@@ -555,7 +520,6 @@ void gstp_bus_attach(GstpPlayer *p) {
   /* gst_bus_create_watch expects GstBusFunc-compatible callback. */
   g_source_set_callback(bus_src, (GSourceFunc)(void *)gstp_bus_on_message, p,
                         NULL);
-  (void)gstp_bus_watch_dispatch;
   p->bus_watch_id = g_source_attach(bus_src, rt->ctx);
   g_source_unref(bus_src);
   gst_object_unref(bus);

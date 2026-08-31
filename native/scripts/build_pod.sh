@@ -11,7 +11,6 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:${PATH}"
 SRCS=(
   "${ROOT}/src/runtime.c"
   "${ROOT}/src/bus.c"
-  "${ROOT}/src/discoverer.c"
   "${ROOT}/src/frame.c"
   "${ROOT}/src/pipeline.c"
   "${ROOT}/src/thumbnail.c"

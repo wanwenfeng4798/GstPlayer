@@ -8,7 +8,6 @@ import '../controls/playback_controls_model.dart';
 import '../gstplayer.dart';
 import '../domain/player_events.dart';
 import '../enum/video_rotation.dart';
-import '../ffi/init_timing.dart';
 import '../media/frame_image.dart';
 import '../media/media_source_resolver.dart';
 import '../model/video_source.dart';
@@ -72,6 +71,9 @@ class PlaybackSession extends ChangeNotifier
   int? _wantGen;
   int? _sentTransportGen;
   Future<void>? _transportFlush;
+
+  /// True while replaying after EOS; ignores stale end-of-stream position ticks.
+  bool _replayFromCompleted = false;
 
   /// 每次 [open] 递增；供 View 在切换媒体时重置 UI 状态 / Increments on each [open]; lets views reset UI state on media switch.
   int get mediaGeneration => _mediaGeneration;
@@ -142,7 +144,6 @@ class PlaybackSession extends ChangeNotifier
   /// 创建原生 player 并订阅事件流 / Creates native player and subscribes to events.
   Future<void> initialize() async {
     if (_initialized) return;
-    final total = Stopwatch()..start();
     await _port.create();
     final id = _port.playerId;
     if (id == null) {
@@ -155,7 +156,6 @@ class PlaybackSession extends ChangeNotifier
       _onEvent,
       onError: (Object e) => _applyError(e.toString()),
     );
-    gstpInitTiming('controller_total', total);
   }
 
   void _onEvent(PlayerEvent event) {
@@ -196,11 +196,9 @@ class PlaybackSession extends ChangeNotifier
 
   /// 播放；EOS 后手动 replay 会将 [speed] 重置为 1.0 并从 0 起播 / Plays; resets speed and position after EOS replay.
   Future<void> play() {
-    // Manual replay after EOS resets speed to 1x (engine resets its rate too);
-    // keep the UI in sync. Normal pause->resume (not completed) keeps the speed.
     if (_state == PlayerState.completed) {
-      _speed = 1.0;
-      _position = Duration.zero;
+      _beginReplayFromCompleted();
+      return _flushTransport();
     }
     _setWantPlaying(true);
     return _flushTransport();
@@ -225,6 +223,9 @@ class PlaybackSession extends ChangeNotifier
 
   @override
   Future<void> togglePlayPause() {
+    if (_state == PlayerState.completed) {
+      return play();
+    }
     if (isPlaying) {
       return pause();
     }
@@ -244,10 +245,24 @@ class PlaybackSession extends ChangeNotifier
     notifyListeners();
   }
 
+  /// EOS replay: keep transport intent but stay in buffering until native PLAYING.
+  /// Avoids danmaku wall-clock extrapolation ahead of prerolling video.
+  void _beginReplayFromCompleted() {
+    _speed = 1.0;
+    _position = Duration.zero;
+    _replayFromCompleted = true;
+    _wantPlaying = true;
+    _wantGen = ++_transportGen;
+    _state = PlayerState.buffering;
+    _bufferingPercent = 0;
+    notifyListeners();
+  }
+
   void _clearTransportIntent() {
     _wantPlaying = null;
     _wantGen = null;
     _sentTransportGen = null;
+    _replayFromCompleted = false;
   }
 
   Future<void> _flushTransport() {
@@ -444,13 +459,59 @@ class PlaybackSession extends ChangeNotifier
     notifyListeners();
   }
 
+  static const Duration _maxPosition = Duration(hours: 24);
+
+  Duration _clampPosition(Duration position, Duration duration) {
+    if (_state == PlayerState.idle ||
+        _state == PlayerState.ready ||
+        _state == PlayerState.stopped ||
+        _state == PlayerState.error) {
+      return Duration.zero;
+    }
+    var ms = position.inMilliseconds;
+    if (ms < 0) {
+      ms = 0;
+    }
+    if (duration <= Duration.zero) {
+      // Preroll before duration is known — hide bogus playbin timestamps.
+      if (ms > 60000) {
+        ms = 0;
+      }
+    }
+    final maxMs = _maxPosition.inMilliseconds;
+    if (ms > maxMs) {
+      ms = maxMs;
+    }
+    if (duration > Duration.zero) {
+      final durMs = duration.inMilliseconds;
+      if (ms > durMs) {
+        ms = durMs;
+      }
+    }
+    return Duration(milliseconds: ms);
+  }
+
   void _applyEvent(PlayerEvent event) {
     switch (event.kind) {
       case PlayerEventKind.durationChanged:
         _duration = Duration(milliseconds: event.durationMs);
         _isSeekable = event.isSeekable;
       case PlayerEventKind.positionChanged:
-        _position = Duration(milliseconds: event.positionMs);
+        if (_replayFromCompleted) {
+          final durMs = _duration.inMilliseconds;
+          final ms = event.positionMs;
+          // Native may still report EOS position until rewind preroll finishes.
+          if (durMs > 0 && ms >= durMs - 50) {
+            break;
+          }
+          if (ms <= 1000) {
+            _replayFromCompleted = false;
+          }
+        }
+        _position = _clampPosition(
+          Duration(milliseconds: event.positionMs),
+          _duration,
+        );
       case PlayerEventKind.videoSize:
         _videoSize = Size(
           event.width.toDouble(),
@@ -477,6 +538,7 @@ class PlaybackSession extends ChangeNotifier
           switch (event.state) {
             case PlayerState.playing:
               if (_wantPlaying == true) {
+                _replayFromCompleted = false;
                 _clearTransportIntent();
                 _state = event.state;
               }
@@ -536,6 +598,7 @@ class PlaybackSession extends ChangeNotifier
     _error = message;
     _state = PlayerState.error;
     _bufferingPercent = 100;
+    _replayFromCompleted = false;
     notifyListeners();
   }
 

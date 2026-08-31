@@ -42,10 +42,20 @@ class MediaSourceResolver {
             _isRealUriScheme(parsed.scheme)) {
           return trimmed;
         }
-        return Uri.file(trimmed).toString();
+        return _fileUriFromPath(trimmed);
       case VideoSourceType.asset:
         return source.uri.trim();
     }
+  }
+
+  static String _fileUriFromPath(String path) {
+    if (RegExp(r'^[A-Za-z]:[/\\]').hasMatch(path)) {
+      final normalized = path.replaceAll('\\', '/');
+      final withoutLeadingSlash =
+          normalized.startsWith('/') ? normalized.substring(1) : normalized;
+      return 'file:///$withoutLeadingSlash';
+    }
+    return Uri.file(path).toString();
   }
 
   static bool _isRealUriScheme(String scheme) {

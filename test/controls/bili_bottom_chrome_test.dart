@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gstplayer/src/controls/bili_bottom_chrome.dart';
 import 'package:gstplayer/src/controls/bili_overlay_controls.dart';
@@ -20,6 +22,7 @@ void main() {
 
   setUp(() {
     model = FakePlaybackControlsModel(
+      initialState: PlayerState.playing,
       initialPosition: const Duration(seconds: 1),
       duration: const Duration(seconds: 5),
     );
@@ -36,6 +39,8 @@ void main() {
     GstPlayerStrings? strings,
     BiliOverlayControlsConfig? overlay,
     Size size = const Size(800, 480),
+    bool showCaptureButton = true,
+    Future<void> Function(Uint8List pngBytes)? onScreenshot,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -53,6 +58,8 @@ void main() {
               showFullscreenButton: true,
               landscapeLocked: false,
               onFullscreenToggle: () {},
+              showCaptureButton: showCaptureButton,
+              onScreenshot: onScreenshot,
             ),
           ),
         ),
@@ -205,6 +212,51 @@ void main() {
     expect(menuRect.bottom, lessThanOrEqualTo(labelRect.top + 8));
     expect(menuRect.left, lessThan(labelRect.center.dx + 24));
     expect(menuRect.right, greaterThan(labelRect.center.dx - 24));
+  });
+
+  testWidgets('time labels use fixed width', (tester) async {
+    await pumpChrome(tester);
+    final boxes = tester.widgetList<SizedBox>(
+      find.descendant(
+        of: find.byType(BiliBottomChrome),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is SizedBox && widget.width == 52,
+        ),
+      ),
+    );
+    expect(boxes.length, greaterThanOrEqualTo(2));
+  });
+
+  testWidgets('settings screenshot calls captureFramePng and onScreenshot', (
+    tester,
+  ) async {
+    Uint8List? saved;
+    await pumpChrome(
+      tester,
+      onScreenshot: (png) async {
+        saved = png;
+      },
+    );
+    await tester.tap(find.byIcon(Icons.settings));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('截图'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(model.captureFramePngCallCount, 1);
+    expect(saved, model.captureFramePngResult);
+  });
+
+  testWidgets('screenshot row hidden when showCaptureButton is false', (
+    tester,
+  ) async {
+    await pumpChrome(
+      tester,
+      showCaptureButton: false,
+      onScreenshot: (_) async {},
+    );
+    await tester.tap(find.byIcon(Icons.settings));
+    await tester.pumpAndSettle();
+    expect(find.text('截图'), findsNothing);
   });
 
   testWidgets('BiliBottomChrome is present in the material controls tree', (

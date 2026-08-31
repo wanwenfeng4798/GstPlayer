@@ -9,7 +9,6 @@ add_compile_definitions(GSTP_BUILDING)
 set(GSTP_SOURCES
   src/runtime.c
   src/bus.c
-  src/discoverer.c
   src/frame.c
   src/pipeline.c
   src/thumbnail.c
@@ -53,7 +52,7 @@ elseif(APPLE AND NOT IOS)
   # Prefer pkg-config (Homebrew) when available; else GStreamer.framework.
   find_package(PkgConfig)
   if(PkgConfig_FOUND)
-    pkg_check_modules(GST gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0 gstreamer-pbutils-1.0)
+    pkg_check_modules(GST gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
   endif()
   if(GST_FOUND)
     target_include_directories(gstplayer PRIVATE ${GST_INCLUDE_DIRS})
@@ -76,7 +75,7 @@ elseif(IOS)
   message(STATUS "iOS: link GStreamer.framework via podspec OTHER_LDFLAGS")
 else()
   find_package(PkgConfig REQUIRED)
-  pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0 gstreamer-pbutils-1.0)
+  pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
   target_include_directories(gstplayer PRIVATE ${GST_INCLUDE_DIRS})
   target_link_directories(gstplayer PRIVATE ${GST_LIBRARY_DIRS})
   target_link_libraries(gstplayer PRIVATE ${GST_LIBRARIES})

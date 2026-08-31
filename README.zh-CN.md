@@ -73,7 +73,7 @@ Apple/桌面：`appsink` BGRA 帧）。
 - 封面图与播完保留最后一帧。
 - 外挂字幕叠层（SRT/WebVTT，`SubtitleParser`）以及内嵌字幕轨选择 API/UI。
 - 弹幕叠层（由 App 注入 `DanmakuItem` 时间轴数据）。
-- 当前帧截图（`onScreenshot` 交给宿主保存）与一次性抽封面。内置底栏不再显示截图按钮。
+- 当前帧截图（**设置 → 截图**，`onScreenshot` 交给宿主保存）与一次性抽封面。`showCaptureButton: false` 可隐藏设置项。
 - 基于 [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
   普通 getter 的响应式状态：播放状态、进度、时长、视频尺寸、宽高比、缓冲百分比、
   音量、倍速、循环、静音、错误等。用 `ListenableBuilder` / `addListener` 订阅重建。
@@ -161,7 +161,7 @@ rustup target add \
 
 ```yaml
 dependencies:
-  gstplayer: ^0.0.3
+  gstplayer: ^0.0.4
 ```
 
 ```bash
@@ -318,6 +318,9 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   libgtk-3-dev
 ```
 
+首次运行会将 GStreamer registry 缓存到 `~/.cache/gstplayer/` 以加快后续启动。
+安装上述插件后，HTTP 头、User-Agent、时长与截图等行为与 macOS 一致。
+
 ## API 说明
 
 ### `GstPlayer.initialize()`
@@ -366,9 +369,18 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 
 ### `VideoSource`
 
-- `VideoSource.network(String url)`
+- `VideoSource.network(String url, {Map<String, String> httpHeaders})`
 - `VideoSource.file(String path)`（接受普通路径或 `file://` URI）
 - `VideoSource.asset(String assetKey)`
+
+网络流默认使用设备 User-Agent。需要鉴权或自定义头时传入 `httpHeaders`：
+
+```dart
+VideoSource.network(
+  'https://example.com/video.mov',
+  httpHeaders: {'Authorization': 'Bearer …'},
+)
+```
 
 ### `GstVideoView`
 
@@ -395,8 +407,8 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 | `onSubtitlesEnabledChanged` | `null` | 底栏 CC 开关。 |
 | `subtitles` | `[]` | 外挂 `SubtitleCue`（可用 `SubtitleParser` 解析）。 |
 | `subtitlesEnabled` | `true` | 是否显示外挂字幕。 |
-| `showCaptureButton` | `true` | 仅为 API 兼容保留；两行底栏**不**再绘制截图按钮。 |
-| `onScreenshot` | `null` | 截图成功后回调 PNG；由宿主保存（相册/路径）。插件不落盘、不弹预览。 |
+| `showCaptureButton` | `true` | 为 `false` 时隐藏 **设置 → 截图**。 |
+| `onScreenshot` | `null` | 用户在设置中点击截图后回调 PNG；由宿主保存。插件不落盘、不弹预览。 |
 
 封面 / 字幕 / 弹幕示例：
 
@@ -422,9 +434,11 @@ GstVideoView(
   显示/隐藏解锁按钮。手势与键盘快捷键不会绕过锁屏。
 - **第一行：** 播放 / 暂停、当前时间、进度条、剩余时间、倍速、设置齿轮、音量弹出、全屏。
 - **第二行：** 弹幕开关、胶囊输入 + 发送、CC。弹幕关闭后输入/发送禁用。
-- **设置（两页）：** 镜像、单集循环、自动播放；再进入播完切下一集 / 播放暂停、16:9 / 4:3、隐藏黑边、关灯、音轨。
+- **设置（两页）：** 镜像、单集循环、自动播放、**截图**；再进入播完切下一集 /
+  播放暂停、16:9 / 4:3、隐藏黑边、关灯、音轨。
 
-底栏不再绘制截图按钮。如需截图，请由宿主调用 `controller.captureCurrentFrame()` 或使用 `onScreenshot`。
+在 `showCaptureButton` 为 true 且设置了 `onScreenshot` 时，使用 **设置 → 截图**；
+也可由宿主调用 `controller.captureCurrentFrame()`。
 
 **音量弹出：** 点击喇叭图标弹出竖向粉色滑条，上方实时显示 **0–100** 数值；长按切换静音。
 

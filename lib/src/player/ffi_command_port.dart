@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 
 import '../domain/player_events.dart';
 import '../ffi/event_pump.dart';
-import '../ffi/init_timing.dart';
 import '../ffi/gstp_library.dart';
 import '../player/command_port.dart';
 import '../gstplayer.dart';
@@ -53,17 +52,12 @@ class FfiPlayerCommandPort implements PlayerCommandPort {
     // microtask and stalls the first frame.
     await SchedulerBinding.instance.endOfFrame;
 
-    final id = gstpTimed(
-      'player_create',
-      () => GstpLibrary.instance.bindings.gstp_player_create(),
-    );
+    final id = GstpLibrary.instance.bindings.gstp_player_create();
     if (id == 0) {
       throw StateError('gstp_player_create failed');
     }
     _playerId = id;
-    gstpTimed('event_pump', () {
-      _pump = GstpEventPump(id)..start();
-    });
+    _pump = GstpEventPump(id)..start();
   }
 
   @override

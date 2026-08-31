@@ -190,6 +190,32 @@ void main() {
       expect(session.isSeekable, isFalse);
     });
 
+    test('bogus preroll position is clamped before duration is known', () async {
+      await session.initialize();
+      port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.buffering));
+      port.emit(
+        event(
+          kind: PlayerEventKind.positionChanged,
+          positionMs: 999999999,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.position, Duration.zero);
+    });
+
+    test('idle state always reports zero position', () async {
+      await session.initialize();
+      port.emit(
+        event(
+          kind: PlayerEventKind.positionChanged,
+          positionMs: 120000,
+        ),
+      );
+      port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.idle));
+      await Future<void>.delayed(Duration.zero);
+      expect(session.position, Duration.zero);
+    });
+
     test('PlayerEventKind.error applies error state', () async {
       await session.initialize();
       port.emit(PlayerEventFixtures.error(message: 'decode error'));
@@ -344,6 +370,53 @@ void main() {
       expect(session.state, PlayerState.completed);
       expect(session.position, const Duration(milliseconds: 5000));
       expect(session.isCompleted, isTrue);
+    });
+
+    test('play after eos restarts from beginning', () async {
+      await session.initialize();
+      port.emit(event(kind: PlayerEventKind.durationChanged, durationMs: 5000));
+      await Future<void>.delayed(Duration.zero);
+      port.emit(event(kind: PlayerEventKind.eos));
+      await Future<void>.delayed(Duration.zero);
+      expect(session.state, PlayerState.completed);
+
+      await session.togglePlayPause();
+      await Future<void>.delayed(Duration.zero);
+      expect(session.state, PlayerState.buffering);
+      expect(session.isPlaying, isTrue);
+      expect(session.position, Duration.zero);
+
+      port.emit(
+        event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+
+      expect(port.playCallCount, 1);
+      expect(session.state, PlayerState.playing);
+    });
+
+    test('replay ignores stale end position until rewind lands', () async {
+      await session.initialize();
+      port.emit(event(kind: PlayerEventKind.durationChanged, durationMs: 5000));
+      await Future<void>.delayed(Duration.zero);
+      port.emit(event(kind: PlayerEventKind.eos));
+      await Future<void>.delayed(Duration.zero);
+
+      unawaited(session.play());
+      await Future<void>.delayed(Duration.zero);
+      expect(session.position, Duration.zero);
+
+      port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 5000));
+      await Future<void>.delayed(Duration.zero);
+      expect(session.position, Duration.zero);
+
+      port.emit(
+        event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
+      );
+      port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 120));
+      await Future<void>.delayed(Duration.zero);
+      expect(session.state, PlayerState.playing);
+      expect(session.position, const Duration(milliseconds: 120));
     });
 
     test('metadataChanged drives aspectRatio', () async {

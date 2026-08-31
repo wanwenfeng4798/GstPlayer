@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../domain/player_events.dart';
@@ -19,6 +21,8 @@ class PlayerSettingsButton extends StatelessWidget {
     required this.strings,
     required this.icon,
     required this.onInteract,
+    this.showCaptureButton = true,
+    this.onScreenshot,
   });
 
   final PlaybackControlsModel model;
@@ -27,6 +31,8 @@ class PlayerSettingsButton extends StatelessWidget {
   final GstPlayerStrings strings;
   final IconData icon;
   final VoidCallback onInteract;
+  final bool showCaptureButton;
+  final Future<void> Function(Uint8List pngBytes)? onScreenshot;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +46,8 @@ class PlayerSettingsButton extends StatelessWidget {
           theme: theme,
           strings: strings,
           onInteract: onInteract,
+          showCaptureButton: showCaptureButton,
+          onScreenshot: onScreenshot,
         );
       },
       buttonBuilder: (context, showMenu) {
@@ -70,6 +78,8 @@ class _PlayerSettingsPanel extends StatefulWidget {
     required this.theme,
     required this.strings,
     required this.onInteract,
+    this.showCaptureButton = true,
+    this.onScreenshot,
   });
 
   final PlaybackControlsModel model;
@@ -77,6 +87,8 @@ class _PlayerSettingsPanel extends StatefulWidget {
   final VideoControlsTheme theme;
   final GstPlayerStrings strings;
   final VoidCallback onInteract;
+  final bool showCaptureButton;
+  final Future<void> Function(Uint8List pngBytes)? onScreenshot;
 
   @override
   State<_PlayerSettingsPanel> createState() => _PlayerSettingsPanelState();
@@ -84,6 +96,35 @@ class _PlayerSettingsPanel extends StatefulWidget {
 
 class _PlayerSettingsPanelState extends State<_PlayerSettingsPanel> {
   bool _more = false;
+  bool _screenshotBusy = false;
+
+  Future<void> _captureScreenshot() async {
+    final onScreenshot = widget.onScreenshot;
+    if (_screenshotBusy || onScreenshot == null) return;
+    setState(() => _screenshotBusy = true);
+    widget.onInteract();
+    try {
+      final png = await widget.model.captureFramePng();
+      if (!mounted) return;
+      if (png == null || png.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.strings.screenshotFailed)),
+        );
+        return;
+      }
+      await onScreenshot(png);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.strings.screenshotFailed)),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _screenshotBusy = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -164,6 +205,41 @@ class _PlayerSettingsPanelState extends State<_PlayerSettingsPanel> {
             settings.playNextOnEnd = v;
           },
         ),
+        if (widget.showCaptureButton && widget.onScreenshot != null)
+          InkWell(
+            onTap: _screenshotBusy ? null : _captureScreenshot,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      s.screenshot,
+                      style: TextStyle(
+                        color: widget.theme.textColor,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  if (_screenshotBusy)
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: widget.theme.iconColor,
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.photo_camera_outlined,
+                      size: 20,
+                      color: widget.theme.iconColor.withValues(alpha: 0.7),
+                    ),
+                ],
+              ),
+            ),
+          ),
         InkWell(
           onTap: () {
             widget.onInteract();

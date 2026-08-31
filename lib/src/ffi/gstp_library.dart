@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 
-import 'init_timing.dart';
 import 'gstp_bindings.dart';
 
 /// Loads the native player library and exposes [GstpBindings].
@@ -20,21 +19,19 @@ class GstpLibrary {
   static bool get isInitialized => _instance != null;
 
   static GstpBindings _open() {
-    return gstpTimed('dylib_open', () {
-      final DynamicLibrary dylib;
-      if (Platform.isMacOS || Platform.isIOS) {
-        dylib = DynamicLibrary.process();
-      } else if (Platform.isAndroid) {
-        dylib = DynamicLibrary.open('libgstplayer.so');
-      } else if (Platform.isWindows) {
-        dylib = DynamicLibrary.open('gstplayer_plugin.dll');
-      } else if (Platform.isLinux) {
-        dylib = DynamicLibrary.open('libgstplayer_plugin.so');
-      } else {
-        throw UnsupportedError('Unsupported platform for GstpLibrary');
-      }
-      return GstpBindings(dylib);
-    });
+    final DynamicLibrary dylib;
+    if (Platform.isMacOS || Platform.isIOS) {
+      dylib = DynamicLibrary.process();
+    } else if (Platform.isAndroid) {
+      dylib = DynamicLibrary.open('libgstplayer.so');
+    } else if (Platform.isWindows) {
+      dylib = DynamicLibrary.open('gstplayer_plugin.dll');
+    } else if (Platform.isLinux) {
+      dylib = DynamicLibrary.open('libgstplayer_plugin.so');
+    } else {
+      throw UnsupportedError('Unsupported platform for GstpLibrary');
+    }
+    return GstpBindings(dylib);
   }
 
   /// For host unit tests that load a built dylib by path.

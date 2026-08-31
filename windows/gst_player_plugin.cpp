@@ -46,6 +46,7 @@ class GstPlayerPlugin : public flutter::Plugin {
       flutter::BinaryMessenger* messenger,
       std::shared_ptr<gstplayer::VideoTextureRegistry> textures)
       : textures_(std::move(textures)) {
+    gstp_ffi_retain_symbols();
     channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
         messenger, kTextureChannelName,
         &flutter::StandardMethodCodec::GetInstance());

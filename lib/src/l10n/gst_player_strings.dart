@@ -40,6 +40,8 @@ class GstPlayerStrings {
     required this.untitledAudioTrack,
     required this.lockControls,
     required this.unlockControls,
+    required this.screenshot,
+    required this.screenshotFailed,
     required this.aspectRatioLabels,
     required this.orientationLabels,
   });
@@ -74,6 +76,8 @@ class GstPlayerStrings {
         untitledAudioTrack: '音轨',
         lockControls: '锁屏',
         unlockControls: '解锁',
+        screenshot: '截图',
+        screenshotFailed: '截图失败',
         aspectRatioLabels: const AspectRatioModeLabels(),
         orientationLabels: const VideoRotationLabels(),
       );
@@ -108,6 +112,8 @@ class GstPlayerStrings {
         untitledAudioTrack: 'Track',
         lockControls: 'Lock controls',
         unlockControls: 'Unlock controls',
+        screenshot: 'Screenshot',
+        screenshotFailed: 'Screenshot failed',
         aspectRatioLabels: const AspectRatioModeLabels(
           fit: 'Fit',
           fill: 'Fill',
@@ -144,6 +150,8 @@ class GstPlayerStrings {
   final String untitledAudioTrack;
   final String lockControls;
   final String unlockControls;
+  final String screenshot;
+  final String screenshotFailed;
   final AspectRatioModeLabels aspectRatioLabels;
   final VideoRotationLabels orientationLabels;
 

@@ -78,7 +78,7 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 - Poster image and keep-last-frame after EOS.
 - External subtitle overlay (SRT/WebVTT via `SubtitleParser`) plus embedded subtitle track selection API/UI.
 - Danmaku (bullet comment) overlay driven by app-supplied `DanmakuItem` cues.
-- Frame capture (`captureCurrentFrame` / `onScreenshot` — host saves PNG) and one-shot covers (`captureThumbnail`). Built-in chrome no longer shows a screenshot button.
+- Frame capture via **Settings → Screenshot** (`onScreenshot` — host saves PNG) and one-shot covers (`captureThumbnail`). Set `showCaptureButton: false` to hide the settings entry.
 - Reactive state via [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
   plain getters: state, position, duration, video size, aspect ratio, buffering %,
   volume, speed, looping, muted, and errors. Rebuild with `ListenableBuilder` /
@@ -170,7 +170,7 @@ Host GStreamer + `pkg-config` — see [Windows & Linux host SDK](#windows--linux
 
 ```yaml
 dependencies:
-  gstplayer: ^0.0.3
+  gstplayer: ^0.0.4
 ```
 
 ```bash
@@ -335,6 +335,10 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   libgtk-3-dev
 ```
 
+On first run the plugin caches the GStreamer registry under `~/.cache/gstplayer/`
+to speed up subsequent launches. Runtime behavior (HTTP headers, User-Agent,
+duration, screenshot) matches macOS once the plugins above are installed.
+
 ## API reference
 
 ### `GstPlayer.initialize()`
@@ -386,9 +390,19 @@ or after `addListener`):
 
 ### `VideoSource`
 
-- `VideoSource.network(String url)`
+- `VideoSource.network(String url, {Map<String, String> httpHeaders})`
 - `VideoSource.file(String path)` (accepts a plain path or a `file://` URI)
 - `VideoSource.asset(String assetKey)`
+
+Network streams use the device User-Agent by default. Pass custom headers when
+the server requires auth or special headers:
+
+```dart
+VideoSource.network(
+  'https://example.com/video.mov',
+  httpHeaders: {'Authorization': 'Bearer …'},
+)
+```
 
 ### `GstVideoView`
 
@@ -416,8 +430,8 @@ auto-hiding two-row Bilibili-style control bar.
 | `onSubtitlesEnabledChanged` | `null` | CC toggle from chrome. |
 | `subtitles` | `[]` | External `SubtitleCue` list (e.g. from `SubtitleParser`). |
 | `subtitlesEnabled` | `true` | Toggle external subtitle overlay. |
-| `showCaptureButton` | `true` | Kept for API compatibility; two-row chrome does **not** render a screenshot button. |
-| `onScreenshot` | `null` | Host receives PNG bytes and owns saving. Plugin does not write disk or show a preview dialog. |
+| `showCaptureButton` | `true` | When `false`, hides **Settings → Screenshot**. |
+| `onScreenshot` | `null` | Host receives PNG bytes when the user taps screenshot in settings. Plugin does not write disk or show a preview dialog. |
 
 Example with poster, subtitles, and danmaku:
 
@@ -446,11 +460,12 @@ GstVideoView(
   gear, volume popup, fullscreen.
 - **Row 2:** danmaku toggle, capsule input + send, CC. Input/send disable when
   danmaku is off.
-- **Settings (two pages):** mirror, single-episode loop, autoplay; then play-next
-  vs pause-at-end, 16:9 / 4:3, hide black bars, lights-off, audio tracks.
+- **Settings (two pages):** mirror, single-episode loop, autoplay, **screenshot**;
+  then play-next vs pause-at-end, 16:9 / 4:3, hide black bars, lights-off,
+  audio tracks.
 
-The plugin does not draw a screenshot button on this chrome. Use
-`controller.captureCurrentFrame()` or `onScreenshot` from the host if needed.
+Use **Settings → Screenshot** (when `showCaptureButton` is true and
+`onScreenshot` is set) or call `controller.captureCurrentFrame()` from the host.
 
 **Volume popup:** tap the speaker icon for a vertical pink slider; the live
 **0–100** value is shown above the track. Long-press toggles mute.

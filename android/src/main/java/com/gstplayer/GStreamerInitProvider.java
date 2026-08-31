@@ -53,28 +53,20 @@ public class GStreamerInitProvider extends ContentProvider {
 
     @Override
     public boolean onCreate() {
-        final long totalNs = System.nanoTime();
         try {
-            long t = System.nanoTime();
             System.loadLibrary("gstreamer_android");
-            logMs("load_gstreamer_android", t);
 
             // Load C player before Dart FFI so JNI surface symbols resolve.
             // JNI_OnLoad only captures JavaVM; gstp_init runs in warmup below.
-            t = System.nanoTime();
             System.loadLibrary("gstplayer");
-            logMs("load_gstplayer", t);
 
-            t = System.nanoTime();
             GStreamer.init(getContext());
-            logMs("gstreamer_init", t);
 
             FlutterAssetHelper.init(getContext());
             NativeAndroidContext.init(getContext());
 
             startBackgroundWarmup();
 
-            logMs("provider_total", totalNs);
             Log.i(TAG, "GStreamer Android libs ready; native warmup async");
         } catch (Throwable t) {
             Log.e(TAG, "Failed to initialize GStreamer Android runtime", t);
@@ -90,10 +82,8 @@ public class GStreamerInitProvider extends ContentProvider {
         final Thread thread =
                 new Thread(
                         () -> {
-                            final long t = System.nanoTime();
                             try {
                                 NativeRuntimeWarmup.warmup();
-                                logMs("native_warmup", t);
                             } catch (Throwable e) {
                                 Log.e(TAG, "Background native warmup failed", e);
                             } finally {
@@ -103,11 +93,6 @@ public class GStreamerInitProvider extends ContentProvider {
                         "gstp-native-warmup");
         thread.setDaemon(true);
         thread.start();
-    }
-
-    private static void logMs(String phase, long startNs) {
-        final long ms = (System.nanoTime() - startNs) / 1_000_000L;
-        Log.i(TAG, "[gstp-init-timing] " + phase + "=" + ms + "ms");
     }
 
     @Override

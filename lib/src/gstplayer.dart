@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
-import 'ffi/init_timing.dart';
 import 'ffi/gstp_bindings.dart';
 import 'ffi/gstp_library.dart';
 import 'media/frame_image.dart';
@@ -68,12 +67,10 @@ class GstPlayer {
   }
 
   static Future<void> _kickoffOnce() async {
-    final total = Stopwatch()..start();
     try {
       GstpLibrary.instance;
       // Schedule ready work; do not await gst_init / worker spawn here.
       _ready ??= _readyOnce();
-      gstpInitTiming('plugin_kickoff', total);
     } catch (_) {
       _kickoff = null;
       _ready = null;
@@ -82,21 +79,14 @@ class GstPlayer {
   }
 
   static Future<void> _readyOnce() async {
-    final total = Stopwatch()..start();
     NativeCallable<GstpInitDoneFnFunction>? callable;
     try {
       // Open dylib on this isolate, then start worker in parallel with gst_init.
       GstpLibrary.instance;
-      final workerFuture = gstpTimedAsync(
-        'plugin_worker_spawn',
-        FfiNativeWorker.ensureStarted,
-      );
-      final userAgentFuture = gstpTimedAsync(
-        'plugin_user_agent',
-        configureDefaultHttpUserAgent,
-      );
+      final workerFuture = FfiNativeWorker.ensureStarted();
+      final userAgentFuture = configureDefaultHttpUserAgent();
 
-      final code = await gstpTimedAsync('plugin_gstp_init', () async {
+      final code = await () async {
         final done = Completer<int>();
         callable = NativeCallable<GstpInitDoneFnFunction>.listener((
           Pointer<Void> ctx,
@@ -111,7 +101,7 @@ class GstPlayer {
           nullptr,
         );
         return done.future;
-      });
+      }();
 
       await workerFuture;
       await userAgentFuture;
@@ -120,7 +110,6 @@ class GstPlayer {
         throw StateError('gstp_init failed with code $code');
       }
       _initialized = true;
-      gstpInitTiming('plugin_init', total);
     } catch (_) {
       _ready = null;
       _kickoff = null;

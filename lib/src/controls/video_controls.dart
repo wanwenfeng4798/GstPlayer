@@ -44,6 +44,8 @@ class VideoControls extends StatefulWidget {
     this.autoHide = const Duration(seconds: 3),
     this.scrubPreview,
     this.overlayControls,
+    this.showCaptureButton = true,
+    this.onScreenshot,
   });
 
   final PlaybackControlsModel model;
@@ -58,6 +60,12 @@ class VideoControls extends StatefulWidget {
 
   /// Danmaku input + external subtitle toggles on the bottom chrome.
   final BiliOverlayControlsConfig? overlayControls;
+
+  /// Whether the settings popup shows a screenshot action.
+  final bool showCaptureButton;
+
+  /// Host callback when the user captures a frame from settings.
+  final Future<void> Function(Uint8List pngBytes)? onScreenshot;
 
   @override
   State<VideoControls> createState() => _VideoControlsState();
@@ -285,6 +293,8 @@ class _VideoControlsState extends State<VideoControls> {
             landscapeLocked: widget.immersive.landscapeLocked,
             onFullscreenToggle: _toggleFullscreen,
             immersive: widget.immersive,
+            showCaptureButton: widget.showCaptureButton,
+            onScreenshot: widget.onScreenshot,
           )
         : MaterialVideoControls(
             model: widget.model,
@@ -298,6 +308,8 @@ class _VideoControlsState extends State<VideoControls> {
             landscapeLocked: widget.immersive.landscapeLocked,
             onFullscreenToggle: _toggleFullscreen,
             immersive: widget.immersive,
+            showCaptureButton: widget.showCaptureButton,
+            onScreenshot: widget.onScreenshot,
           );
 
     final chrome = Stack(

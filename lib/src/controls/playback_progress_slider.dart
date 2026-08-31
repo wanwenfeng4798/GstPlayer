@@ -35,7 +35,7 @@ typedef PlaybackProgressSliderBuilder =
     Widget Function(BuildContext context, PlaybackSliderSnapshot snapshot);
 
 /// 共享进度条接线：[Listenable]、[ScrubController] 钉住与落定动画 / Shared progress slider wiring: listenables, scrub pinning, settle animation.
-class PlaybackProgressSlider extends StatelessWidget {
+class PlaybackProgressSlider extends StatefulWidget {
   const PlaybackProgressSlider({
     super.key,
     required this.model,
@@ -48,40 +48,54 @@ class PlaybackProgressSlider extends StatelessWidget {
   final PlaybackProgressSliderBuilder builder;
 
   @override
+  State<PlaybackProgressSlider> createState() => _PlaybackProgressSliderState();
+}
+
+class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
+  int _lastPosMs = 0;
+
+  @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([model, scrub]),
+      listenable: Listenable.merge([widget.model, widget.scrub]),
       builder: (context, _) {
-        final dur = model.duration.inMilliseconds.toDouble();
-        final pos = model.position.inMilliseconds.toDouble();
+        final dur = widget.model.duration.inMilliseconds.toDouble();
+        final pos = widget.model.position.inMilliseconds.toDouble();
         final hasTimeline = dur > 0;
-        final canSeek = model.isSeekable && hasTimeline;
-        final value = scrub.sliderValue(dur, pos);
+        final canSeek = widget.model.isSeekable && hasTimeline;
+        final value = widget.scrub.sliderValue(dur, pos);
+
+        final posMs = pos.round();
+        final jumpMs = (posMs - _lastPosMs).abs();
+        _lastPosMs = posMs;
+        final skipTween = !widget.scrub.isScrubbing && jumpMs > 5000;
 
         PlaybackSliderSnapshot snapshotFor(double v) {
           return PlaybackSliderSnapshot(
             displayValue: v,
             enabled: hasTimeline,
             canSeek: canSeek,
-            onSeekStart: canSeek ? scrub.onSeekStart : null,
+            onSeekStart: canSeek ? widget.scrub.onSeekStart : null,
             onSeekChanged: canSeek
-                ? (fraction) => scrub.onSeekChanged(fraction, dur)
+                ? (fraction) => widget.scrub.onSeekChanged(fraction, dur)
                 : null,
             onSeekEnd: canSeek
-                ? (fraction) => scrub.onSeekEnd(fraction, dur)
+                ? (fraction) => widget.scrub.onSeekEnd(fraction, dur)
                 : null,
           );
         }
 
+        if (widget.scrub.isScrubbing || skipTween) {
+          return widget.builder(context, snapshotFor(value));
+        }
+
         return TweenAnimationBuilder<double>(
           tween: Tween<double>(end: value),
-          duration: scrub.isScrubbing
-              ? Duration.zero
-              : const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 200),
           curve: Curves.linear,
-          builder: (context, animatedValue, _) => builder(
+          builder: (context, animatedValue, _) => widget.builder(
             context,
-            snapshotFor(scrub.isScrubbing ? value : animatedValue),
+            snapshotFor(animatedValue),
           ),
         );
       },

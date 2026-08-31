@@ -1,22 +1,10 @@
 #include "gstp_internal.h"
 #include "http_source.h"
 
-#include <stdio.h>
 #include <string.h>
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
-#endif
-
-#if defined(__ANDROID__)
-#include <android/log.h>
-#define GSTP_RUNTIME_LOGI(...)                                                 \
-  __android_log_print(ANDROID_LOG_INFO, "GstpNative", __VA_ARGS__)
-#else
-#define GSTP_RUNTIME_LOGI(...)                                                 \
-  do {                                                                         \
-    g_message(__VA_ARGS__);                                                    \
-  } while (0)
 #endif
 
 static GstpRuntime g_runtime;
@@ -151,11 +139,6 @@ static gpointer gstp_runtime_thread_main(gpointer data) {
   return NULL;
 }
 
-static void gstp_log_init_timing(const char *phase, gint64 start_us) {
-  const gint64 ms = (g_get_monotonic_time() - start_us) / 1000;
-  GSTP_RUNTIME_LOGI("[gstp-init-timing] %s=%" G_GINT64_FORMAT "ms", phase, ms);
-}
-
 /** Performs env/gst_init/thread start. Caller must own the start gate. */
 static int32_t gstp_runtime_start_unlocked(void) {
   GstpRuntime *rt = gstp_runtime();
@@ -163,39 +146,28 @@ static int32_t gstp_runtime_start_unlocked(void) {
     return GSTP_ERR_OK;
   }
 
-  const gint64 total_us = g_get_monotonic_time();
-  gint64 phase_us;
-
-  phase_us = g_get_monotonic_time();
 #if defined(__APPLE__) && TARGET_OS_IPHONE
   gstp_setup_ios_env();
 #elif defined(__APPLE__)
   gstp_setup_macos_env();
 #elif defined(_WIN32)
   gstp_setup_windows_env();
+#elif defined(__linux__) && !defined(__ANDROID__)
+  gstp_setup_linux_env();
 #endif
-  gstp_log_init_timing("native_env_setup", phase_us);
 
   gstp_http_user_agent_init_platform();
-
-  phase_us = g_get_monotonic_time();
   gst_init(NULL, NULL);
-  gstp_log_init_timing("native_gst_init", phase_us);
 
 #if defined(__APPLE__) && TARGET_OS_IPHONE
-  phase_us = g_get_monotonic_time();
   gstp_register_ios_static_plugins();
   gstp_register_ios_tls_backend();
-  gstp_log_init_timing("native_ios_plugins", phase_us);
 #endif
 
-  phase_us = g_get_monotonic_time();
   rt->ctx = g_main_context_new();
   rt->loop = g_main_loop_new(rt->ctx, FALSE);
   rt->thread = g_thread_new("gstp-gst", gstp_runtime_thread_main, rt);
   rt->initialized = true;
-  gstp_log_init_timing("native_thread_start", phase_us);
-  gstp_log_init_timing("native_runtime_start", total_us);
   return GSTP_ERR_OK;
 }
 

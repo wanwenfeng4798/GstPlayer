@@ -4,7 +4,6 @@
 
 #include <gst/app/gstappsink.h>
 #include <gst/gst.h>
-#include <gst/pbutils/pbutils.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -75,7 +74,6 @@ typedef struct GstpPlayer {
   int64_t duration_ms;
   int64_t position_ms;
   int64_t tag_duration_ms;
-  int64_t discovered_duration_ms;
   int64_t last_frame_pts_ms;
   int64_t play_wall_origin_us;
   int64_t play_position_origin_ms;
@@ -97,7 +95,6 @@ typedef struct GstpPlayer {
   int32_t track_count;
   GstStreamCollection *stream_collection;
   int32_t buffering_percent;
-  GstDiscoverer *uri_discoverer;
 
   /* Android overlay */
   int64_t android_window; /* ANativeWindow* as intptr; owned when non-zero */
@@ -147,6 +144,10 @@ void gstp_setup_macos_env(void);
 void gstp_setup_windows_env(void);
 #endif
 
+#if defined(__linux__) && !defined(__ANDROID__)
+void gstp_setup_linux_env(void);
+#endif
+
 void gstp_player_emit(GstpPlayer *p, int32_t kind, const char *message);
 void gstp_player_set_state(GstpPlayer *p, int32_t state);
 
@@ -178,9 +179,8 @@ void gstp_media_note_frame_pts(GstpPlayer *p, GstClockTime pts);
 void gstp_media_sync_wall_clock(GstpPlayer *p);
 void gstp_media_set_duration_ms(GstpPlayer *p, int64_t duration_ms);
 void gstp_configure_uri_child(GstpPlayer *p, GstElement *element);
-void gstp_discoverer_cancel(GstpPlayer *p);
-void gstp_discoverer_schedule(GstpPlayer *p);
 void gstp_ensure_demux_duration_probes(GstpPlayer *p);
+void gstp_media_set_position_ms(GstpPlayer *p, int64_t position_ms);
 
 void gstp_frame_init(GstpPlayer *p);
 void gstp_frame_clear(GstpPlayer *p);

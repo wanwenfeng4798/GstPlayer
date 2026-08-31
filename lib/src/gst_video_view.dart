@@ -291,7 +291,7 @@ class _GstVideoViewState extends State<GstVideoView> {
     // Keep screenshot API fields reachable without rendering a chrome button.
     if (oldWidget.showCaptureButton != widget.showCaptureButton ||
         oldWidget.onScreenshot != widget.onScreenshot) {
-      // no-op: two-row chrome does not show capture.
+      // Wired through VideoControls → settings popup.
     }
   }
 
@@ -384,6 +384,7 @@ class _GstVideoViewState extends State<GstVideoView> {
                   items: widget.danmaku,
                   position: widget.controller.position,
                   enabled: widget.danmakuEnabled,
+                  isPlaying: widget.controller.state == PlayerState.playing,
                 );
               },
             ),
@@ -406,6 +407,10 @@ class _GstVideoViewState extends State<GstVideoView> {
                 style: widget.controlsStyle,
                 scrubPreview: widget.scrubPreview,
                 overlayControls: _overlayControls,
+                showCaptureButton: widget.showCaptureButton,
+                onScreenshot: widget.onScreenshot == null
+                    ? null
+                    : (png) async => widget.onScreenshot!(png),
               ),
           ],
         ),

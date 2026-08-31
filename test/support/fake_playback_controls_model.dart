@@ -62,6 +62,8 @@ class FakePlaybackControlsModel extends ChangeNotifier
   AspectRatioMode? lastAspectRatioMode;
   MediaTrack? lastSelectedTrack;
   bool? lastSelectTrackEnable;
+  int captureFramePngCallCount = 0;
+  Uint8List captureFramePngResult = Uint8List.fromList([1, 2, 3]);
 
   @override
   bool get isPlaying => _state == PlayerState.playing;
@@ -160,7 +162,10 @@ class FakePlaybackControlsModel extends ChangeNotifier
   }
 
   @override
-  Future<Uint8List?> captureFramePng() async => null;
+  Future<Uint8List?> captureFramePng() async {
+    captureFramePngCallCount++;
+    return captureFramePngResult;
+  }
 
   void setPosition(Duration position) {
     _position = position;

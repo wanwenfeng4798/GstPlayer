@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../l10n/gst_player_strings.dart';
@@ -28,6 +30,8 @@ class MaterialVideoControls extends StatefulWidget {
     this.landscapeLocked,
     this.onFullscreenToggle,
     this.immersive,
+    this.showCaptureButton = true,
+    this.onScreenshot,
   });
 
   final PlaybackControlsModel model;
@@ -41,6 +45,8 @@ class MaterialVideoControls extends StatefulWidget {
   final bool? landscapeLocked;
   final VoidCallback? onFullscreenToggle;
   final ImmersiveControlsState? immersive;
+  final bool showCaptureButton;
+  final Future<void> Function(Uint8List pngBytes)? onScreenshot;
 
   @override
   State<MaterialVideoControls> createState() => _MaterialVideoControlsState();
@@ -132,6 +138,8 @@ class _MaterialVideoControlsState extends State<MaterialVideoControls> {
                 showFullscreenButton: widget.showFullscreenButton,
                 landscapeLocked: landscapeLocked,
                 onFullscreenToggle: widget.onFullscreenToggle,
+                showCaptureButton: widget.showCaptureButton,
+                onScreenshot: widget.onScreenshot,
               ),
           ],
         );

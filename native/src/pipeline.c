@@ -439,7 +439,6 @@ static void gstp_reset_media_fields(GstpPlayer *p) {
   p->duration_ms = 0;
   p->position_ms = 0;
   p->tag_duration_ms = -1;
-  p->discovered_duration_ms = -1;
   p->last_frame_pts_ms = -1;
   p->play_wall_origin_us = 0;
   p->play_position_origin_ms = 0;
@@ -480,7 +479,6 @@ static void gstp_clear_asset_temp(GstpPlayer *p) {
 static int32_t gstp_pipeline_set_state_sync(GstpPlayer *p, GstState state);
 
 void gstp_pipeline_destroy(GstpPlayer *p) {
-  gstp_discoverer_cancel(p);
   gstp_bus_detach(p);
   if (p->appsink) {
     gst_app_sink_set_callbacks(GST_APP_SINK(p->appsink), NULL, NULL, NULL);
@@ -860,9 +858,6 @@ int32_t gstp_pipeline_load_uri(GstpPlayer *p, const char *uri, bool auto_play,
   g_object_set(pipeline, "mute", p->muted, NULL);
 
   gstp_bus_attach(p);
-  if (p->is_uri) {
-    gstp_discoverer_schedule(p);
-  }
 
   /* Optimistic buffering before blocking PAUSED preroll (network open UI). */
   p->buffering_percent = 0;
@@ -993,6 +988,103 @@ int32_t gstp_pipeline_load_asset(GstpPlayer *p, const uint8_t *bytes,
   return GSTP_ERR_OK;
 }
 
+static gboolean gstp_seek_to_ns(GstElement *pipeline, gdouble rate, gint64 pos_ns) {
+  if (gst_element_seek(
+          pipeline, rate, GST_FORMAT_TIME,
+          (GstSeekFlags)(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT),
+          GST_SEEK_TYPE_SET, pos_ns, GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE)) {
+    return (gboolean)1;
+  }
+  return gst_element_seek_simple(
+      pipeline, GST_FORMAT_TIME,
+      (GstSeekFlags)(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT), pos_ns);
+}
+
+static gboolean gstp_wait_pipeline_state(GstElement *pipeline, GstState target) {
+  if (!pipeline) {
+    return (gboolean)0;
+  }
+  GstState cur = GST_STATE_NULL;
+  GstState pending = GST_STATE_VOID_PENDING;
+  const GstStateChangeReturn ret =
+      gst_element_get_state(pipeline, &cur, &pending, GST_CLOCK_TIME_NONE);
+  if (ret == GST_STATE_CHANGE_FAILURE) {
+    return (gboolean)0;
+  }
+  return (gboolean)(cur == target && pending == GST_STATE_VOID_PENDING);
+}
+
+static gboolean gstp_set_pipeline_state_and_wait(GstElement *pipeline,
+                                                 GstState state) {
+  if (!pipeline) {
+    return (gboolean)0;
+  }
+  if (gst_element_set_state(pipeline, state) == GST_STATE_CHANGE_FAILURE) {
+    return (gboolean)0;
+  }
+  return gstp_wait_pipeline_state(pipeline, state);
+}
+
+static gboolean gstp_seek_to_start_verified(GstElement *pipeline, gdouble rate) {
+  if (!gstp_seek_to_ns(pipeline, rate, 0)) {
+    return (gboolean)0;
+  }
+  /* Flush seeks are async; wait for preroll before querying position (GStreamer
+   * queryevents/seeking docs). Immediate position queries after seek return the
+   * old EOS position and falsely trigger READY fallback on all formats. */
+  if (!gstp_wait_pipeline_state(pipeline, GST_STATE_PAUSED)) {
+    return (gboolean)0;
+  }
+  gint64 cur = GST_CLOCK_TIME_NONE;
+  if (gst_element_query_position(pipeline, GST_FORMAT_TIME, &cur) &&
+      GST_CLOCK_TIME_IS_VALID(cur) && cur > (gint64)(GST_SECOND)) {
+    return (gboolean)0;
+  }
+  return (gboolean)1;
+}
+
+static int32_t gstp_pipeline_rewind_to_start(GstpPlayer *p) {
+  if (!p->pipeline) {
+    return GSTP_ERR_NOT_READY;
+  }
+  p->buffering_percent = 0;
+  gstp_player_set_state(p, GSTP_STATE_BUFFERING);
+  gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
+
+  const gdouble rate = p->speed > 0.0 ? p->speed : 1.0;
+
+  GstState cur = GST_STATE_NULL;
+  (void)gst_element_get_state(p->pipeline, &cur, NULL, 0);
+  if (cur != GST_STATE_PAUSED) {
+    if (!gstp_set_pipeline_state_and_wait(p->pipeline, GST_STATE_PAUSED)) {
+      return GSTP_ERR_FAIL;
+    }
+  }
+
+  if (!gstp_seek_to_start_verified(p->pipeline, rate)) {
+    /* qtdemux / avidemux keep demuxer EOS until the pipeline drops to READY. */
+    if (!gstp_set_pipeline_state_and_wait(p->pipeline, GST_STATE_READY)) {
+      return GSTP_ERR_FAIL;
+    }
+    if (!gstp_set_pipeline_state_and_wait(p->pipeline, GST_STATE_PAUSED)) {
+      return GSTP_ERR_FAIL;
+    }
+    if (!gstp_seek_to_start_verified(p->pipeline, rate)) {
+      return GSTP_ERR_FAIL;
+    }
+  }
+
+  p->position_ms = 0;
+  p->last_frame_pts_ms = -1;
+  p->at_eos = false;
+  p->play_position_origin_ms = 0;
+  p->play_wall_origin_us = g_get_monotonic_time();
+  p->buffering_percent = 100;
+  gstp_player_emit(p, GSTP_EVENT_POSITION_CHANGED, "");
+  gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
+  return GSTP_ERR_OK;
+}
+
 int32_t gstp_pipeline_play(GstpPlayer *p) {
   if (!p->pipeline) {
     return GSTP_ERR_NOT_READY;
@@ -1001,12 +1093,17 @@ int32_t gstp_pipeline_play(GstpPlayer *p) {
    * seeks on EOS; play() alone would resume near the end). */
   const bool near_end =
       p->duration_ms > 0 && p->position_ms >= p->duration_ms - 50;
-  if (p->at_eos || near_end) {
-    int32_t seek_rc = gstp_pipeline_seek(p, 0);
-    if (seek_rc != GSTP_ERR_OK) {
-      return seek_rc;
+  const bool restart = p->at_eos || near_end ||
+                       p->player_state == GSTP_STATE_COMPLETED;
+
+  if (restart) {
+    p->speed = 1.0;
+    const int32_t rewind_rc = gstp_pipeline_rewind_to_start(p);
+    if (rewind_rc != GSTP_ERR_OK) {
+      return rewind_rc;
     }
   }
+
   p->desired_playing = true;
   p->at_eos = false;
 #if defined(__ANDROID__)

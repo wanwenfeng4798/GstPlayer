@@ -142,6 +142,7 @@ static void gst_player_plugin_class_init(
 }
 
 static void gst_player_plugin_init(GstPlayerPlugin* self) {
+  gstp_ffi_retain_symbols();
   self->texture_channel = nullptr;
   self->texture_registrar = nullptr;
   self->textures = new std::map<int64_t, GstVideoTexture*>();

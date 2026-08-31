@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../constant/constant.dart';
+import '../domain/player_events.dart';
 import '../l10n/gst_player_strings.dart';
 import '../theme/video_controls_theme.dart';
 import '../utils/time_util.dart';
@@ -93,6 +96,8 @@ class BiliBottomChrome extends StatelessWidget {
     this.showFullscreenButton = true,
     this.landscapeLocked,
     this.onFullscreenToggle,
+    this.showCaptureButton = true,
+    this.onScreenshot,
   });
 
   final PlaybackControlsModel model;
@@ -108,6 +113,8 @@ class BiliBottomChrome extends StatelessWidget {
   final bool showFullscreenButton;
   final bool? landscapeLocked;
   final VoidCallback? onFullscreenToggle;
+  final bool showCaptureButton;
+  final Future<void> Function(Uint8List pngBytes)? onScreenshot;
 
   ButtonStyle get _iconStyle => IconButton.styleFrom(
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -160,119 +167,123 @@ class BiliBottomChrome extends StatelessWidget {
   }
 
   Widget _buildTransportRow(BuildContext context) {
+    final row = Row(
+      children: [
+        IconButton(
+          style: _iconStyle,
+          color: theme.iconColor,
+          icon: Icon(
+            model.isPlaying ? icons.pause : icons.play,
+            size: theme.primaryIconSize,
+          ),
+          onPressed: () {
+            onInteract();
+            model.togglePlayPause();
+          },
+        ),
+        _TimeLabel(
+          model: model,
+          scrub: scrub,
+          theme: theme,
+          remaining: false,
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: theme.activeTrackColor,
+              inactiveTrackColor: theme.inactiveTrackColor,
+              thumbColor: theme.thumbColor,
+              secondaryActiveTrackColor: theme.bufferedTrackColor,
+              trackHeight: 2.5,
+              overlayShape: const RoundSliderOverlayShape(
+                overlayRadius: 8,
+              ),
+              thumbShape: const RoundSliderThumbShape(
+                enabledThumbRadius: 5,
+                elevation: 1,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              disabledActiveTrackColor: theme.activeTrackColor,
+              disabledInactiveTrackColor: theme.inactiveTrackColor,
+              disabledThumbColor: theme.thumbColor,
+            ),
+            child: ProgressBarWithPreview(
+              model: model,
+              scrub: scrub,
+              preview: preview,
+              scrubPreview: scrubPreview,
+              theme: theme,
+              previewBarHeight: 72,
+              builder: (context, snap) => Slider(
+                value: snap.displayValue,
+                onChangeStart: snap.canSeek
+                    ? (_) => snap.onSeekStart?.call()
+                    : null,
+                onChanged: snap.canSeek ? snap.onSeekChanged : null,
+                onChangeEnd: snap.canSeek ? snap.onSeekEnd : null,
+              ),
+            ),
+          ),
+        ),
+        _TimeLabel(
+          model: model,
+          scrub: scrub,
+          theme: theme,
+          remaining: true,
+        ),
+        _SpeedMenuButton(
+          model: model,
+          theme: theme,
+          onInteract: onInteract,
+        ),
+        PlayerSettingsButton(
+          model: model,
+          settings: settings,
+          theme: theme,
+          strings: strings,
+          icon: icons.settings,
+          onInteract: onInteract,
+          showCaptureButton: showCaptureButton,
+          onScreenshot: onScreenshot,
+        ),
+        VolumePopupButton(
+          model: model,
+          theme: theme,
+          onInteract: onInteract,
+          volumeOnIcon: icons.volumeOn,
+          volumeOffIcon: icons.volumeOff,
+        ),
+        if (showFullscreenButton && onFullscreenToggle != null)
+          IconButton(
+            style: _iconStyle,
+            color: theme.iconColor,
+            icon: Icon(
+              (landscapeLocked ?? false)
+                  ? icons.fullscreenExit
+                  : icons.fullscreen,
+              size: theme.secondaryIconSize,
+            ),
+            onPressed: () {
+              onInteract();
+              onFullscreenToggle!();
+            },
+          ),
+      ],
+    );
+
     return Padding(
       padding: const EdgeInsets.only(left: 4, right: 4, bottom: 2),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final width = constraints.maxWidth.isFinite
-              ? constraints.maxWidth
-              : 800.0;
+          if (constraints.maxWidth >= 480) {
+            return row;
+          }
           return FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: SizedBox(
-              width: width < 480 ? 480 : width,
-              child: Row(
-                children: [
-                  IconButton(
-                    style: _iconStyle,
-                    color: theme.iconColor,
-                    icon: Icon(
-                      model.isPlaying ? icons.pause : icons.play,
-                      size: theme.primaryIconSize,
-                    ),
-                    onPressed: () {
-                      onInteract();
-                      model.togglePlayPause();
-                    },
-                  ),
-                  _TimeLabel(
-                    model: model,
-                    scrub: scrub,
-                    theme: theme,
-                    remaining: false,
-                  ),
-                  Expanded(
-                    child: SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: theme.activeTrackColor,
-                        inactiveTrackColor: theme.inactiveTrackColor,
-                        thumbColor: theme.thumbColor,
-                        secondaryActiveTrackColor: theme.bufferedTrackColor,
-                        trackHeight: 2.5,
-                        overlayShape: const RoundSliderOverlayShape(
-                          overlayRadius: 8,
-                        ),
-                        thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 5,
-                          elevation: 1,
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        disabledActiveTrackColor: theme.activeTrackColor,
-                        disabledInactiveTrackColor: theme.inactiveTrackColor,
-                        disabledThumbColor: theme.thumbColor,
-                      ),
-                      child: ProgressBarWithPreview(
-                        model: model,
-                        scrub: scrub,
-                        preview: preview,
-                        scrubPreview: scrubPreview,
-                        theme: theme,
-                        previewBarHeight: 72,
-                        builder: (context, snap) => Slider(
-                          value: snap.displayValue,
-                          onChangeStart: snap.canSeek
-                              ? (_) => snap.onSeekStart?.call()
-                              : null,
-                          onChanged: snap.canSeek ? snap.onSeekChanged : null,
-                          onChangeEnd: snap.canSeek ? snap.onSeekEnd : null,
-                        ),
-                      ),
-                    ),
-                  ),
-                  _TimeLabel(
-                    model: model,
-                    scrub: scrub,
-                    theme: theme,
-                    remaining: true,
-                  ),
-                  _SpeedMenuButton(
-                    model: model,
-                    theme: theme,
-                    onInteract: onInteract,
-                  ),
-                  PlayerSettingsButton(
-                    model: model,
-                    settings: settings,
-                    theme: theme,
-                    strings: strings,
-                    icon: icons.settings,
-                    onInteract: onInteract,
-                  ),
-                  VolumePopupButton(
-                    model: model,
-                    theme: theme,
-                    onInteract: onInteract,
-                    volumeOnIcon: icons.volumeOn,
-                    volumeOffIcon: icons.volumeOff,
-                  ),
-                  if (showFullscreenButton && onFullscreenToggle != null)
-                    IconButton(
-                      style: _iconStyle,
-                      color: theme.iconColor,
-                      icon: Icon(
-                        (landscapeLocked ?? false)
-                            ? icons.fullscreenExit
-                            : icons.fullscreen,
-                        size: theme.secondaryIconSize,
-                      ),
-                      onPressed: () {
-                        onInteract();
-                        onFullscreenToggle!();
-                      },
-                    ),
-                ],
-              ),
+              width: 480,
+              child: row,
             ),
           );
         },
@@ -365,25 +376,38 @@ class _TimeLabel extends StatelessWidget {
       builder: (context, _) {
         final durMs = model.duration.inMilliseconds;
         final posMs = model.position.inMilliseconds;
-        final fraction = scrub.sliderValue(durMs.toDouble(), posMs.toDouble());
-        final displayPos = durMs > 0
-            ? Duration(
-                milliseconds: (fraction * durMs).round().clamp(0, durMs),
-              )
-            : model.position;
+        final showZero = model.state == PlayerState.idle ||
+            model.state == PlayerState.ready ||
+            model.state == PlayerState.stopped ||
+            model.state == PlayerState.error;
+        final effectivePos = showZero
+            ? Duration.zero
+            : (durMs > 0
+                ? Duration(
+                    milliseconds: (scrub
+                                .sliderValue(
+                                  durMs.toDouble(),
+                                  posMs.toDouble(),
+                                ) *
+                            durMs)
+                        .round()
+                        .clamp(0, durMs),
+                  )
+                : model.position);
         final text = remaining
             ? formatDuration(
-                model.duration - displayPos < Duration.zero
+                model.duration - effectivePos < Duration.zero
                     ? Duration.zero
-                    : model.duration - displayPos,
+                    : model.duration - effectivePos,
               )
-            : formatDuration(displayPos);
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
+            : formatDuration(effectivePos);
+        return SizedBox(
+          width: 52,
           child: Text(
             text,
             maxLines: 1,
             softWrap: false,
+            textAlign: remaining ? TextAlign.right : TextAlign.left,
             style: TextStyle(
               color: theme.textColor,
               fontSize: 12,

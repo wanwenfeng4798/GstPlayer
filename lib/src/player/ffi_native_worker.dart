@@ -7,7 +7,6 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 
 import '../domain/player_events.dart';
-import '../ffi/init_timing.dart';
 import '../ffi/gstp_library.dart';
 
 /// Serializes [headers] to JSON for the native HTTP source layer.
@@ -46,21 +45,19 @@ class FfiNativeWorker {
   }
 
   static Future<FfiNativeWorker> _start() async {
-    return gstpTimedAsync('worker_spawn', () async {
-      final ready = ReceivePort();
-      await Isolate.spawn(
-        _workerMain,
-        ready.sendPort,
-        debugName: 'gstp-ffi-worker',
-      );
-      final commands = await ready.first as SendPort;
-      ready.close();
-      final worker = FfiNativeWorker._(commands);
-      worker._replies.listen(worker._onReply);
-      _instance = worker;
-      _starting = null;
-      return worker;
-    });
+    final ready = ReceivePort();
+    await Isolate.spawn(
+      _workerMain,
+      ready.sendPort,
+      debugName: 'gstp-ffi-worker',
+    );
+    final commands = await ready.first as SendPort;
+    ready.close();
+    final worker = FfiNativeWorker._(commands);
+    worker._replies.listen(worker._onReply);
+    _instance = worker;
+    _starting = null;
+    return worker;
   }
 
   void _onReply(dynamic message) {

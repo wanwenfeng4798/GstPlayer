@@ -105,15 +105,9 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
-    final sw = Stopwatch()..start();
     _controller
         .initialize()
         .then((_) async {
-          debugPrint(
-            '[gstp-init-timing] example_controller_init='
-            '${sw.elapsedMilliseconds}ms '
-            'playerId=${_controller.playerId}',
-          );
           await _prepareSubtitlesAndPreview();
           if (mounted) setState(() => _ready = true);
         })

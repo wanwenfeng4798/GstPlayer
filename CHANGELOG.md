@@ -1,3 +1,26 @@
+## 0.0.4
+
+### Playback & native
+
+- Network MOV / QuickTime duration via qtdemux SEGMENT sticky probe (replaces
+  unreliable GstDiscoverer / factory duration queries).
+- Custom HTTP request headers and device User-Agent on all platforms.
+- Windows / Linux: `linux_env` GStreamer registry cache, FFI symbol retain
+  (`gstp_ffi_keep`), aligned with macOS plugin behavior.
+- Removed discoverer path, deep position MAX query, and init-timing debug logs.
+- playbin3 `playsink` duration/position queries; position clamping for startup
+  anomalies on network MOV.
+
+### UI
+
+- Screenshot restored in the settings popup on all platforms (`onScreenshot`).
+- Danmaku Ticker interpolation; fixed-width time labels; progress bar jitter
+  fixes (no transport-row FittedBox scale; skip tween on large position jumps).
+
+### Docs
+
+- README / CHANGELOG for 0.0.4; `VideoSource.network` HTTP header examples.
+
 ## 0.0.3
 
 ### UI (Flutter 3.44 / `material_ui`)

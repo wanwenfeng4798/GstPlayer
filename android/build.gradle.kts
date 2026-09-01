@@ -157,23 +157,18 @@ val buildGstreamerUmbrella =
             file("$projectDir/gstreamer_build/jni/Android.mk"),
             file("$projectDir/gstreamer_build/jni/Application.mk"),
             file("$projectDir/gstreamer_build/jni/dummy.c"),
-            file("$projectDir/gstreamer_build/patches/reqwest-android-current-thread.patch"),
             file("$gstScriptsDir/build_gstreamer_umbrella.sh"),
-            file("$gstScriptsDir/build_reqwest_plugin_android.sh"),
         )
 
         outputs.dir(gstJniOut)
 
-        // Existence alone is not enough: a stale unpatched umbrella (multi-thread
-        // Tokio) would otherwise be treated as UP-TO-DATE and ship into the APK.
         outputs.upToDateWhen {
             val abis = resolveGstreamerAbis()
-            // Empty ABI list must never count as up-to-date (Kotlin all{} is true on empty).
             abis.isNotEmpty() &&
                 abis.all { abi ->
                     file("$gstJniOut/$abi/libgstreamer_android.so").exists() &&
                         file("$gstJniOut/$abi/libc++_shared.so").exists() &&
-                        file("$gstJniOut/$abi/.reqwest-tokio-current-thread").exists()
+                        file("$gstJniOut/$abi/.gstreamer-umbrella-soup").exists()
                 }
         }
 

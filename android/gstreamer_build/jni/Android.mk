@@ -41,9 +41,8 @@ GSTREAMER_NDK_BUILD_PATH := $(GSTREAMER_ROOT)/share/gst-android/ndk-build/
 #   ogg/ogv  ogg + theora / vorbis
 #   flv/asf/ts/ps  dedicated demuxers; libav fills remaining codecs
 #
-# HTTP: reqwest (patched current_thread Tokio). Do not add soup — playbin
-# would autoplug souphttpsrc and hit the TLS/pthread crash. See
-# build_reqwest_plugin_android.sh.
+# HTTP: souphttpsrc (official C plugin from the 1.28.6 Android SDK; same as
+# iOS/macOS). No gst-plugins-rs reqwest / Rust cross-compile on Android.
 #
 # `opengl` is REQUIRED for hardware decode: Qualcomm/Android MediaCodec
 # (amcvideodec) only emits GL textures (memory:GLMemory, texture-target=
@@ -61,7 +60,7 @@ GSTREAMER_PLUGINS := \
     jpeg png theora vpx opus vorbis androidmedia \
     libav mpegpsdemux mpegtsdemux asf mpg123 wavparse \
     opengl opensles \
-    reqwest tcp udp
+    soup tcp udp
 
 GSTREAMER_EXTRA_DEPS := gstreamer-video-1.0 gstreamer-app-1.0
 # TLS for https://. 1.28.6 Android SDK ships openssl (docs still mention gnutls).

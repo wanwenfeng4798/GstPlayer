@@ -169,6 +169,7 @@ class _GstVideoViewState extends State<GstVideoView> {
   PlayerState? _lastState;
   bool _lastHideBlackBars = false;
   bool _lastLightsOff = false;
+  int _lastSeekFailureGeneration = 0;
 
   @override
   void initState() {
@@ -222,6 +223,7 @@ class _GstVideoViewState extends State<GstVideoView> {
     if (generation != _lastMediaGeneration) {
       _lastMediaGeneration = generation;
       _lastFramePng = null;
+      _lastSeekFailureGeneration = 0;
       if (generation > 0) {
         _immersive.aspectRatioMode = _chromeSettings.hideBlackBars
             ? AspectRatioMode.fill
@@ -252,6 +254,23 @@ class _GstVideoViewState extends State<GstVideoView> {
       }
     }
     _lastState = state;
+
+    final seekFailureGen = widget.controller.seekFailureGeneration;
+    if (seekFailureGen != _lastSeekFailureGeneration) {
+      _lastSeekFailureGeneration = seekFailureGen;
+      final reason = widget.controller.lastSeekFailure;
+      if (reason != null && mounted) {
+        final message = switch (reason) {
+          SeekFailureReason.bufferingIncomplete =>
+            _strings.seekWaitForBuffering,
+          SeekFailureReason.notSeekable => _strings.seekNotSupported,
+        };
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
+    }
+
     if (mounted) setState(() {});
   }
 

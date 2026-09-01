@@ -8,7 +8,9 @@ import 'package:flutter/widgets.dart';
 import '../controls/playback_controls_model.dart';
 import '../gstplayer.dart';
 import '../domain/player_events.dart';
+import '../domain/seek_failure_reason.dart';
 import '../enum/video_rotation.dart';
+import '../enum/video_source_type.dart';
 import '../media/frame_image.dart';
 import '../media/media_source_resolver.dart';
 import '../model/video_source.dart';
@@ -79,6 +81,15 @@ class PlaybackSession extends ChangeNotifier
   /// Pins UI position after user seek until native timing catches up.
   int? _seekPinMs;
   DateTime? _seekPinUntil;
+
+  SeekFailureReason? _lastSeekFailure;
+  int _seekFailureGeneration = 0;
+
+  /// Last seek failure reason for UI feedback; cleared on successful seek or [open].
+  SeekFailureReason? get lastSeekFailure => _lastSeekFailure;
+
+  /// Increments when [lastSeekFailure] is set so views can show one-shot toasts.
+  int get seekFailureGeneration => _seekFailureGeneration;
 
   /// 每次 [open] 递增；供 View 在切换媒体时重置 UI 状态 / Increments on each [open]; lets views reset UI state on media switch.
   @override
@@ -337,13 +348,24 @@ class PlaybackSession extends ChangeNotifier
     _previewSeek(position, showBuffering: false);
     try {
       await _port.seek(position);
+      _lastSeekFailure = null;
     } catch (e) {
       debugPrint('gstplayer: seek soft-fail: $e');
       _seekPinMs = null;
       _seekPinUntil = null;
       _position = beforeSeek;
+      _lastSeekFailure = _classifySeekFailure();
+      _seekFailureGeneration++;
       notifyListeners();
     }
+  }
+
+  SeekFailureReason _classifySeekFailure() {
+    final source = _mediaSource;
+    if (source?.type == VideoSourceType.network && _bufferingPercent < 100) {
+      return SeekFailureReason.bufferingIncomplete;
+    }
+    return SeekFailureReason.notSeekable;
   }
 
   @override
@@ -467,6 +489,7 @@ class PlaybackSession extends ChangeNotifier
     _duration = Duration.zero;
     _seekPinMs = null;
     _seekPinUntil = null;
+    _lastSeekFailure = null;
     _isSeekable = true;
     _volume = 1.0;
     _muted = false;

@@ -42,6 +42,8 @@ class GstPlayerStrings {
     required this.unlockControls,
     required this.screenshot,
     required this.screenshotFailed,
+    required this.seekWaitForBuffering,
+    required this.seekNotSupported,
     required this.aspectRatioLabels,
     required this.orientationLabels,
   });
@@ -78,6 +80,8 @@ class GstPlayerStrings {
         unlockControls: '解锁',
         screenshot: '截图',
         screenshotFailed: '截图失败',
+        seekWaitForBuffering: '请等待缓冲完成',
+        seekNotSupported: '该文件不支持拖动',
         aspectRatioLabels: const AspectRatioModeLabels(),
         orientationLabels: const VideoRotationLabels(),
       );
@@ -114,6 +118,8 @@ class GstPlayerStrings {
         unlockControls: 'Unlock controls',
         screenshot: 'Screenshot',
         screenshotFailed: 'Screenshot failed',
+        seekWaitForBuffering: 'Please wait until buffering completes',
+        seekNotSupported: 'This file cannot be scrubbed',
         aspectRatioLabels: const AspectRatioModeLabels(
           fit: 'Fit',
           fill: 'Fill',
@@ -152,6 +158,8 @@ class GstPlayerStrings {
   final String unlockControls;
   final String screenshot;
   final String screenshotFailed;
+  final String seekWaitForBuffering;
+  final String seekNotSupported;
   final AspectRatioModeLabels aspectRatioLabels;
   final VideoRotationLabels orientationLabels;
 

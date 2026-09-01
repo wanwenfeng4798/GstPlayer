@@ -16,5 +16,9 @@ void main() {
     expect(en.send, 'Send');
     expect(zh.audioTrackFallback(3), '音轨 3');
     expect(en.audioTrackFallback(3), 'Track 3');
+    expect(zh.seekWaitForBuffering, '请等待缓冲完成');
+    expect(en.seekWaitForBuffering, 'Please wait until buffering completes');
+    expect(zh.seekNotSupported, '该文件不支持拖动');
+    expect(en.seekNotSupported, 'This file cannot be scrubbed');
   });
 }

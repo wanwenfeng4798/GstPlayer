@@ -10,6 +10,7 @@ import 'model/video_source.dart';
 import 'player/command_port.dart';
 import 'player/playback_session.dart';
 import 'domain/player_events.dart';
+import 'domain/seek_failure_reason.dart';
 
 export 'enum/video_rotation.dart';
 export 'domain/player_events.dart'
@@ -22,6 +23,7 @@ export 'domain/player_events.dart'
         PlayerEventKind,
         TrackType,
         VideoMetadata;
+export 'domain/seek_failure_reason.dart';
 export 'model/video_source.dart';
 
 /// 单个 GStreamer 播放器的公开门面 / Public facade for a single GStreamer-backed player.
@@ -130,6 +132,12 @@ class GstPlayerController extends ChangeNotifier
   /// 当前 pipeline 是否支持多轨选择 / Whether multi-track selection is supported.
   @override
   bool get supportsTracks => _session.supportsTracks;
+
+  /// Last seek failure for UI toasts; see [seekFailureGeneration].
+  SeekFailureReason? get lastSeekFailure => _session.lastSeekFailure;
+
+  /// Bumps when [lastSeekFailure] is set.
+  int get seekFailureGeneration => _session.seekFailureGeneration;
 
   /// 当前 pipeline 是否支持视频方向变换 / Whether video orientation transforms are supported.
   @override

@@ -6,6 +6,7 @@ import 'package:gstplayer/src/enum/video_rotation.dart';
 import 'package:gstplayer/src/model/video_source.dart';
 import 'package:gstplayer/src/player/playback_session.dart';
 import 'package:gstplayer/src/domain/player_events.dart';
+import 'package:gstplayer/src/domain/seek_failure_reason.dart';
 
 import '../support/fake_player_command_port.dart';
 import '../support/player_event_fixtures.dart';
@@ -153,6 +154,26 @@ void main() {
       expect(session.position, Duration.zero);
       expect(session.error, isNull);
       expect(session.state, isNot(PlayerState.error));
+      expect(session.lastSeekFailure, SeekFailureReason.notSeekable);
+      expect(session.seekFailureGeneration, 1);
+    });
+
+    test('network seek failure while buffering reports wait message reason',
+        () async {
+      port = FakePlayerCommandPort(failSeek: true);
+      session = PlaybackSession(port: port);
+      await session.initialize();
+      await session.open(VideoSource.network('https://example.com/video.avi'));
+      port.emit(
+        event(
+          kind: PlayerEventKind.buffering,
+          bufferingPercent: 40,
+        ),
+      );
+
+      await session.seek(const Duration(seconds: 5));
+
+      expect(session.lastSeekFailure, SeekFailureReason.bufferingIncomplete);
     });
 
     test('durationChanged refreshes isSeekable from event', () async {

@@ -16,14 +16,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Auto-initializes the GStreamer Android runtime before any Dart FFI code runs.
  *
  * <p>The {@code libgstreamer_android.so} umbrella library is built at compile time
- * and packaged into the plugin AAR. It must be loaded through
- * {@link System#loadLibrary} here (not Dart FFI {@code dlopen}) so the library's
- * {@code JNI_OnLoad} runs, the JavaVM is captured, and the {@code androidmedia}
- * (MediaCodec) decoders register. Without this, playback fails with
- * "not-linked" / "No streams to output".
+ * (GStreamer 1.28.6 {@code gstreamer-1.0.mk}) and packaged into the plugin AAR.
+ * It must be loaded through {@link System#loadLibrary} here (not Dart FFI
+ * {@code dlopen}) so the library's {@code JNI_OnLoad} runs, the JavaVM is
+ * captured, and the {@code androidmedia} (MediaCodec) decoders register. Without
+ * this, playback fails with "not-linked" / "No streams to output".
  *
- * <p>{@link GStreamer#init} sets the application {@code Context}/{@code ClassLoader}
- * required for MediaCodec codec discovery. A {@link ContentProvider} is used
+ * <p>{@link GStreamer#init} calls umbrella {@code nativeInit}, which sets the
+ * application {@code Context}/{@code ClassLoader} for MediaCodec. Background
+ * {@code gstp_init} then calls {@code gst_init}, which runs generated
+ * {@code gst_init_static_plugins()} ({@code GST_PLUGIN_STATIC_REGISTER} for
+ * every plugin in {@code Android.mk}). TLS uses the SDK openssl GIO module
+ * (not the outdated gnutls example in the online Android install docs). A {@link ContentProvider} is used
  * because its {@link #onCreate()} runs during process startup - before
  * {@code Application.onCreate} and long before the Flutter engine.
  *

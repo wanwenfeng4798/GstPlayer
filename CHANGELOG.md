@@ -1,5 +1,17 @@
 ## 0.0.4
 
+### Android
+
+- HTTPS / HTTP uses official **`souphttpsrc`** from the GStreamer **1.28.6** Android
+  SDK (same HTTP element family as iOS/macOS). The umbrella `ndk-build` links
+  `libgstsoup.a` from the SDK — **no** `gst-plugins-rs` / Rust cross-compile on
+  Android.
+- Removed **`reqwest-android-current-thread.patch`** and
+  **`build_reqwest_plugin_android.sh`** (and Tokio symbol verification in the
+  umbrella build). Gradle up-to-date checks use `.gstreamer-umbrella-soup`.
+- **Android builds no longer require Rust** (`rustup`, Android cargo targets, or
+  `pkg-config` for reqwest).
+
 ### Playback & native
 
 - Network MOV / QuickTime duration via qtdemux SEGMENT sticky probe (replaces
@@ -34,7 +46,8 @@
 
 ### Docs
 
-- README / CHANGELOG for 0.0.4; `VideoSource.network` HTTP header examples.
+- README (EN / zh-CN): Android prerequisites, installation, and troubleshooting
+  updated for `souphttpsrc` (removed Rust / reqwest / patch references).
 
 ## 0.0.3
 
@@ -173,6 +186,10 @@
   ndk-build’s libtool path otherwise passes a bare `gstrsworkspace` to
   `clang++` and the umbrella link fails. Cargo’s staticlib already embeds the
   Rust workspace crates, so the extra `.la` dependency is unnecessary.
+
+  > **Superseded in 0.0.4:** Android HTTPS now uses official `souphttpsrc` from
+  > the GStreamer SDK; the reqwest patch, Rust cross-compile, and
+  > `build_reqwest_plugin_android.sh` were removed.
 - Android / macOS GStreamer helper scripts share cache roots under
   `*/Caches/gstplayer/gstreamer/...` (override with
   `GSTREAMER_ROOT_ANDROID` / `GSTPLAYER_GSTREAMER_ROOT` as before).

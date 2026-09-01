@@ -47,7 +47,7 @@ buildscript {
     }
     dependencies {
         // Keep classpath for standalone/plugin-module resolution; apps use AGP from settings.
-        classpath("com.android.tools.build:gradle:9.3.0")
+        classpath("com.android.tools.build:gradle:9.3.2")
     }
 }
 
@@ -123,8 +123,9 @@ dependencies {
 
 // --- GStreamer (Android) dynamic build --------------------------------------
 // On every Android build the plugin downloads the official GStreamer Android SDK
-// (if missing) and runs ndk-build to produce libgstreamer_android.so per ABI.
-// Override GSTREAMER_ROOT_ANDROID / GST_VER for offline or custom SDK paths.
+// (if missing) and runs ndk-build to produce libgstreamer_android.so per ABI
+// (souphttpsrc and other plugins from Android.mk). Override
+// GSTREAMER_ROOT_ANDROID / GST_VER for offline or custom SDK paths.
 // See android/scripts/ and the plugin README, "Android".
 
 fun resolveGstreamerAbis(): List<String> {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds libgstreamer_android.so (umbrella) for the requested Android ABIs via
-# ndk-build, then installs into the SDK lib dirs (Rust link) and the Gradle
-# jniLibs output directory (runtime packaging).
+# ndk-build, then installs into the SDK lib dirs and the Gradle jniLibs output
+# directory (runtime packaging).
 #
 # Usage:
 #   build_gstreamer_umbrella.sh <ndk_path> <output_jnilibs_dir> <abi> [abi...]

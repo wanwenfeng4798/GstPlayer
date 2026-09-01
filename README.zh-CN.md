@@ -15,8 +15,7 @@ Apple/桌面：`appsink` BGRA 帧）。
 
 支持平台：**Android、iOS、macOS、Windows、Linux**。
 
-> **Android / iOS / macOS：** 首次构建会自动下载 GStreamer SDK。**Android** 还需本机
-> [Rust](#前置条件) 工具链（用于 HTTPS / reqwest）。
+> **Android / iOS / macOS：** 首次构建会自动下载 GStreamer SDK。
 > **Windows / Linux：** 需在本机安装一次 GStreamer（见下文）。
 
 > 功能范围：视频播放 —— 打开 / 播放 / 暂停 / 停止 / 跳转 / 音量 / 静音 / 倍速 /
@@ -108,7 +107,7 @@ GStreamer 编解码 / 协议的场景）。
 ## 前置条件
 
 在**编译应用的机器**上准备下列环境（装一次即可）。Android / iOS / macOS 的
-GStreamer SDK 仍会在首次构建时自动下载，但 **Android 需要本机 Rust**。
+GStreamer SDK 会在首次构建时自动下载。
 
 ### 通用
 
@@ -118,29 +117,10 @@ GStreamer SDK 仍会在首次构建时自动下载，但 **Android 需要本机 
 
 ### Android
 
-HTTPS（`reqwesthttpsrc`）会在构建伞形原生库时用 Rust 编译：
-
-```bash
-# Rust 工具链
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup default stable
-
-# 本插件用到的 Android target
-rustup target add \
-  aarch64-linux-android \
-  armv7-linux-androideabi \
-  i686-linux-android \
-  x86_64-linux-android
-```
-
-另外还需要：
-
-- Android SDK + NDK（按 Flutter 常规 Android 环境即可；Gradle 会调用 NDK）
-- `PATH` 上有 `pkg-config`（Cargo 读取 SDK 缓存里的 GStreamer `.pc`）
-
-  - macOS：`brew install pkgconf`
-  - Linux：`sudo apt install pkg-config`
-  - Windows：例如 `choco install pkgconfiglite`
+- Android SDK + NDK（Flutter 常规 Android 环境；Gradle 通过 `ndk-build` 生成
+  `libgstreamer_android.so`）
+- HTTPS / HTTP 使用 GStreamer Android SDK 自带的官方 **`souphttpsrc`**（编入
+  伞形库，**无需 Rust 工具链**）
 
 ### iOS
 
@@ -182,8 +162,7 @@ flutter run
 - 首次构建会把官方 GStreamer SDK 下载到 `~/Library/Caches/gstplayer/...`
   （只需联网一次，无需 sudo）。
 - 之后复用缓存。
-- 这几个平台**无需**手动跑 GStreamer 安装器；Android 仍需上方的 Rust /
-  `pkg-config`。
+- 这几个平台**无需**手动跑 GStreamer 安装器。
 
 **iOS：** 请使用真机（`flutter run -d <device>`）。不支持模拟器。
 
@@ -484,6 +463,8 @@ C:     native/ playbin3 ─► appsink（Apple/桌面）或 glimagesink（Androi
 ```
 
 - 解码：`playbin3` + 平台 sink（`appsink` 或 `glimagesink`）。
+- 网络 HTTP(S)：各平台均使用 `souphttpsrc`（Android/iOS/macOS 由伞形库或
+  framework 静态注册；Windows/Linux 使用系统 GStreamer）。
 - 渲染：Flutter `Texture`；Android 为 `SurfaceProducer` + VideoOverlay，且等
   surface 就绪后才真正开播；Apple/桌面经 C ABI（`gstp_texture_*`）拉取 BGRA 帧。
 - 控制面：Dart FFI → 窄 `gstp_player_*` API（见 `native/include/gstp_player.h`）。
@@ -514,10 +495,12 @@ dart run ffigen --config ffigen.yaml
 - **首次构建很慢 / 需要联网（Android / iOS / macOS）：** 正常。官方 GStreamer SDK
   会下载到 `~/Library/Caches/gstplayer/`，之后复用。离线 CI 可预置该缓存，或设置
   `GSTREAMER_ROOT_ANDROID` / `GSTREAMER_ROOT_IOS` / `GSTPLAYER_GSTREAMER_ROOT`。
-- **Android 报 `cargo: command not found` / 缺少 Android target：** 安装 Rust，并
-  `rustup target add` 四个 Android triple —— 见 [前置条件](#前置条件)。
-- **Android / macOS 构建 reqwest 时 `pkg-config` 报错：** 安装 `pkgconf` /
-  `pkg-config`（例如 `brew install pkgconf`）。
+- **Android `ndk-build` / 伞形库失败：** 确认 NDK 与应用的 `android.ndkVersion`
+  一致、首次构建可下载 GStreamer SDK，插件升级后执行 `flutter clean` 再
+  `flutter run`。旧 reqwest 时代的 jniLibs 由 `.gstreamer-umbrella-soup` 标记
+  失效并触发重编。
+- **macOS `pkg-config` 报错（Homebrew GStreamer 开发包）：** 安装 `pkgconf`
+  （例如 `brew install pkgconf`）。
 - **iOS 模拟器：** 不支持，请用真机。
 - **iOS 报 `Plug-in ended with non-zero exit code: 1`：** 通常是 SPM 构建插件
   `EnsureGStreamerIOS` 失败（首次下载 SDK，或找不到 `ios/scripts`）。在 Xcode

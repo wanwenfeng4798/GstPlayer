@@ -17,8 +17,7 @@ on Android).
 Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 
 > **Android / iOS / macOS:** GStreamer SDK is downloaded automatically on the
-> first build. **Android** also needs a local [Rust](#prerequisites) toolchain
-> (for HTTPS / reqwest). **Windows / Linux:** install GStreamer once on the
+> first build. **Windows / Linux:** install GStreamer once on the
 > machine (see below).
 
 > Scope: video playback — open / play / pause / stop / seek / volume /
@@ -128,29 +127,10 @@ itself is still auto-downloaded for Android / iOS / macOS on first build.
 
 ### Android
 
-HTTPS (`reqwesthttpsrc`) is built from Rust during the umbrella native build:
-
-```bash
-# Rust toolchain
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup default stable
-
-# Android targets used by this plugin
-rustup target add \
-  aarch64-linux-android \
-  armv7-linux-androideabi \
-  i686-linux-android \
-  x86_64-linux-android
-```
-
-Also required:
-
-- Android SDK + NDK (normal Flutter Android setup; NDK is used by Gradle)
-- `pkg-config` on `PATH` (Cargo reads GStreamer `.pc` files from the SDK cache)
-
-  - macOS: `brew install pkgconf`
-  - Linux: `sudo apt install pkg-config`
-  - Windows: e.g. `choco install pkgconfiglite`
+- Android SDK + NDK (normal Flutter Android setup; Gradle runs `ndk-build` for
+  `libgstreamer_android.so`)
+- HTTPS / HTTP uses official **`souphttpsrc`** from the GStreamer Android SDK
+  (linked into the umbrella at build time — **no Rust toolchain**)
 
 ### iOS
 
@@ -193,8 +173,7 @@ That is enough for **Android / iOS / macOS** (after [Prerequisites](#prerequisit
 - The first build downloads the official GStreamer SDK into
   `~/Library/Caches/gstplayer/...` (needs network once; no sudo).
 - Later builds reuse the cache.
-- No manual GStreamer **installer** for those platforms; Android still needs
-  Rust / `pkg-config` as listed above.
+- No manual GStreamer **installer** for those platforms.
 
 **iOS:** use a physical device (`flutter run -d <device>`). Simulator is not supported.
 
@@ -516,6 +495,8 @@ C:     native/ playbin3 ─► appsink (Apple/desktop) or glimagesink (Android)
 ```
 
 - Decoding: `playbin3` with platform video sink (`appsink` or `glimagesink`).
+- Network HTTP(S): `souphttpsrc` on all platforms (Android/iOS/macOS via static
+  plugins in the umbrella or framework; Windows/Linux via system GStreamer).
 - Rendering: Flutter `Texture` + native `TextureRegistry`; Android uses
   `SurfaceProducer` + VideoOverlay and defers play until that surface exists;
   Apple/desktop pull BGRA frames via C ABI (`gstp_texture_*`).
@@ -549,11 +530,12 @@ before build/publish:
   official GStreamer SDK is downloaded once into `~/Library/Caches/gstplayer/`.
   Offline CI: pre-seed that cache or set `GSTREAMER_ROOT_ANDROID` /
   `GSTREAMER_ROOT_IOS` / `GSTPLAYER_GSTREAMER_ROOT`.
-- **Android `cargo: command not found` / missing Android targets:** install Rust
-  and `rustup target add` the four Android triples — see
-  [Prerequisites](#prerequisites).
-- **Android / macOS `pkg-config` errors while building reqwest:** install
-  `pkgconf` / `pkg-config` (e.g. `brew install pkgconf`).
+- **Android `ndk-build` / umbrella failed:** ensure NDK matches `android.ndkVersion`
+  in the app, network access for the first GStreamer SDK download, and a clean
+  rebuild after plugin updates (`flutter clean` then `flutter run`). Stale
+  jniLibs from the old reqwest build are invalidated by `.gstreamer-umbrella-soup`.
+- **macOS `pkg-config` errors (Homebrew GStreamer dev):** install `pkgconf`
+  (e.g. `brew install pkgconf`).
 - **iOS Simulator:** not supported. Use a physical device.
 - **iOS `Plug-in ended with non-zero exit code: 1`:** usually the
   `EnsureGStreamerIOS` SPM build plugin failed (first-time SDK download, or

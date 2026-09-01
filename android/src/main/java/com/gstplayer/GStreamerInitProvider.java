@@ -26,7 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * application {@code Context}/{@code ClassLoader} for MediaCodec. Background
  * {@code gstp_init} then calls {@code gst_init}, which runs generated
  * {@code gst_init_static_plugins()} ({@code GST_PLUGIN_STATIC_REGISTER} for
- * every plugin in {@code Android.mk}). TLS uses the SDK openssl GIO module
+ * every plugin in {@code Android.mk}, including {@code souphttpsrc} for HTTPS).
+ * TLS uses the SDK openssl GIO module
  * (not the outdated gnutls example in the online Android install docs). A {@link ContentProvider} is used
  * because its {@link #onCreate()} runs during process startup - before
  * {@code Application.onCreate} and long before the Flutter engine.

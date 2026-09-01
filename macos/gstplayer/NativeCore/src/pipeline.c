@@ -834,6 +834,17 @@ static gboolean gstp_deferred_play_cb(gpointer data) {
 }
 #endif
 
+/* Local/asset never emit GST_MESSAGE_BUFFERING. Network must stay at 0 until
+ * BUFFERING / PLAYING — a fake 100% races with qtdemux/avidemux download fill
+ * and makes the loading percent jump backwards. */
+static void gstp_finish_load_buffering(GstpPlayer *p) {
+  if (p->is_uri) {
+    return;
+  }
+  p->buffering_percent = 100;
+  gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
+}
+
 int32_t gstp_pipeline_load_uri(GstpPlayer *p, const char *uri, bool auto_play,
                                const char *http_headers_json) {
   if (!uri || !*uri) {
@@ -898,10 +909,8 @@ int32_t gstp_pipeline_load_uri(GstpPlayer *p, const char *uri, bool auto_play,
   }
 
   /* Clear optimistic 0% so UI spinner hides when GStreamer never emits
-   * BUFFERING (local/asset / autoPlay:false). Real rebuffer can still drop
-   * below 100 via GST_MESSAGE_BUFFERING. */
-  p->buffering_percent = 100;
-  gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
+   * BUFFERING (local/asset). Network waits for GST_MESSAGE_BUFFERING. */
+  gstp_finish_load_buffering(p);
 
   gstp_player_set_state(p, GSTP_STATE_READY);
   /* Caps may already be negotiated after preroll; emit size so Dart layout
@@ -928,8 +937,7 @@ int32_t gstp_pipeline_load_uri(GstpPlayer *p, const char *uri, bool auto_play,
     return rc;
   }
 
-  p->buffering_percent = 100;
-  gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
+  gstp_finish_load_buffering(p);
 
   gstp_player_set_state(p, GSTP_STATE_READY);
   gstp_media_update_timing(p);

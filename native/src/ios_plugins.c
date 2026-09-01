@@ -31,6 +31,7 @@ GSTP_DECL_PLUGIN(isomp4);
 GSTP_DECL_PLUGIN(matroska);
 GSTP_DECL_PLUGIN(id3demux);
 GSTP_DECL_PLUGIN(subparse);
+GSTP_DECL_PLUGIN(avi);
 GSTP_DECL_PLUGIN(libav);
 GSTP_DECL_PLUGIN(jpeg);
 GSTP_DECL_PLUGIN(png);
@@ -71,6 +72,7 @@ void gstp_register_ios_static_plugins(void) {
   gst_plugin_matroska_register();
   gst_plugin_id3demux_register();
   gst_plugin_subparse_register();
+  gst_plugin_avi_register();
   gst_plugin_libav_register();
   gst_plugin_jpeg_register();
   gst_plugin_png_register();

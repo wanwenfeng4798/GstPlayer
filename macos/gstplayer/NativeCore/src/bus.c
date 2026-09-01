@@ -497,6 +497,10 @@ static gboolean gstp_bus_on_message(GstBus *bus, GstMessage *msg,
           p->replay_preroll_since_us = 0;
           p->buffering_percent = 100;
           gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
+        } else if (p->is_uri && p->buffering_percent < 100) {
+          /* Playable without BUFFERING messages: complete the load bar. */
+          p->buffering_percent = 100;
+          gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
         }
         if (p->position_ms <= 0 && p->last_frame_pts_ms < 0) {
           p->position_ms = 0;
@@ -530,7 +534,13 @@ static gboolean gstp_bus_on_message(GstBus *bus, GstMessage *msg,
       }
       break;
     }
-    p->buffering_percent = percent;
+    /* Initial download fill is non-monotonic for MOV/AVI (qtdemux/avidemux
+     * consume the HTTP queue). Keep the high-water mark until 100%. */
+    const bool regress = percent < 100 && p->buffering_percent < 100 &&
+                         percent < p->buffering_percent;
+    if (!regress) {
+      p->buffering_percent = percent;
+    }
     if (percent < 100) {
       /* Standard playbin network buffering: pause until cached, then resume. */
       if (p->desired_playing && p->pipeline) {
@@ -569,7 +579,9 @@ static gboolean gstp_bus_on_message(GstBus *bus, GstMessage *msg,
     if (percent >= 100) {
       gstp_media_update_timing(p);
     }
-    gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
+    if (!regress) {
+      gstp_player_emit(p, GSTP_EVENT_BUFFERING, "");
+    }
     break;
   }
   case GST_MESSAGE_DURATION_CHANGED:

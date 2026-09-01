@@ -631,7 +631,12 @@ class PlaybackSession extends ChangeNotifier
           _clearLoadingMediaIfReady();
         }
       case PlayerEventKind.buffering:
-        _bufferingPercent = event.bufferingPercent;
+        final incoming = event.bufferingPercent;
+        if (_loadingMedia && incoming < 100 && incoming < _bufferingPercent) {
+          // Ignore download-queue regressions during initial MOV/AVI fill.
+        } else {
+          _bufferingPercent = incoming;
+        }
         // Mid-playback rebuffer: keep playing state so video surface stays visible.
         if (event.bufferingPercent < 100) {
           if (_loadingMedia || _videoSize == Size.zero) {

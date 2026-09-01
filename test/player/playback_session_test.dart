@@ -661,6 +661,28 @@ void main() {
       expect(session.duration, Duration.zero);
     });
 
+    test('loading overlay ignores buffering percent regressions', () async {
+      await session.initialize();
+      await session.open(VideoSource.network('https://example.com/video.mov'));
+      expect(session.bufferingPercent, 0);
+
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 50));
+      await Future<void>.delayed(Duration.zero);
+      expect(session.bufferingPercent, 50);
+
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 30));
+      await Future<void>.delayed(Duration.zero);
+      expect(session.bufferingPercent, 50);
+
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 80));
+      await Future<void>.delayed(Duration.zero);
+      expect(session.bufferingPercent, 80);
+
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 100));
+      await Future<void>.delayed(Duration.zero);
+      expect(session.bufferingPercent, 100);
+    });
+
     test('open clears media-specific state', () async {
       await session.initialize();
       port.emit(

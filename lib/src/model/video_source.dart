@@ -15,22 +15,22 @@ import '../enum/video_source_type.dart';
 /// controller.open(const VideoSource.asset('assets/sample.mp4'));
 /// ```
 ///
-/// 经 [MediaSourceResolver] 转为 Rust [MediaSourceDto] 后交给 GStreamer pipeline。
-/// Resolved to a Rust [MediaSourceDto] via [MediaSourceResolver] before entering the GStreamer pipeline.
+/// 经 [MediaSourceResolver] 转为 [MediaSourceDto] 后交给 GStreamer pipeline。
+/// Resolved to a [MediaSourceDto] via [MediaSourceResolver] before entering the GStreamer pipeline.
 class VideoSource {
   /// 远程 URL 媒体（`http(s)://`、`rtsp://` 等）/ Media served from a remote URL.
   const VideoSource.network(this.uri, {this.httpHeaders = const {}})
-      : type = VideoSourceType.network;
+    : type = VideoSourceType.network;
 
   /// 本地文件路径或 `file://` URI / Local filesystem path or `file://` URI.
   const VideoSource.file(this.uri)
-      : type = VideoSourceType.file,
-        httpHeaders = const {};
+    : type = VideoSourceType.file,
+      httpHeaders = const {};
 
   /// Flutter 资源键（如 `assets/sample.mp4`）/ Flutter asset key declared in `pubspec.yaml`.
   const VideoSource.asset(this.uri)
-      : type = VideoSourceType.asset,
-        httpHeaders = const {};
+    : type = VideoSourceType.asset,
+      httpHeaders = const {};
 
   /// 地址、本地路径或资源键，含义取决于 [type] / Address, path, or asset key depending on [type].
   final String uri;

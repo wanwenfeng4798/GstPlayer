@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:gstplayer/src/player/command_port.dart';
 import 'package:gstplayer/src/domain/player_events.dart';
 
-/// Test double for [PlayerCommandPort] — the Dart/Rust seam under [PlaybackSession].
+/// Test double for [PlayerCommandPort] — the Dart/native FFI seam under [PlaybackSession].
 class FakePlayerCommandPort implements PlayerCommandPort {
   FakePlayerCommandPort({
     this.failCreate = false,
@@ -15,7 +15,7 @@ class FakePlayerCommandPort implements PlayerCommandPort {
 
   final bool failCreate;
   final bool failLoad;
-  final bool failSeek;
+  bool failSeek;
   final bool seekable;
 
   List<MediaTrack> tracksToReturn;

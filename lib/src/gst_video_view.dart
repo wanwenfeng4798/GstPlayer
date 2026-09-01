@@ -265,9 +265,9 @@ class _GstVideoViewState extends State<GstVideoView> {
             _strings.seekWaitForBuffering,
           SeekFailureReason.notSeekable => _strings.seekNotSupported,
         };
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     }
 
@@ -277,11 +277,13 @@ class _GstVideoViewState extends State<GstVideoView> {
   Future<void> _captureLastFrame() async {
     _capturingLastFrame = true;
     try {
-      // Desktop/iOS may map appsink frames; Android uses External-OES and does
-      // not support mid-pipeline grab — poster / frozen surface is the cover.
-      final png = await widget.controller.captureCurrentFrame();
+      // Android display sink has no appsink frame grab; captureFramePng falls
+      // back to a headless thumbnail so keep-last-frame still has a poster.
+      final png = await widget.controller.captureFramePng();
       if (!mounted) return;
-      setState(() => _lastFramePng = png);
+      if (png != null && png.isNotEmpty) {
+        setState(() => _lastFramePng = png);
+      }
     } catch (_) {
       // Texture/surface may already hold the frame; overlay is best-effort.
     } finally {

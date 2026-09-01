@@ -2,7 +2,7 @@ import CoreVideo
 import FlutterMacOS
 import Foundation
 
-/// Rust C-ABI frame bridge (see rust/src/platform/texture.rs).
+/// C ABI frame bridge (`gstp_texture_*` in native/).
 @_silgen_name("gstp_texture_register")
 func gstp_texture_register(
     _ playerId: Int64,
@@ -32,7 +32,7 @@ func gstp_texture_copy_latest(
     _ outStride: UnsafeMutablePointer<Int32>?
 ) -> Bool
 
-/// C trampoline invoked by Rust on the GStreamer streaming thread.
+/// C trampoline invoked by the native player on the GStreamer streaming thread.
 private func gstpTextureOnFrame(_ ctx: UnsafeMutableRawPointer?) {
     guard let ctx = ctx else { return }
     let texture = Unmanaged<GstVideoTexture>.fromOpaque(ctx).takeUnretainedValue()

@@ -78,27 +78,4 @@ Java_com_gstplayer_AndroidSurfaceBridge_nativeOnSurfaceDestroyed(
   gstp_player_clear_android_surface(player_id);
 }
 
-/* No-op stubs: asset bytes are loaded in Dart; context/plugin binds unused by C core. */
-JNIEXPORT void JNICALL
-Java_com_gstplayer_FlutterAssetHelper_nativeBindAssetHelperClass(
-    JNIEnv *env, jclass clazz) {
-  (void)env;
-  (void)clazz;
-}
-
-JNIEXPORT void JNICALL
-Java_com_gstplayer_NativeAndroidContext_nativeInitAndroidContext(
-    JNIEnv *env, jclass clazz, jobject context) {
-  (void)env;
-  (void)clazz;
-  (void)context;
-}
-
-JNIEXPORT void JNICALL
-Java_com_gstplayer_GstPlayerPlugin_nativeBindPluginClass(
-    JNIEnv *env, jclass clazz) {
-  (void)env;
-  (void)clazz;
-}
-
 #endif /* __ANDROID__ */

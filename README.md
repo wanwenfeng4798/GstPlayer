@@ -65,9 +65,9 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 
 - Local files, Flutter assets, and network URLs (`http(s)://`, `rtsp://`, ...).
 - Play / pause / stop / seek / looping.
-- EOS replay and looping use the same native rewind path for local files and
-  progressive network streams (MOV / AVI / MP4); scrub seeks use accurate
-  positioning by default.
+- EOS replay and looping reload the current [VideoSource] via `open()` (same
+  path as switching sources) for local files and progressive network streams
+  (MOV / AVI / MP4); scrub seeks use accurate positioning by default.
 - Volume (popup vertical slider with live **0–100** readout), mute, and playback speed.
 - Bilibili-inspired two-row chrome: pink progress (`#FB7299`), remaining time,
   speed / settings / volume / fullscreen, then danmaku input + CC; auto-hiding.
@@ -79,7 +79,9 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 - Mobile surface gestures (**inline and fullscreen**): horizontal seek, left brightness / right volume (HUD shows percent). Disabled while controls are locked.
 - Progress-bar scrub thumbnail preview (external WebVTT + sprite / frame list).
 - Poster image and keep-last-frame after EOS.
-- External subtitle overlay (SRT/WebVTT via `SubtitleParser`) plus embedded subtitle track selection API/UI.
+- External subtitle overlay (SRT/WebVTT via `SubtitleParser`). Embedded subtitle
+  tracks are enumerable via `tracks` / `selectTrack`; there is no in-pipeline
+  subtitle renderer or settings UI for them.
 - Danmaku (bullet comment) overlay driven by app-supplied `DanmakuItem` cues.
 - Frame capture via **Settings → Screenshot** (`onScreenshot` — host saves PNG) and one-shot covers (`captureThumbnail`). Set `showCaptureButton: false` to hide the settings entry.
 - Reactive state via [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
@@ -301,6 +303,8 @@ await controller.open(const VideoSource.asset('assets/sample.mp4'));
 2. One `GstPlayerController` per surface; always `dispose()` it.
 3. Read playback state inside `ListenableBuilder` / `addListener`.
 4. First Android / iOS / macOS build needs network for the SDK cache.
+5. On Android, `play()` waits for a Flutter `Texture` (`GstVideoView`). Calling
+   play without a view holds auto-play until the surface exists.
 
 ## Network permissions
 
@@ -378,8 +382,8 @@ scrub preview uses `scrubPreview` (external VTT/sprite), not live capture.
 | `setSpeed(double)` | Playback speed multiplier. |
 | `setLooping(bool)` | Loop at end-of-stream. |
 | `tracks` / `refreshTracks()` / `selectTrack(MediaTrack, {enable})` | Audio / video / subtitle tracks. |
-| `captureCurrentFrame()` | Latest decoded frame as PNG (`gstp_player_capture_frame`). |
-| `queryPosition()` / `queryDuration()` | Query the pipeline directly. |
+| `captureCurrentFrame()` | Latest decoded frame as PNG (`gstp_player_capture_frame`; Apple/desktop appsink). |
+| `captureFramePng()` | Screenshot PNG; Android uses a headless thumbnail pipeline. |
 | `dispose()` | Tear down the player and release all resources. |
 
 Reactive state (plain getters on `ChangeNotifier`; read inside `ListenableBuilder`
@@ -513,8 +517,8 @@ C:     native/ playbin3 ─► appsink (Apple/desktop) or glimagesink (Android)
 
 - Decoding: `playbin3` with platform video sink (`appsink` or `glimagesink`).
 - Rendering: Flutter `Texture` + native `TextureRegistry`; Android uses
-  `SurfaceProducer` + VideoOverlay; Apple/desktop pull BGRA frames via C ABI
-  (`gstp_texture_*`).
+  `SurfaceProducer` + VideoOverlay and defers play until that surface exists;
+  Apple/desktop pull BGRA frames via C ABI (`gstp_texture_*`).
 - Control plane: Dart FFI → narrow `gstp_player_*` API (see `native/include/gstp_player.h`).
 
 ### Regenerating FFI bindings

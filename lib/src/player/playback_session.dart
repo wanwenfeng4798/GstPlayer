@@ -26,8 +26,8 @@ import 'command_port.dart';
 /// Core of [GstPlayerController]. Maintains listenable state, listens to [PlayerCommandPort.events],
 /// maps [PlayerEvent] to fields; commands run through `_guard` to capture errors into [error].
 ///
-/// Seek/volume 等命令会先乐观更新 UI（`_preview*`），再异步调用 Rust。
-/// Seek/volume and similar commands optimistically update UI (`_preview*`) before async Rust calls.
+/// Seek/volume 等命令会先乐观更新 UI（`_preview*`），再异步调用 native FFI。
+/// Seek/volume and similar commands optimistically update UI (`_preview*`) before async native FFI calls.
 class PlaybackSession extends ChangeNotifier
     implements PlaybackControlsModel, PlaybackPresentationModel {
   static const Duration _transportDebounce = Duration(milliseconds: 200);
@@ -337,8 +337,9 @@ class PlaybackSession extends ChangeNotifier
 
   /// 跳转；仅更新位置预览，缓冲态由 native BUFFERING 事件驱动 / Seeks; position preview only — buffering from native events.
   ///
-  /// Soft-fails: a native seek error keeps optimistic position and does not
-  /// promote the session to [PlayerState.error] (scrub must stay recoverable).
+  /// Soft-fails: a native seek error rolls position back to the pre-seek value
+  /// and does not promote the session to [PlayerState.error] (scrub must stay
+  /// recoverable).
   @override
   Future<void> seek(Duration position) async {
     final beforeSeek = _position;
@@ -348,7 +349,10 @@ class PlaybackSession extends ChangeNotifier
     _previewSeek(position, showBuffering: false);
     try {
       await _port.seek(position);
-      _lastSeekFailure = null;
+      if (_lastSeekFailure != null) {
+        _lastSeekFailure = null;
+        notifyListeners();
+      }
     } catch (e) {
       debugPrint('gstplayer: seek soft-fail: $e');
       _seekPinMs = null;
@@ -361,6 +365,9 @@ class PlaybackSession extends ChangeNotifier
   }
 
   SeekFailureReason _classifySeekFailure() {
+    if (!_isSeekable) {
+      return SeekFailureReason.notSeekable;
+    }
     final source = _mediaSource;
     if (source?.type == VideoSourceType.network && _bufferingPercent < 100) {
       return SeekFailureReason.bufferingIncomplete;
@@ -490,6 +497,7 @@ class PlaybackSession extends ChangeNotifier
     _seekPinMs = null;
     _seekPinUntil = null;
     _lastSeekFailure = null;
+    _seekFailureGeneration = 0;
     _isSeekable = true;
     _volume = 1.0;
     _muted = false;
@@ -556,7 +564,10 @@ class PlaybackSession extends ChangeNotifier
           if (DateTime.now().isBefore(_seekPinUntil!)) {
             final pin = _seekPinMs!;
             final delta = (eventMs - pin).abs();
-            final tol = math.max(3000, (_duration.inMilliseconds * 0.05).round());
+            final tol = math.max(
+              3000,
+              (_duration.inMilliseconds * 0.05).round(),
+            );
             if (delta > tol) {
               break;
             }
@@ -569,15 +580,9 @@ class PlaybackSession extends ChangeNotifier
             _seekPinUntil = null;
           }
         }
-        _position = _clampPosition(
-          Duration(milliseconds: eventMs),
-          _duration,
-        );
+        _position = _clampPosition(Duration(milliseconds: eventMs), _duration);
       case PlayerEventKind.videoSize:
-        _videoSize = Size(
-          event.width.toDouble(),
-          event.height.toDouble(),
-        );
+        _videoSize = Size(event.width.toDouble(), event.height.toDouble());
         _clearLoadingMediaIfReady();
       case PlayerEventKind.metadataChanged:
         _videoMetadata = VideoMetadata(
@@ -633,9 +638,7 @@ class PlaybackSession extends ChangeNotifier
             _state = PlayerState.buffering;
           }
         } else if (_wantPlaying != null) {
-          _state = _wantPlaying!
-              ? PlayerState.playing
-              : PlayerState.paused;
+          _state = _wantPlaying! ? PlayerState.playing : PlayerState.paused;
         } else if (!_loadingMedia) {
           // Buffering finished but native may still be waiting for surface /
           // deferred play — do not fake playing (masks "not actually playing").

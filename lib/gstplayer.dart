@@ -4,7 +4,7 @@
 /// Exports player initialization, controllers, views, media source descriptors, and built-in control theming.
 ///
 /// # 主要导出 / Main exports
-/// - [GstPlayer] — 一次性初始化 Rust 桥 / one-time Rust bridge init
+/// - [GstPlayer] — 一次性初始化 C FFI 运行时 / one-time C FFI runtime init
 /// - [GstPlayerController] — 播放控制与 reactive 状态 / playback control and reactive state
 /// - [GstVideoView] — 带可选控件栏的视频视图 / video view with optional control bar
 /// - [VideoSource] — 网络/文件/资源媒体描述 / network, file, or asset media descriptor
@@ -36,8 +36,7 @@ export 'src/controls/scrub_preview_track.dart'
         ScrubPreviewTrackSprite,
         ScrubPreviewTrackVtt,
         ScrubPreviewVttParser;
-export 'src/controls/bili_overlay_controls.dart'
-    show BiliOverlayControlsConfig;
+export 'src/controls/bili_overlay_controls.dart' show BiliOverlayControlsConfig;
 export 'src/overlay/danmaku.dart' show DanmakuItem, DanmakuOverlay;
 export 'src/overlay/subtitle.dart'
     show SubtitleCue, SubtitleOverlay, SubtitleParser;

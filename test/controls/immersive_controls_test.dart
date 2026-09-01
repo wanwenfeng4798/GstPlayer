@@ -81,6 +81,30 @@ void main() {
       }
     });
 
+    testWidgets('arrow seek is ignored when media is not seekable', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      try {
+        model.dispose();
+        model = FakePlaybackControlsModel(
+          duration: const Duration(seconds: 100),
+          initialPosition: const Duration(seconds: 30),
+          isSeekable: false,
+        );
+        await pumpControls(tester);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(model.seekCallCount, 0);
+        expect(model.lastSeek, isNull);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
     testWidgets('arrow right seeks forward on desktop immersive', (
       tester,
     ) async {

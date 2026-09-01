@@ -143,37 +143,125 @@ void main() {
       expect(port.lastSeekPosition, const Duration(seconds: 12));
     });
 
-    test('seek failure after optimistic update soft-fails without error state',
-        () async {
+    test(
+      'seek failure after optimistic update soft-fails without error state',
+      () async {
+        port = FakePlayerCommandPort(failSeek: true);
+        session = PlaybackSession(port: port);
+        await session.initialize();
+
+        await session.seek(const Duration(seconds: 5));
+
+        expect(session.position, Duration.zero);
+        expect(session.error, isNull);
+        expect(session.state, isNot(PlayerState.error));
+        expect(session.lastSeekFailure, SeekFailureReason.notSeekable);
+        expect(session.seekFailureGeneration, 1);
+      },
+    );
+
+    test(
+      'network seek failure while buffering reports wait message reason',
+      () async {
+        port = FakePlayerCommandPort(failSeek: true);
+        session = PlaybackSession(port: port);
+        await session.initialize();
+        await session.open(
+          VideoSource.network('https://example.com/video.avi'),
+        );
+        port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 40));
+
+        await session.seek(const Duration(seconds: 5));
+
+        expect(session.lastSeekFailure, SeekFailureReason.bufferingIncomplete);
+        expect(session.seekFailureGeneration, 1);
+      },
+    );
+
+    test(
+      'network seek failure after buffering complete is notSeekable',
+      () async {
+        port = FakePlayerCommandPort(failSeek: true);
+        session = PlaybackSession(port: port);
+        await session.initialize();
+        await session.open(
+          VideoSource.network('https://example.com/video.avi'),
+        );
+        port.emit(
+          event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
+        );
+
+        await session.seek(const Duration(seconds: 5));
+
+        expect(session.lastSeekFailure, SeekFailureReason.notSeekable);
+      },
+    );
+
+    test('file seek failure while buffering is notSeekable', () async {
       port = FakePlayerCommandPort(failSeek: true);
       session = PlaybackSession(port: port);
       await session.initialize();
+      await session.open(const VideoSource.file('/tmp/video.mp4'));
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 40));
 
       await session.seek(const Duration(seconds: 5));
 
-      expect(session.position, Duration.zero);
-      expect(session.error, isNull);
-      expect(session.state, isNot(PlayerState.error));
       expect(session.lastSeekFailure, SeekFailureReason.notSeekable);
-      expect(session.seekFailureGeneration, 1);
     });
 
-    test('network seek failure while buffering reports wait message reason',
-        () async {
-      port = FakePlayerCommandPort(failSeek: true);
+    test('unseekable network still buffering reports notSeekable', () async {
+      port = FakePlayerCommandPort(failSeek: true, seekable: false);
       session = PlaybackSession(port: port);
       await session.initialize();
-      await session.open(VideoSource.network('https://example.com/video.avi'));
-      port.emit(
-        event(
-          kind: PlayerEventKind.buffering,
-          bufferingPercent: 40,
-        ),
-      );
+      await session.open(VideoSource.network('https://example.com/live.ts'));
+      expect(session.isSeekable, isFalse);
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 40));
 
       await session.seek(const Duration(seconds: 5));
 
-      expect(session.lastSeekFailure, SeekFailureReason.bufferingIncomplete);
+      expect(session.lastSeekFailure, SeekFailureReason.notSeekable);
+    });
+
+    test('consecutive seek failures increment generation', () async {
+      port = FakePlayerCommandPort(failSeek: true);
+      session = PlaybackSession(port: port);
+      await session.initialize();
+
+      await session.seek(const Duration(seconds: 5));
+      await session.seek(const Duration(seconds: 8));
+
+      expect(session.seekFailureGeneration, 2);
+      expect(session.lastSeekFailure, SeekFailureReason.notSeekable);
+    });
+
+    test('successful seek clears lastSeekFailure and notifies', () async {
+      port = FakePlayerCommandPort(failSeek: true);
+      session = PlaybackSession(port: port);
+      await session.initialize();
+      await session.seek(const Duration(seconds: 5));
+      expect(session.lastSeekFailure, SeekFailureReason.notSeekable);
+
+      var notified = false;
+      session.addListener(() => notified = true);
+      port.failSeek = false;
+      await session.seek(const Duration(seconds: 8));
+
+      expect(session.lastSeekFailure, isNull);
+      expect(notified, isTrue);
+    });
+
+    test('open clears lastSeekFailure and resets generation', () async {
+      port = FakePlayerCommandPort(failSeek: true);
+      session = PlaybackSession(port: port);
+      await session.initialize();
+      await session.seek(const Duration(seconds: 5));
+      expect(session.lastSeekFailure, SeekFailureReason.notSeekable);
+      expect(session.seekFailureGeneration, 1);
+
+      await session.open(const VideoSource.file('/tmp/other.mp4'));
+
+      expect(session.lastSeekFailure, isNull);
+      expect(session.seekFailureGeneration, 0);
     });
 
     test('durationChanged refreshes isSeekable from event', () async {
@@ -211,26 +299,25 @@ void main() {
       expect(session.isSeekable, isFalse);
     });
 
-    test('bogus preroll position is clamped before duration is known', () async {
-      await session.initialize();
-      port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.buffering));
-      port.emit(
-        event(
-          kind: PlayerEventKind.positionChanged,
-          positionMs: 999999999,
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-      expect(session.position, Duration.zero);
-    });
+    test(
+      'bogus preroll position is clamped before duration is known',
+      () async {
+        await session.initialize();
+        port.emit(
+          PlayerEventFixtures.stateChanged(state: PlayerState.buffering),
+        );
+        port.emit(
+          event(kind: PlayerEventKind.positionChanged, positionMs: 999999999),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(session.position, Duration.zero);
+      },
+    );
 
     test('idle state always reports zero position', () async {
       await session.initialize();
       port.emit(
-        event(
-          kind: PlayerEventKind.positionChanged,
-          positionMs: 120000,
-        ),
+        event(kind: PlayerEventKind.positionChanged, positionMs: 120000),
       );
       port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.idle));
       await Future<void>.delayed(Duration.zero);
@@ -268,39 +355,36 @@ void main() {
       expect(port.pauseCallCount, 0);
     });
 
-    test(
-      'rapid toggles coalesce so final play reaches native last',
-      () async {
-        await session.initialize();
-        port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.playing));
-        await Future<void>.delayed(Duration.zero);
+    test('rapid toggles coalesce so final play reaches native last', () async {
+      await session.initialize();
+      port.emit(PlayerEventFixtures.stateChanged(state: PlayerState.playing));
+      await Future<void>.delayed(Duration.zero);
 
-        final gate = Completer<void>();
-        port.pauseGate = gate;
+      final gate = Completer<void>();
+      port.pauseGate = gate;
 
-        // First toggle starts pause and blocks mid-flight.
-        final first = session.togglePlayPause();
-        await Future<void>.delayed(const Duration(milliseconds: 240));
-        expect(session.isPlaying, isFalse);
-        expect(port.transportLog, ['pause']);
+      // First toggle starts pause and blocks mid-flight.
+      final first = session.togglePlayPause();
+      await Future<void>.delayed(const Duration(milliseconds: 240));
+      expect(session.isPlaying, isFalse);
+      expect(port.transportLog, ['pause']);
 
-        // Burst while pause is still in flight: end intent is play.
-        unawaited(session.togglePlayPause()); // want play
-        unawaited(session.togglePlayPause()); // want pause
-        final last = session.togglePlayPause(); // want play
-        expect(session.isPlaying, isTrue);
+      // Burst while pause is still in flight: end intent is play.
+      unawaited(session.togglePlayPause()); // want play
+      unawaited(session.togglePlayPause()); // want pause
+      final last = session.togglePlayPause(); // want play
+      expect(session.isPlaying, isTrue);
 
-        gate.complete();
-        await first;
-        await last;
-        await Future<void>.delayed(const Duration(milliseconds: 240));
+      gate.complete();
+      await first;
+      await last;
+      await Future<void>.delayed(const Duration(milliseconds: 240));
 
-        // Intermediate intents coalesce; native must end on play.
-        expect(port.transportLog.last, 'play');
-        expect(session.isPlaying, isTrue);
-        expect(port.playCallCount, greaterThanOrEqualTo(1));
-      },
-    );
+      // Intermediate intents coalesce; native must end on play.
+      expect(port.transportLog.last, 'play');
+      expect(session.isPlaying, isTrue);
+      expect(port.playCallCount, greaterThanOrEqualTo(1));
+    });
 
     test('late paused event does not clobber in-flight play intent', () async {
       await session.initialize();
@@ -413,9 +497,7 @@ void main() {
       expect(port.loadSourceCallCount, 2);
       expect(port.playCallCount, 0);
 
-      port.emit(
-        event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
-      );
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 100));
       port.emit(
         event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
       );
@@ -443,18 +525,12 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(session.position, Duration.zero);
 
-      port.emit(
-        event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
-      );
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 100));
       port.emit(
         event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
       );
       port.emit(
-        event(
-          kind: PlayerEventKind.videoSize,
-          width: 640,
-          height: 360,
-        ),
+        event(kind: PlayerEventKind.videoSize, width: 640, height: 360),
       );
       port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 120));
       await Future<void>.delayed(Duration.zero);
@@ -476,16 +552,12 @@ void main() {
       unawaited(session.play());
       await Future<void>.delayed(Duration.zero);
 
-      port.emit(
-        event(kind: PlayerEventKind.buffering, bufferingPercent: 4),
-      );
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 4));
       await Future<void>.delayed(Duration.zero);
       expect(session.state, PlayerState.buffering);
       expect(session.bufferingPercent, 4);
 
-      port.emit(
-        event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
-      );
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 100));
       port.emit(
         event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
       );
@@ -621,9 +693,7 @@ void main() {
       await session.open(VideoSource.network('https://example.com/b.mp4'));
       expect(session.position, Duration.zero);
 
-      port.emit(
-        event(kind: PlayerEventKind.positionChanged, positionMs: 5000),
-      );
+      port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 5000));
       await Future<void>.delayed(Duration.zero);
       expect(session.position, Duration.zero);
 
@@ -631,9 +701,7 @@ void main() {
         event(kind: PlayerEventKind.durationChanged, durationMs: 60000),
       );
       await Future<void>.delayed(Duration.zero);
-      port.emit(
-        event(kind: PlayerEventKind.positionChanged, positionMs: 5000),
-      );
+      port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 5000));
       await Future<void>.delayed(Duration.zero);
       expect(session.position, Duration.zero);
 
@@ -641,22 +709,16 @@ void main() {
         event(kind: PlayerEventKind.videoSize, width: 640, height: 360),
       );
       await Future<void>.delayed(Duration.zero);
-      port.emit(
-        event(kind: PlayerEventKind.positionChanged, positionMs: 5000),
-      );
+      port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 5000));
       await Future<void>.delayed(Duration.zero);
       expect(session.position, Duration.zero);
 
-      port.emit(
-        event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
-      );
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 100));
       port.emit(
         event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
       );
       await Future<void>.delayed(Duration.zero);
-      port.emit(
-        event(kind: PlayerEventKind.positionChanged, positionMs: 5000),
-      );
+      port.emit(event(kind: PlayerEventKind.positionChanged, positionMs: 5000));
       await Future<void>.delayed(Duration.zero);
       expect(session.position, const Duration(seconds: 5));
     });
@@ -672,9 +734,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(session.hideVideoSurface, isTrue);
 
-      port.emit(
-        event(kind: PlayerEventKind.buffering, bufferingPercent: 100),
-      );
+      port.emit(event(kind: PlayerEventKind.buffering, bufferingPercent: 100));
       port.emit(
         event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
       );

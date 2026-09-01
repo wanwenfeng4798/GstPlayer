@@ -62,9 +62,6 @@ public class GStreamerInitProvider extends ContentProvider {
 
             GStreamer.init(getContext());
 
-            FlutterAssetHelper.init(getContext());
-            NativeAndroidContext.init(getContext());
-
             startBackgroundWarmup();
 
             Log.i(TAG, "GStreamer Android libs ready; native warmup async");

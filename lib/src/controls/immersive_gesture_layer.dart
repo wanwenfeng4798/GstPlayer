@@ -139,6 +139,7 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
     if (!_axisResolved) return;
 
     if (_isHorizontal) {
+      if (!widget.model.isSeekable) return;
       _horizontalDrag += details.delta.dx;
       _previewHorizontalSeek(size.width);
       return;
@@ -174,6 +175,7 @@ class _ImmersiveGestureLayerState extends State<ImmersiveGestureLayer> {
   Future<void> _onPanEnd(DragEndDetails details) async {
     final size = context.size;
     if (_isHorizontal &&
+        widget.model.isSeekable &&
         _horizontalDrag.abs() >= _seekDragThreshold &&
         size != null) {
       final stepSeconds = widget.immersive.fullscreen.seekStep.seconds;

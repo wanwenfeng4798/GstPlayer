@@ -61,8 +61,8 @@ Apple/桌面：`appsink` BGRA 帧）。
 
 - 支持本地文件、Flutter 资源（asset）以及网络地址（`http(s)://`、`rtsp://` 等）。
 - 播放 / 暂停 / 停止 / 跳转 / 循环。
-- 播完重播与循环播放共用同一套 native 回绕逻辑（本地与 progressive 网络流
-  MOV / AVI / MP4 一致）；进度条松手默认精确 seek。
+- 播完重播与循环播放在 EOS 时由应用层 `open()` 重新加载当前源（与切源同一路径，
+  本地与 progressive 网络流 MOV / AVI / MP4 一致）；进度条松手默认精确 seek。
 - 音量（竖向弹出滑条，滑动时显示 **0–100** 数值）、静音、倍速。
 - B 站风格两行底栏：粉色进度条（`#FB7299`）、剩余时间、倍速 / 设置 / 音量 / 全屏，
   以及弹幕输入 + CC；自动隐藏。
@@ -73,7 +73,8 @@ Apple/桌面：`appsink` BGRA 帧）。
 - 移动端画面手势（**非全屏与全屏均可用**）：水平快进/快退，左侧亮度 / 右侧音量（HUD 显示百分比）。锁屏后禁用。
 - 进度条拖拽缩略图预览（外挂 WebVTT + 雪碧图 / 帧列表）。
 - 封面图与播完保留最后一帧。
-- 外挂字幕叠层（SRT/WebVTT，`SubtitleParser`）以及内嵌字幕轨选择 API/UI。
+- 外挂字幕叠层（SRT/WebVTT，`SubtitleParser`）。内嵌字幕轨可通过 `tracks` /
+  `selectTrack` 枚举/选择，但没有烧录渲染与设置页入口。
 - 弹幕叠层（由 App 注入 `DanmakuItem` 时间轴数据）。
 - 当前帧截图（**设置 → 截图**，`onScreenshot` 交给宿主保存）与一次性抽封面。`showCaptureButton: false` 可隐藏设置项。
 - 基于 [`ChangeNotifier`](https://api.flutter.dev/flutter/foundation/ChangeNotifier-class.html)
@@ -286,6 +287,8 @@ await controller.open(const VideoSource.asset('assets/sample.mp4'));
 2. 每个画面一个 `GstPlayerController`，销毁时务必 `dispose()`。
 3. 在 `ListenableBuilder` / `addListener` 内读取播放状态。
 4. Android / iOS / macOS 首次构建需要网络以下载 SDK 缓存。
+5. Android 上 `play()` 会等到 Flutter `Texture`（`GstVideoView`）就绪；没有视图时
+   会挂起自动播放，直到 surface 出现。
 
 ## 网络权限
 
@@ -356,8 +359,8 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
 | `setSpeed(double)` | 倍速。 |
 | `setLooping(bool)` | 结束时循环。 |
 | `tracks` / `refreshTracks()` / `selectTrack(MediaTrack, {enable})` | 音轨 / 视频轨 / 字幕轨。 |
-| `captureCurrentFrame()` | 当前解码帧 PNG（`gstp_player_capture_frame`）。 |
-| `queryPosition()` / `queryDuration()` | 直接向管线查询。 |
+| `captureCurrentFrame()` | 当前解码帧 PNG（`gstp_player_capture_frame`；Apple/桌面 appsink）。 |
+| `captureFramePng()` | 截图 PNG；Android 走无头 thumbnail 管线。 |
 | `dispose()` | 拆除播放器并释放全部资源。 |
 
 响应式状态（`ChangeNotifier` 普通 getter，请在 `ListenableBuilder` 中读取或
@@ -481,7 +484,8 @@ C:     native/ playbin3 ─► appsink（Apple/桌面）或 glimagesink（Androi
 ```
 
 - 解码：`playbin3` + 平台 sink（`appsink` 或 `glimagesink`）。
-- 渲染：Flutter `Texture`；Android 为 `SurfaceProducer` + VideoOverlay；Apple/桌面经 C ABI（`gstp_texture_*`）拉取 BGRA 帧。
+- 渲染：Flutter `Texture`；Android 为 `SurfaceProducer` + VideoOverlay，且等
+  surface 就绪后才真正开播；Apple/桌面经 C ABI（`gstp_texture_*`）拉取 BGRA 帧。
 - 控制面：Dart FFI → 窄 `gstp_player_*` API（见 `native/include/gstp_player.h`）。
 
 ### 重新生成 FFI 绑定

@@ -8,12 +8,12 @@ import '../enum/video_controls_style.dart';
 import '../domain/player_events.dart';
 import '../theme/video_controls_theme.dart';
 import '../utils/platform_util.dart';
-import 'cupertino_video_controls.dart';
+import 'bili_bottom_chrome.dart';
+import 'bili_chrome_video_controls.dart';
 import 'video_controls_top_bar.dart';
 import 'immersive_controls_state.dart';
 import 'immersive_gesture_layer.dart';
 import 'immersive_hud.dart';
-import 'material_video_controls.dart';
 import '../l10n/gst_player_strings.dart';
 import 'playback_controls_model.dart';
 import 'player_chrome_settings.dart';
@@ -235,6 +235,7 @@ class _VideoControlsState extends State<VideoControls> {
     Duration position,
     Duration duration,
   ) async {
+    if (!widget.model.isSeekable) return;
     final target = position + delta;
     final clamped = Duration(
       milliseconds: math.max(
@@ -280,37 +281,22 @@ class _VideoControlsState extends State<VideoControls> {
         Theme.of(context).extension<VideoControlsTheme>() ??
         VideoControlsTheme.bilibili();
 
-    final controls = cupertino
-        ? CupertinoVideoControls(
-            model: widget.model,
-            theme: theme,
-            strings: widget.strings,
-            settings: widget.settings,
-            onInteract: _keepAlive,
-            scrubPreview: widget.scrubPreview,
-            overlayControls: widget.overlayControls,
-            showFullscreenButton: true,
-            landscapeLocked: widget.immersive.landscapeLocked,
-            onFullscreenToggle: _toggleFullscreen,
-            immersive: widget.immersive,
-            showCaptureButton: widget.showCaptureButton,
-            onScreenshot: widget.onScreenshot,
-          )
-        : MaterialVideoControls(
-            model: widget.model,
-            theme: theme,
-            strings: widget.strings,
-            settings: widget.settings,
-            onInteract: _keepAlive,
-            scrubPreview: widget.scrubPreview,
-            overlayControls: widget.overlayControls,
-            showFullscreenButton: true,
-            landscapeLocked: widget.immersive.landscapeLocked,
-            onFullscreenToggle: _toggleFullscreen,
-            immersive: widget.immersive,
-            showCaptureButton: widget.showCaptureButton,
-            onScreenshot: widget.onScreenshot,
-          );
+    final controls = BiliChromeVideoControls(
+      model: widget.model,
+      theme: theme,
+      strings: widget.strings,
+      settings: widget.settings,
+      onInteract: _keepAlive,
+      icons: cupertino ? BiliControlIcons.cupertino : BiliControlIcons.material,
+      scrubPreview: widget.scrubPreview,
+      overlayControls: widget.overlayControls,
+      showFullscreenButton: true,
+      landscapeLocked: widget.immersive.landscapeLocked,
+      onFullscreenToggle: _toggleFullscreen,
+      immersive: widget.immersive,
+      showCaptureButton: widget.showCaptureButton,
+      onScreenshot: widget.onScreenshot,
+    );
 
     final chrome = Stack(
       fit: StackFit.expand,

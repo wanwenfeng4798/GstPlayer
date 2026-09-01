@@ -211,7 +211,7 @@ class GstPlayerController extends ChangeNotifier
     _immersive?.landscapeLocked = false;
   }
 
-  /// 创建原生 player 并订阅 Rust 事件流 / Creates the native player and subscribes to the Rust event stream.
+  /// 创建原生 player 并订阅 FFI 事件流 / Creates the native player and subscribes to the FFI event stream.
   Future<void> initialize() => _session.initialize();
 
   /// 加载 [source]；可选 [autoPlay] 立即开始播放 / Loads [source]; optionally starts playback.
@@ -254,7 +254,7 @@ class GstPlayerController extends ChangeNotifier
   @override
   Future<void> setLooping(bool looping) => _session.setLooping(looping);
 
-  /// 从 Rust 重新拉取轨道列表 / Refreshes the track list from Rust.
+  /// 从 native 重新拉取轨道列表 / Refreshes the track list from native.
   Future<void> refreshTracks() => _session.refreshTracks();
 
   /// 选中或取消选中 [track] / Selects or deselects [track].

@@ -1374,10 +1374,6 @@ int32_t gstp_pipeline_stop(GstpPlayer *p) {
   return rc;
 }
 
-int32_t gstp_pipeline_seek(GstpPlayer *p, int64_t position_ms) {
-  return gstp_pipeline_seek_at(p, position_ms, true);
-}
-
 int32_t gstp_pipeline_set_volume(GstpPlayer *p, double volume) {
   p->volume = volume < 0 ? 0 : (volume > 1 ? 1 : volume);
   if (p->pipeline) {

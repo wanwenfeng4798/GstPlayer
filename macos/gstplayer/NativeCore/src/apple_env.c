@@ -58,7 +58,7 @@ static void gstp_setup_sandbox_writable_env(void) {
   }
 
   /* Prefer the sandbox HOME iOS already provides (app container). Falling back
-   * to TMPDIR's parent matches the old Rust setup_sandbox_writable_env. */
+   * to the parent of TMPDIR keeps GStreamer registry/cache writable. */
   const char *home = getenv("HOME");
   char home_buf[PATH_MAX];
   if (!home || home[0] == '\0') {

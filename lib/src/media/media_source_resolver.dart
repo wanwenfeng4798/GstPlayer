@@ -2,10 +2,10 @@ import '../enum/video_source_type.dart';
 import '../model/video_source.dart';
 import '../domain/player_events.dart';
 
-/// 将 Dart [VideoSource] 解析为 Rust [MediaSourceDto] / Resolves a Dart [VideoSource] into a Rust [MediaSourceDto].
+/// 将 Dart [VideoSource] 解析为 native [MediaSourceDto] / Resolves a Dart [VideoSource] into a native [MediaSourceDto].
 ///
-/// 位于 Dart/Rust 接缝，在 [PlaybackSession.open] 调用 FRB 前执行。
-/// Runs at the Dart/Rust seam before FRB load in [PlaybackSession.open].
+/// 位于 Dart/native FFI 接缝，在 [PlaybackSession.open] 加载前执行。
+/// Runs at the Dart/native seam before [PlaybackSession.open] loads the source.
 class MediaSourceResolver {
   const MediaSourceResolver();
 
@@ -51,8 +51,9 @@ class MediaSourceResolver {
   static String _fileUriFromPath(String path) {
     if (RegExp(r'^[A-Za-z]:[/\\]').hasMatch(path)) {
       final normalized = path.replaceAll('\\', '/');
-      final withoutLeadingSlash =
-          normalized.startsWith('/') ? normalized.substring(1) : normalized;
+      final withoutLeadingSlash = normalized.startsWith('/')
+          ? normalized.substring(1)
+          : normalized;
       return 'file:///$withoutLeadingSlash';
     }
     return Uri.file(path).toString();

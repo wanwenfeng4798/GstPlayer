@@ -164,7 +164,6 @@ int32_t gstp_pipeline_load_asset(GstpPlayer *p, const uint8_t *bytes,
 int32_t gstp_pipeline_play(GstpPlayer *p);
 int32_t gstp_pipeline_pause(GstpPlayer *p);
 int32_t gstp_pipeline_stop(GstpPlayer *p);
-int32_t gstp_pipeline_seek(GstpPlayer *p, int64_t position_ms);
 int32_t gstp_pipeline_seek_at(GstpPlayer *p, int64_t position_ms, bool accurate);
 int32_t gstp_media_rewind(GstpPlayer *p);
 void gstp_replay_begin_resume(GstpPlayer *p);

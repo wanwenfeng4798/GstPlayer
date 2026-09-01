@@ -6,8 +6,6 @@ import android.webkit.WebSettings;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import io.flutter.FlutterInjector;
-import io.flutter.embedding.engine.loader.FlutterLoader;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -20,8 +18,6 @@ import java.util.Map;
 public class GstPlayerPlugin implements FlutterPlugin, MethodChannel.MethodCallHandler {
     public static final String TEXTURE_CHANNEL_NAME = "gstplayer/texture";
 
-    private static native void nativeBindPluginClass();
-
     @Nullable
     private static volatile GstPlayerPlugin instance;
 
@@ -33,16 +29,7 @@ public class GstPlayerPlugin implements FlutterPlugin, MethodChannel.MethodCallH
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
         instance = this;
-        Context context = binding.getApplicationContext();
-        appContext = context;
-        FlutterAssetHelper.init(context);
-        FlutterLoader loader = FlutterInjector.instance().flutterLoader();
-        try {
-            loader.ensureInitializationComplete(context, null);
-        } catch (IllegalStateException e) {
-            loader.startInitialization(context);
-            loader.ensureInitializationComplete(context, null);
-        }
+        appContext = binding.getApplicationContext();
 
         textureRegistry = binding.getTextureRegistry();
         textureChannel = new MethodChannel(
@@ -50,7 +37,6 @@ public class GstPlayerPlugin implements FlutterPlugin, MethodChannel.MethodCallH
             TEXTURE_CHANNEL_NAME
         );
         textureChannel.setMethodCallHandler(this);
-        nativeBindPluginClass();
     }
 
     @Override

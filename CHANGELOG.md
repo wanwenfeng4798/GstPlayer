@@ -1,3 +1,8 @@
+## 0.0.5
+
+- Bump Android Gradle Plugin to 9.4.1; enable `android.builtInKotlin=true`.
+- Update Gradle wrapper to 9.8.0 and pub/Android test dependencies to latest.
+
 ## 0.0.4
 
 ### Android

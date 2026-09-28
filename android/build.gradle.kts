@@ -47,7 +47,7 @@ buildscript {
     }
     dependencies {
         // Keep classpath for standalone/plugin-module resolution; apps use AGP from settings.
-        classpath("com.android.tools.build:gradle:9.3.2")
+        classpath("com.android.tools.build:gradle:9.4.1")
     }
 }
 
@@ -118,7 +118,7 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.mockito:mockito-core:5.24.0")
 }
 
 // --- GStreamer (Android) dynamic build --------------------------------------

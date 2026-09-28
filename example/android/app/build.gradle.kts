@@ -1,11 +1,9 @@
 import java.io.FileInputStream
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // The Flutter Gradle Plugin must be applied after the Android Gradle plugin.
     id("dev.flutter.flutter-gradle-plugin")
 }
 val localProperties = Properties()
@@ -24,11 +22,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
     kotlin {
-      compilerOptions {
-        jvmTarget = JvmTarget.JVM_17
-      }
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
     }
     packaging {
         dex {
@@ -93,6 +90,7 @@ android {
         }
     }
 }
+
 
 flutter {
     source = "../.."

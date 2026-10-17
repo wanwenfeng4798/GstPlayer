@@ -1,3 +1,4 @@
+#include "../native/src/pixel_copy.h"
 #include "gstplayer_texture.h"
 
 #include <flutter_linux/flutter_linux.h>
@@ -56,23 +57,6 @@ void GstpTextureOnFrame(void* ctx) {
   }
 }
 
-void BgraToRgbaTight(const uint8_t* src,
-                     int32_t width,
-                     int32_t height,
-                     int32_t src_stride,
-                     uint8_t* dst) {
-  const int row_bytes = width * 4;
-  for (int32_t y = 0; y < height; ++y) {
-    const uint8_t* src_row = src + y * src_stride;
-    uint8_t* dst_row = dst + y * row_bytes;
-    for (int32_t x = 0; x < width; ++x) {
-      dst_row[x * 4 + 0] = src_row[x * 4 + 2];
-      dst_row[x * 4 + 1] = src_row[x * 4 + 1];
-      dst_row[x * 4 + 2] = src_row[x * 4 + 0];
-      dst_row[x * 4 + 3] = src_row[x * 4 + 3];
-    }
-  }
-}
 
 }  // namespace
 
@@ -127,7 +111,7 @@ static gboolean gstplayer_texture_copy_pixels(FlPixelBufferTexture* texture,
     self->rgba->resize(rgba_bytes);
   }
 
-  BgraToRgbaTight(self->staging_bgra->data(), copied_w, copied_h,
+  gstp_bgra_to_rgba(self->staging_bgra->data(), copied_w, copied_h,
                   copied_stride, self->rgba->data());
 
   *out_buffer = self->rgba->data();

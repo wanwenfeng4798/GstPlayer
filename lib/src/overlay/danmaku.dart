@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// A single danmaku (bullet comment) cue / 单条弹幕.
@@ -54,6 +55,51 @@ class _DanmakuOverlayState extends State<DanmakuOverlay>
   static const int _hardSeekMs = 2000;
 
   late Ticker _ticker;
+  List<({DanmakuItem item, int lane})> _indexed = [];
+  List<int> _maxEndMs = [];
+  List<DanmakuItem> _sourceItems = [];
+
+  void _indexItems() {
+    _indexed = [
+      for (var i = 0; i < widget.items.length; i++)
+        (item: widget.items[i], lane: i),
+    ];
+    _indexed.sort((a, b) => a.item.at.compareTo(b.item.at));
+    var end = 0;
+    _maxEndMs = [
+      for (final entry in _indexed)
+        end = math.max(
+          end,
+          (entry.item.at + entry.item.duration).inMilliseconds,
+        ),
+    ];
+    _sourceItems = List<DanmakuItem>.of(widget.items);
+  }
+
+  bool get _animate =>
+      widget.enabled && widget.items.isNotEmpty && widget.isPlaying;
+
+  // Only scan cues whose start/end windows can include the current position.
+  Iterable<({DanmakuItem item, int lane})> _activeItems(
+    Duration position,
+  ) sync* {
+    final ms = position.inMilliseconds;
+    var lo = 0;
+    var hi = _indexed.length;
+    while (lo < hi) {
+      final mid = (lo + hi) ~/ 2;
+      if (_maxEndMs[mid] < ms) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    for (var i = lo; i < _indexed.length; i++) {
+      if (_indexed[i].item.at > position) break;
+      yield _indexed[i];
+    }
+  }
+
   Duration _anchorPosition = Duration.zero;
   DateTime? _anchorWallClock;
 
@@ -93,8 +139,9 @@ class _DanmakuOverlayState extends State<DanmakuOverlay>
     super.initState();
     _anchorPosition = widget.position;
     _anchorWallClock = DateTime.now();
+    _indexItems();
     _ticker = createTicker((_) => setState(() {}));
-    if (widget.isPlaying) {
+    if (_animate) {
       _ticker.start();
     }
   }
@@ -102,13 +149,17 @@ class _DanmakuOverlayState extends State<DanmakuOverlay>
   @override
   void didUpdateWidget(covariant DanmakuOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.position != oldWidget.position ||
+    if (!listEquals(_sourceItems, widget.items)) {
+      _indexItems();
+    }
+    if (widget.enabled != oldWidget.enabled ||
+        widget.position != oldWidget.position ||
         widget.isPlaying != oldWidget.isPlaying) {
       _syncAnchorToTarget(widget.position);
     }
-    if (widget.isPlaying && !_ticker.isActive) {
+    if (_animate && !_ticker.isActive) {
       _ticker.start();
-    } else if (!widget.isPlaying && _ticker.isActive) {
+    } else if (!_animate && _ticker.isActive) {
       _ticker.stop();
     }
   }
@@ -136,14 +187,14 @@ class _DanmakuOverlayState extends State<DanmakuOverlay>
             final laneHeight = math.max(24.0, height / 10);
             final laneCount = math.max(1, (height / laneHeight).floor());
             final children = <Widget>[];
-            for (var i = 0; i < widget.items.length; i++) {
-              final item = widget.items[i];
+            for (final entry in _activeItems(position)) {
+              final item = entry.item;
               final elapsed = position - item.at;
               if (elapsed.isNegative) continue;
               final totalMs = item.duration.inMilliseconds;
               if (totalMs <= 0 || elapsed.inMilliseconds > totalMs) continue;
               final t = elapsed.inMilliseconds / totalMs;
-              final lane = i % laneCount;
+              final lane = entry.lane % laneCount;
               final top = lane * laneHeight + 4;
               final textWidth = _estimateTextWidth(item.text);
               final travel = width + textWidth + 24;

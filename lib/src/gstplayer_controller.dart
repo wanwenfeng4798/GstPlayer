@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+
 import 'dart:typed_data';
 
 import 'enum/video_rotation.dart';
@@ -58,6 +59,7 @@ class GstPlayerController extends ChangeNotifier
   }
 
   final PlaybackSession _session;
+  Future<void>? _disposing;
 
   ImmersiveControlsState? _immersive;
 
@@ -280,10 +282,11 @@ class GstPlayerController extends ChangeNotifier
 
   /// 释放 player 与事件订阅 / Disposes the player and event subscription.
   @override
-  Future<void> dispose() async {
+  Future<void> dispose() {
+    if (_disposing case final pending?) return pending;
     detachImmersive();
     _session.removeListener(_onSessionChanged);
-    await _session.dispose();
     super.dispose();
+    return _disposing = _session.dispose();
   }
 }

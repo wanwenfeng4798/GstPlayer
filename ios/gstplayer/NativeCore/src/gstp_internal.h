@@ -55,7 +55,6 @@ typedef struct GstpPlayer {
   GstpFrameReadyFn frame_cb;
   void *frame_ctx;
 
-  GMutex frame_mu;
   GstpFrameBuffer frames[2];
   int latest_frame;
 
@@ -94,8 +93,6 @@ typedef struct GstpPlayer {
   char color_matrix[64];
   char color_range[64];
   char hdr_format[64];
-  /* Durable copy for async NativeCallable.listener (no stack pointers). */
-  char event_message[512];
 
   GstpTrackInfo tracks[GSTP_MAX_TRACKS];
   int32_t track_count;
@@ -110,13 +107,15 @@ typedef struct GstpPlayer {
   bool pending_auto_play;
   GstElement *overlay_element; /* non-owning; child of video-sink bin */
 
-  uint8_t *asset_bytes;
-  uint32_t asset_len;
-  uint32_t asset_offset;
   char asset_temp_path[512];
   char media_uri[2048];
 
   GHashTable *http_headers;
+  bool verify_tls;
+
+  /* Initialized once, never copied or reset when a player slot is reused. */
+  GMutex frame_mu;
+  GMutex callback_mu;
 } GstpPlayer;
 
 typedef struct GstpRuntime {
@@ -158,7 +157,7 @@ void gstp_player_emit(GstpPlayer *p, int32_t kind, const char *message);
 void gstp_player_set_state(GstpPlayer *p, int32_t state);
 
 int32_t gstp_pipeline_load_uri(GstpPlayer *p, const char *uri, bool auto_play,
-                               const char *http_headers_json);
+                               const char *http_headers_json, bool verify_tls);
 int32_t gstp_pipeline_load_asset(GstpPlayer *p, const uint8_t *bytes,
                                  uint32_t len, bool auto_play);
 int32_t gstp_pipeline_play(GstpPlayer *p);

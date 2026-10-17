@@ -19,18 +19,23 @@ import '../enum/video_source_type.dart';
 /// Resolved to a [MediaSourceDto] via [MediaSourceResolver] before entering the GStreamer pipeline.
 class VideoSource {
   /// 远程 URL 媒体（`http(s)://`、`rtsp://` 等）/ Media served from a remote URL.
-  const VideoSource.network(this.uri, {this.httpHeaders = const {}})
-    : type = VideoSourceType.network;
+  const VideoSource.network(
+    this.uri, {
+    this.httpHeaders = const {},
+    this.allowInsecureTls = false,
+  }) : type = VideoSourceType.network;
 
   /// 本地文件路径或 `file://` URI / Local filesystem path or `file://` URI.
   const VideoSource.file(this.uri)
     : type = VideoSourceType.file,
-      httpHeaders = const {};
+      httpHeaders = const {},
+      allowInsecureTls = false;
 
   /// Flutter 资源键（如 `assets/sample.mp4`）/ Flutter asset key declared in `pubspec.yaml`.
   const VideoSource.asset(this.uri)
     : type = VideoSourceType.asset,
-      httpHeaders = const {};
+      httpHeaders = const {},
+      allowInsecureTls = false;
 
   /// 地址、本地路径或资源键，含义取决于 [type] / Address, path, or asset key depending on [type].
   final String uri;
@@ -41,6 +46,10 @@ class VideoSource {
   /// 网络播放时的自定义 HTTP 请求头（仅 [VideoSourceType.network] 有效）。
   final Map<String, String> httpHeaders;
 
+  /// Explicit opt-out of server certificate verification for this network source.
+  /// Applies to playback and thumbnails. Defaults to false.
+  final bool allowInsecureTls;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -48,10 +57,12 @@ class VideoSource {
           runtimeType == other.runtimeType &&
           uri == other.uri &&
           type == other.type &&
+          allowInsecureTls == other.allowInsecureTls &&
           _mapEquals(httpHeaders, other.httpHeaders);
 
   @override
-  int get hashCode => Object.hash(uri, type, _mapHash(httpHeaders));
+  int get hashCode =>
+      Object.hash(uri, type, allowInsecureTls, _mapHash(httpHeaders));
 
   @override
   String toString() {

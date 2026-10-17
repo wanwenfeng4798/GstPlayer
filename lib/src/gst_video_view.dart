@@ -265,9 +265,8 @@ class _GstVideoViewState extends State<GstVideoView> {
             _strings.seekWaitForBuffering,
           SeekFailureReason.notSeekable => _strings.seekNotSupported,
         };
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
       }
     }
 
@@ -279,8 +278,15 @@ class _GstVideoViewState extends State<GstVideoView> {
     try {
       // Android display sink has no appsink frame grab; captureFramePng falls
       // back to a headless thumbnail so keep-last-frame still has a poster.
-      final png = await widget.controller.captureFramePng();
-      if (!mounted) return;
+      final controller = widget.controller;
+      final generation = controller.mediaGeneration;
+      final png = await controller.captureFramePng();
+      if (!mounted ||
+          controller != widget.controller ||
+          generation != controller.mediaGeneration ||
+          controller.state != PlayerState.completed) {
+        return;
+      }
       if (png != null && png.isNotEmpty) {
         setState(() => _lastFramePng = png);
       }
@@ -311,11 +317,6 @@ class _GstVideoViewState extends State<GstVideoView> {
     if (oldWidget.aspectRatioMode != widget.aspectRatioMode &&
         !_chromeSettings.hideBlackBars) {
       _immersive.aspectRatioMode = widget.aspectRatioMode;
-    }
-    // Keep screenshot API fields reachable without rendering a chrome button.
-    if (oldWidget.showCaptureButton != widget.showCaptureButton ||
-        oldWidget.onScreenshot != widget.onScreenshot) {
-      // Wired through VideoControls → settings popup.
     }
   }
 

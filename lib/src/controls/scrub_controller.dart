@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -31,12 +30,9 @@ class ScrubController extends ChangeNotifier {
   bool _seeking = false;
   Timer? _seekTimeout;
 
-  double _seekToleranceMs(double durMs) =>
-      math.max(3000.0, durMs * 0.05);
-
   bool _isNearPosition(double fraction, double durMs, double posMs) {
     if (durMs <= 0) return true;
-    return (posMs - fraction * durMs).abs() <= _seekToleranceMs(durMs);
+    return (posMs - fraction * durMs).abs() <= 1000.0;
   }
 
   void _checkSeekSettled() {
@@ -85,7 +81,8 @@ class ScrubController extends ChangeNotifier {
     _dragValue = v;
     notifyListeners();
     final pos = model.position.inMilliseconds.toDouble();
-    if (_isNearPosition(v, durMs, pos)) {
+    // Only skip an actual no-op; settling tolerance must not discard user intent.
+    if ((pos - v * durMs).abs() < 1) {
       _clearSeek();
       return;
     }

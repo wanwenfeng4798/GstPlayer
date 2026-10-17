@@ -28,10 +28,10 @@ endif
 
 GSTREAMER_NDK_BUILD_PATH := $(GSTREAMER_ROOT)/share/gst-android/ndk-build/
 
-# Hand-written plugin set aligned with GStreamer 1.28.6 plugins.mk category
+# Hand-written plugin set aligned with GStreamer 1.28.8 plugins.mk category
 # *names*, matching iOS ios_plugins.c + macOS gstreamer_playback_plugins.txt
 # for the sample formats. Do NOT assign $(GSTREAMER_PLUGINS_CORE) / CODECS /
-# NET / SYS wholesale: 1.28.6 groups pull Rust plugins (lcevcdecoder,
+# NET / SYS wholesale: 1.28.8 groups pull Rust plugins (lcevcdecoder,
 # threadshare, rs*) whose .la deps ndk-build whole-archive cannot resolve.
 #
 # Format map:
@@ -41,7 +41,7 @@ GSTREAMER_NDK_BUILD_PATH := $(GSTREAMER_ROOT)/share/gst-android/ndk-build/
 #   ogg/ogv  ogg + theora / vorbis
 #   flv/asf/ts/ps  dedicated demuxers; libav fills remaining codecs
 #
-# HTTP: souphttpsrc (official C plugin from the 1.28.6 Android SDK; same as
+# HTTP: souphttpsrc (official C plugin from the 1.28.8 Android SDK; same as
 # iOS/macOS). No gst-plugins-rs reqwest / Rust cross-compile on Android.
 #
 # `opengl` is REQUIRED for hardware decode: Qualcomm/Android MediaCodec
@@ -63,7 +63,7 @@ GSTREAMER_PLUGINS := \
     soup tcp udp
 
 GSTREAMER_EXTRA_DEPS := gstreamer-video-1.0 gstreamer-app-1.0
-# TLS for https://. 1.28.6 Android SDK ships openssl (docs still mention gnutls).
+# TLS for https://. 1.28.8 Android SDK ships openssl (docs still mention gnutls).
 G_IO_MODULES := openssl
 # -lssl/-lcrypto for the openssl TLS backend; -lEGL/-lGLESv2 for the opengl
 # plugin (glcolorconvert receives amcvideodec GL textures).

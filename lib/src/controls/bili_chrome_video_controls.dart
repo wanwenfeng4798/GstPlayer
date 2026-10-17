@@ -58,7 +58,7 @@ class BiliChromeVideoControls extends StatefulWidget {
 }
 
 class _BiliChromeVideoControlsState extends State<BiliChromeVideoControls> {
-  late final ScrubController _scrub;
+  late ScrubController _scrub;
   late final ScrubPreviewController _preview;
   int _lastMediaGeneration = 0;
 
@@ -67,11 +67,27 @@ class _BiliChromeVideoControlsState extends State<BiliChromeVideoControls> {
     super.initState();
     _scrub = ScrubController(
       model: widget.model,
-      onInteract: widget.onInteract,
+      onInteract: () => widget.onInteract(),
     );
     _preview = ScrubPreviewController();
     _lastMediaGeneration = widget.model.mediaGeneration;
     widget.model.addListener(_onMediaGenerationChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant BiliChromeVideoControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.model != widget.model) {
+      oldWidget.model.removeListener(_onMediaGenerationChanged);
+      _scrub.dispose();
+      _scrub = ScrubController(
+        model: widget.model,
+        onInteract: () => widget.onInteract(),
+      );
+      _lastMediaGeneration = widget.model.mediaGeneration;
+      _preview.clear();
+      widget.model.addListener(_onMediaGenerationChanged);
+    }
   }
 
   void _onMediaGenerationChanged() {

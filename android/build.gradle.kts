@@ -6,9 +6,10 @@ import org.gradle.internal.os.OperatingSystem
 import java.util.LinkedHashSet
 
 group = "com.gstplayer"
-version = "1.0.0"
+version = file("../pubspec.yaml").readLines().first { it.startsWith("version:") }
+    .substringAfter(":").trim().substringBefore("+")
 
-val gstVer: String = System.getenv("GST_VER") ?: "1.28.6"
+val gstVer: String = System.getenv("GST_VER") ?: "1.28.8"
 
 fun defaultGstreamerAndroidCacheRoot(): String {
     val home = System.getProperty("user.home")

@@ -8,6 +8,7 @@ import 'package:ffi/ffi.dart';
 
 import '../domain/player_events.dart';
 import '../ffi/gstp_library.dart';
+import 'ffi_worker_channel.dart';
 
 /// Serializes [headers] to JSON for the native HTTP source layer.
 Pointer<Char>? encodeHttpHeadersJson(Map<String, String> headers) {
@@ -23,84 +24,44 @@ Pointer<Char>? encodeHttpHeadersJson(Map<String, String> headers) {
 /// ops go through this queue so dispose/load cannot race across ephemeral
 /// [Isolate.run] workers.
 class FfiNativeWorker {
-  FfiNativeWorker._(this._commands);
-
-  final SendPort _commands;
-  final ReceivePort _replies = ReceivePort();
-  final Map<int, Completer<Object?>> _pending = {};
-  var _nextId = 0;
-
+  FfiNativeWorker._(this._channel);
+  final FfiWorkerChannel _channel;
   static FfiNativeWorker? _instance;
   static Future<FfiNativeWorker>? _starting;
-
-  /// Whether the worker isolate is already running in this isolate group.
   static bool get isStarted => _instance != null;
 
   static Future<FfiNativeWorker> ensureStarted() {
-    final existing = _instance;
-    if (existing != null) {
-      return Future.value(existing);
-    }
+    if (_instance case final existing?) return Future.value(existing);
     return _starting ??= _start();
   }
 
   static Future<FfiNativeWorker> _start() async {
-    final ready = ReceivePort();
-    await Isolate.spawn(
-      _workerMain,
-      ready.sendPort,
-      debugName: 'gstp-ffi-worker',
-    );
-    final commands = await ready.first as SendPort;
-    ready.close();
-    final worker = FfiNativeWorker._(commands);
-    worker._replies.listen(worker._onReply);
-    _instance = worker;
-    _starting = null;
-    return worker;
-  }
-
-  void _onReply(dynamic message) {
-    final list = message as List<dynamic>;
-    final id = list[0] as int;
-    final completer = _pending.remove(id);
-    if (completer == null || completer.isCompleted) {
-      return;
-    }
-    final error = list[1];
-    if (error != null) {
-      completer.completeError(
-        error,
-        list.length > 2 ? list[2] as StackTrace? : null,
+    try {
+      final channel = await FfiWorkerChannel.start(
+        _workerMain,
+        debugName: 'gstp-ffi-worker',
+        onFailure: () {
+          _instance = null;
+        },
       );
-    } else {
-      completer.complete(list[2]);
+      return _instance = FfiNativeWorker._(channel);
+    } finally {
+      _starting = null;
     }
   }
 
-  Future<T> run<T>(FfiRequest request) async {
-    final id = _nextId++;
-    final completer = Completer<Object?>();
-    _pending[id] = completer;
-    _commands.send(<Object?>[id, _replies.sendPort, request]);
-    return await completer.future as T;
-  }
+  Future<T> run<T>(FfiRequest request) => _channel.run<T>(request);
 
-  /// Waits for in-flight requests then runs [request] (typically dispose).
-  Future<T> runAfterDrain<T>(FfiRequest request) async {
-    while (_pending.isNotEmpty) {
-      await Future.wait(_pending.values.map((c) => c.future).toList());
-    }
-    return run(request);
-  }
+  /// The worker processes messages in FIFO order, including disposal.
+  Future<T> runAfterDrain<T>(FfiRequest request) => run<T>(request);
 }
 
 @pragma('vm:entry-point')
 void _workerMain(SendPort ready) {
   final commands = ReceivePort();
-  ready.send(commands.sendPort);
-  // Open native bindings once on this isolate.
+  // Bindings must be ready before advertising a usable worker.
   GstpLibrary.instance;
+  ready.send(commands.sendPort);
 
   commands.listen((message) {
     final list = message as List<dynamic>;
@@ -137,23 +98,26 @@ final class FfiLoadUriRequest extends FfiRequest {
     this.playerId,
     this.uri,
     this.autoPlay,
-    this.httpHeaders,
-  );
+    this.httpHeaders, {
+    this.allowInsecureTls = false,
+  });
   final int playerId;
   final String uri;
   final bool autoPlay;
   final Map<String, String> httpHeaders;
+  final bool allowInsecureTls;
 
   @override
   Object? execute() {
     final ptr = uri.toNativeUtf8();
     final headersPtr = encodeHttpHeadersJson(httpHeaders);
     try {
-      return GstpLibrary.instance.bindings.gstp_player_load_uri(
+      return GstpLibrary.instance.bindings.gstp_player_load_uri_with_tls(
         playerId,
         ptr.cast(),
         autoPlay,
         headersPtr ?? nullptr,
+        !allowInsecureTls,
       );
     } finally {
       malloc.free(ptr);
@@ -299,7 +263,11 @@ final class FfiIntOpRequest extends FfiRequest {
       case 'stop':
         return b.gstp_player_stop(playerId);
       case 'seek':
-        return b.gstp_player_seek(playerId, arg0! as int, arg1 as bool? ?? false);
+        return b.gstp_player_seek(
+          playerId,
+          arg0! as int,
+          arg1 as bool? ?? false,
+        );
       case 'set_volume':
         return b.gstp_player_set_volume(playerId, arg0! as double);
       case 'set_mute':
@@ -366,6 +334,7 @@ Map<String, Object?> _readCapturedFrame({
   final outW = malloc<Int32>();
   final outH = malloc<Int32>();
   final outStride = malloc<Int32>();
+  Pointer<Uint8> nativePixels = nullptr;
   try {
     final code = capture(outPtr, outLen, outW, outH, outStride);
     if (code != 0) {
@@ -377,11 +346,11 @@ Map<String, Object?> _readCapturedFrame({
     }
     final len = outLen.value;
     final ptr = outPtr.value;
+    nativePixels = ptr;
     if (ptr == nullptr || len == 0) {
       throw StateError(notReadyMessage ?? '$op returned empty frame');
     }
     final bytes = Uint8List.fromList(ptr.asTypedList(len));
-    GstpLibrary.instance.bindings.gstp_thumbnail_free(ptr);
     return <String, Object?>{
       'bytes': bytes,
       'width': outW.value,
@@ -389,6 +358,9 @@ Map<String, Object?> _readCapturedFrame({
       'stride': outStride.value,
     };
   } finally {
+    if (nativePixels != nullptr) {
+      GstpLibrary.instance.bindings.gstp_thumbnail_free(nativePixels);
+    }
     malloc.free(outPtr);
     malloc.free(outLen);
     malloc.free(outW);
@@ -403,12 +375,14 @@ final class FfiThumbnailCaptureRequest extends FfiRequest {
     required this.positionMs,
     required this.maxWidth,
     this.httpHeaders = const {},
+    this.allowInsecureTls = false,
   });
 
   final String uri;
   final int positionMs;
   final int maxWidth;
   final Map<String, String> httpHeaders;
+  final bool allowInsecureTls;
 
   @override
   Object? execute() {
@@ -418,11 +392,12 @@ final class FfiThumbnailCaptureRequest extends FfiRequest {
       return _readCapturedFrame(
         op: 'gstp_thumbnail_capture($uri)',
         capture: (outPtr, outLen, outW, outH, outStride) {
-          return GstpLibrary.instance.bindings.gstp_thumbnail_capture(
+          return GstpLibrary.instance.bindings.gstp_thumbnail_capture_with_tls(
             uriPtr.cast(),
             positionMs,
             maxWidth,
             headersPtr ?? nullptr,
+            !allowInsecureTls,
             outPtr,
             outLen,
             outW,

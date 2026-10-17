@@ -24,10 +24,17 @@ void main() {
         'https://example.com/a.mp4',
         httpHeaders: {'Referer': 'https://example.com/'},
       );
-      expect(
-        source.toString(),
-        contains('Referer'),
-      );
+      expect(source.toString(), contains('Referer'));
     });
+  });
+  test('TLS opt-out is explicit and participates in source identity', () {
+    const strict = VideoSource.network('https://example.com/video');
+    const insecure = VideoSource.network(
+      'https://example.com/video',
+      allowInsecureTls: true,
+    );
+    expect(strict.allowInsecureTls, isFalse);
+    expect(insecure.allowInsecureTls, isTrue);
+    expect(strict, isNot(insecure));
   });
 }

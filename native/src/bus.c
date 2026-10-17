@@ -453,8 +453,6 @@ static gboolean gstp_bus_on_message(GstBus *bus, GstMessage *msg,
      * while playbin recovers (e.g. HEVC probe → AVC). Only pipeline-level
      * errors are fatal to the Dart session. */
     if (!p->pipeline || GST_MESSAGE_SRC(msg) != GST_OBJECT(p->pipeline)) {
-      strncpy(p->event_message, buf, sizeof(p->event_message) - 1);
-      p->event_message[sizeof(p->event_message) - 1] = '\0';
       break;
     }
     gstp_player_set_state(p, GSTP_STATE_ERROR);

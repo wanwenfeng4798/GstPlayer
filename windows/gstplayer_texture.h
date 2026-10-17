@@ -11,12 +11,13 @@
 
 namespace gstplayer {
 
-/// Pulls BGRA frames from Rust and exposes them to Flutter as a pixel-buffer
+/// Pulls BGRA frames from the native C core and exposes them to Flutter as a pixel-buffer
 /// external texture (RGBA, tight stride).
 class VideoTexture {
  public:
   VideoTexture(int64_t player_id, flutter::TextureRegistrar* registrar);
   ~VideoTexture();
+  static void Release(std::unique_ptr<VideoTexture> texture);
 
   VideoTexture(const VideoTexture&) = delete;
   VideoTexture& operator=(const VideoTexture&) = delete;
@@ -45,6 +46,7 @@ class VideoTexture {
 class VideoTextureRegistry {
  public:
   explicit VideoTextureRegistry(flutter::TextureRegistrar* registrar);
+  ~VideoTextureRegistry();
 
   int64_t Create(int64_t player_id);
   void Dispose(int64_t player_id);

@@ -19,6 +19,8 @@ class GstpEventPump {
       StreamController<PlayerEvent>.broadcast();
 
   NativeCallable<GstpEventCallbackFunction>? _callable;
+  final Completer<void> _detached = Completer<void>();
+  Future<void>? _disposing;
 
   Stream<PlayerEvent> get stream => _controller.stream;
 
@@ -34,7 +36,7 @@ class GstpEventPump {
     );
   }
 
-  /// Safe C string → Dart; never throws on freed/malformed pointers.
+  /// Decodes an owned native event string; malformed UTF-8 is tolerated.
   static String _cString(Pointer<Char> ptr) {
     if (ptr == nullptr) {
       return '';
@@ -78,57 +80,63 @@ class GstpEventPump {
     Pointer<Char> hdr_format,
     bool is_seekable,
   ) {
-    final positionMs = position_ms;
-    final durationMs = duration_ms;
-    final bufferingPercent = buffering_percent;
-    final parN = par_n;
-    final parD = par_d;
-    final darN = dar_n;
-    final darD = dar_d;
-    final isSeekable = is_seekable;
-    if (_controller.isClosed) {
+    if (kind == -1) {
+      if (!_detached.isCompleted) _detached.complete();
       return;
     }
-    final kinds = PlayerEventKind.values;
-    final states = PlayerState.values;
-    final event = PlayerEvent(
-      kind: kind >= 0 && kind < kinds.length
-          ? kinds[kind]
-          : PlayerEventKind.error,
-      positionMs: positionMs,
-      durationMs: durationMs,
-      width: width,
-      height: height,
-      bufferingPercent: bufferingPercent,
-      state: state >= 0 && state < states.length
-          ? states[state]
-          : PlayerState.error,
-      message: _cString(message),
-      fps: fps,
-      pixelAspectWidth: parN,
-      pixelAspectHeight: parD,
-      displayAspectWidth: darN,
-      displayAspectHeight: darD,
-      interlaced: interlaced,
-      colorMatrix: _cString(color_matrix),
-      colorRange: _cString(color_range),
-      hdrFormat: _cString(hdr_format),
-      isSeekable: isSeekable,
-    );
-    _controller.add(event);
+    try {
+      final positionMs = position_ms;
+      final durationMs = duration_ms;
+      final bufferingPercent = buffering_percent;
+      final parN = par_n;
+      final parD = par_d;
+      final darN = dar_n;
+      final darD = dar_d;
+      final isSeekable = is_seekable;
+      if (_controller.isClosed) return;
+      final kinds = PlayerEventKind.values;
+      final states = PlayerState.values;
+      final event = PlayerEvent(
+        kind: kind >= 0 && kind < kinds.length
+            ? kinds[kind]
+            : PlayerEventKind.error,
+        positionMs: positionMs,
+        durationMs: durationMs,
+        width: width,
+        height: height,
+        bufferingPercent: bufferingPercent,
+        state: state >= 0 && state < states.length
+            ? states[state]
+            : PlayerState.error,
+        message: _cString(message),
+        fps: fps,
+        pixelAspectWidth: parN,
+        pixelAspectHeight: parD,
+        displayAspectWidth: darN,
+        displayAspectHeight: darD,
+        interlaced: interlaced,
+        colorMatrix: _cString(color_matrix),
+        colorRange: _cString(color_range),
+        hdrFormat: _cString(hdr_format),
+        isSeekable: isSeekable,
+      );
+      _controller.add(event);
+    } finally {
+      GstpLibrary.instance.bindings.gstp_event_free(message);
+    }
   }
 
-  Future<void> dispose() async {
-    // Clear callback before closing the NativeCallable.
-    GstpLibrary.instance.bindings.gstp_player_set_event_callback(
-      _playerId,
-      nullptr,
-      nullptr,
-    );
-    _callable?.close();
-    _callable = null;
-    if (!_controller.isClosed) {
-      await _controller.close();
+  Future<void> dispose() => _disposing ??= _dispose();
+
+  Future<void> _dispose() async {
+    if (_callable != null) {
+      final sent = GstpLibrary.instance.bindings
+          .gstp_player_detach_event_callback(_playerId);
+      // The marker follows all previously posted events on this listener.
+      if (sent) await _detached.future;
+      _callable!.close();
+      _callable = null;
     }
+    await _controller.close();
   }
 }

@@ -34,6 +34,7 @@ static gpointer gstp_runtime_players_init(gpointer data) {
     g_runtime.players[i].id = 0;
     g_runtime.players[i].in_use = false;
     g_mutex_init(&g_runtime.players[i].frame_mu);
+    g_mutex_init(&g_runtime.players[i].callback_mu);
   }
   gstp_start_gate_ensure();
   return NULL;

@@ -23,6 +23,17 @@ class GstpBindings {
     ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName) lookup,
   ) : _lookup = lookup;
 
+  void gstp_event_free(ffi.Pointer<ffi.Char> message) {
+    return _gstp_event_free(message);
+  }
+
+  late final _gstp_event_freePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Char>)>>(
+        'gstp_event_free',
+      );
+  late final _gstp_event_free = _gstp_event_freePtr
+      .asFunction<void Function(ffi.Pointer<ffi.Char>)>();
+
   /// Touch every Dart-looked-up ABI symbol so Apple Release dead-strip / LTO
   /// cannot drop them. Call once from the Flutter plugin register path.
   void gstp_ffi_retain_symbols() {
@@ -138,6 +149,18 @@ class GstpBindings {
       );
   late final _gstp_player_create = _gstp_player_createPtr
       .asFunction<int Function()>();
+
+  /// Detaches on the runtime thread. True means a final kind=-1 marker was sent.
+  bool gstp_player_detach_event_callback(int id) {
+    return _gstp_player_detach_event_callback(id);
+  }
+
+  late final _gstp_player_detach_event_callbackPtr =
+      _lookup<ffi.NativeFunction<ffi.Bool Function(GstpPlayerId)>>(
+        'gstp_player_detach_event_callback',
+      );
+  late final _gstp_player_detach_event_callback =
+      _gstp_player_detach_event_callbackPtr.asFunction<bool Function(int)>();
 
   void gstp_player_dispose(int id) {
     return _gstp_player_dispose(id);
@@ -314,6 +337,46 @@ class GstpBindings {
         int Function(int, ffi.Pointer<ffi.Char>, bool, ffi.Pointer<ffi.Char>)
       >();
 
+  /// Extended load; verify_tls defaults to true through gstp_player_load_uri.
+  int gstp_player_load_uri_with_tls(
+    int id,
+    ffi.Pointer<ffi.Char> uri,
+    bool auto_play,
+    ffi.Pointer<ffi.Char> http_headers_json,
+    bool verify_tls,
+  ) {
+    return _gstp_player_load_uri_with_tls(
+      id,
+      uri,
+      auto_play,
+      http_headers_json,
+      verify_tls,
+    );
+  }
+
+  late final _gstp_player_load_uri_with_tlsPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int32 Function(
+            GstpPlayerId,
+            ffi.Pointer<ffi.Char>,
+            ffi.Bool,
+            ffi.Pointer<ffi.Char>,
+            ffi.Bool,
+          )
+        >
+      >('gstp_player_load_uri_with_tls');
+  late final _gstp_player_load_uri_with_tls = _gstp_player_load_uri_with_tlsPtr
+      .asFunction<
+        int Function(
+          int,
+          ffi.Pointer<ffi.Char>,
+          bool,
+          ffi.Pointer<ffi.Char>,
+          bool,
+        )
+      >();
+
   /// Android: cache ANativeWindow pointer (as intptr) from JNI thread.
   void gstp_player_notify_android_surface(
     int id,
@@ -367,10 +430,10 @@ class GstpBindings {
 
   late final _gstp_player_seekPtr =
       _lookup<
-          ffi.NativeFunction<
-              ffi.Int32 Function(GstpPlayerId, ffi.Int64, ffi.Bool)>>(
-        'gstp_player_seek',
-      );
+        ffi.NativeFunction<
+          ffi.Int32 Function(GstpPlayerId, ffi.Int64, ffi.Bool)
+        >
+      >('gstp_player_seek');
   late final _gstp_player_seek = _gstp_player_seekPtr
       .asFunction<int Function(int, int, bool)>();
 
@@ -616,6 +679,7 @@ class GstpBindings {
         void Function(int, ffi.Pointer<ffi.Void>, GstpFrameReadyFn)
       >();
 
+  /// Waits for any in-flight frame callback before returning.
   void gstp_texture_unregister(int player_id) {
     return _gstp_texture_unregister(player_id);
   }
@@ -626,6 +690,16 @@ class GstpBindings {
       );
   late final _gstp_texture_unregister = _gstp_texture_unregisterPtr
       .asFunction<void Function(int)>();
+
+  /// Cancels the active headless capture; queued newer captures can proceed.
+  void gstp_thumbnail_cancel() {
+    return _gstp_thumbnail_cancel();
+  }
+
+  late final _gstp_thumbnail_cancelPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function()>>('gstp_thumbnail_cancel');
+  late final _gstp_thumbnail_cancel = _gstp_thumbnail_cancelPtr
+      .asFunction<void Function()>();
 
   /// One-shot cover frame from a URI (no player slot).
   /// position_ms < 0 → auto (5% of duration, or 1s). max_width <= 0 → 320.
@@ -685,6 +759,67 @@ class GstpBindings {
         )
       >();
 
+  /// Extended capture; verify_tls defaults to true through gstp_thumbnail_capture.
+  int gstp_thumbnail_capture_with_tls(
+    ffi.Pointer<ffi.Char> uri,
+    int position_ms,
+    int max_width,
+    ffi.Pointer<ffi.Char> http_headers_json,
+    bool verify_tls,
+    ffi.Pointer<ffi.Pointer<ffi.Uint8>> out_bgra,
+    ffi.Pointer<ffi.Uint32> out_len,
+    ffi.Pointer<ffi.Int32> out_width,
+    ffi.Pointer<ffi.Int32> out_height,
+    ffi.Pointer<ffi.Int32> out_stride,
+  ) {
+    return _gstp_thumbnail_capture_with_tls(
+      uri,
+      position_ms,
+      max_width,
+      http_headers_json,
+      verify_tls,
+      out_bgra,
+      out_len,
+      out_width,
+      out_height,
+      out_stride,
+    );
+  }
+
+  late final _gstp_thumbnail_capture_with_tlsPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int32 Function(
+            ffi.Pointer<ffi.Char>,
+            ffi.Int64,
+            ffi.Int32,
+            ffi.Pointer<ffi.Char>,
+            ffi.Bool,
+            ffi.Pointer<ffi.Pointer<ffi.Uint8>>,
+            ffi.Pointer<ffi.Uint32>,
+            ffi.Pointer<ffi.Int32>,
+            ffi.Pointer<ffi.Int32>,
+            ffi.Pointer<ffi.Int32>,
+          )
+        >
+      >('gstp_thumbnail_capture_with_tls');
+  late final _gstp_thumbnail_capture_with_tls =
+      _gstp_thumbnail_capture_with_tlsPtr
+          .asFunction<
+            int Function(
+              ffi.Pointer<ffi.Char>,
+              int,
+              int,
+              ffi.Pointer<ffi.Char>,
+              bool,
+              ffi.Pointer<ffi.Pointer<ffi.Uint8>>,
+              ffi.Pointer<ffi.Uint32>,
+              ffi.Pointer<ffi.Int32>,
+              ffi.Pointer<ffi.Int32>,
+              ffi.Pointer<ffi.Int32>,
+            )
+          >();
+
   void gstp_thumbnail_free(ffi.Pointer<ffi.Uint8> data) {
     return _gstp_thumbnail_free(data);
   }
@@ -725,52 +860,53 @@ enum GstpAspectRatioMode {
   };
 }
 
+/// Event strings are an owned snapshot. Call gstp_event_free(message) once
+/// after consuming all strings. kind == -1 is the final detach marker (no data).
+/// Callbacks must not synchronously reenter callback registration/unregistration.
 typedef GstpEventCallback =
     ffi.Pointer<ffi.NativeFunction<GstpEventCallbackFunction>>;
-typedef GstpEventCallbackFunction =
-    ffi.Void Function(
-      ffi.Pointer<ffi.Void> ctx,
-      ffi.Int32 kind,
-      ffi.Int64 position_ms,
-      ffi.Int64 duration_ms,
-      ffi.Int32 width,
-      ffi.Int32 height,
-      ffi.Int32 buffering_percent,
-      ffi.Int32 state,
-      ffi.Pointer<ffi.Char> message,
-      ffi.Double fps,
-      ffi.Int32 par_n,
-      ffi.Int32 par_d,
-      ffi.Int32 dar_n,
-      ffi.Int32 dar_d,
-      ffi.Bool interlaced,
-      ffi.Pointer<ffi.Char> color_matrix,
-      ffi.Pointer<ffi.Char> color_range,
-      ffi.Pointer<ffi.Char> hdr_format,
-      ffi.Bool is_seekable,
-    );
-typedef DartGstpEventCallbackFunction =
-    void Function(
-      ffi.Pointer<ffi.Void> ctx,
-      int kind,
-      int position_ms,
-      int duration_ms,
-      int width,
-      int height,
-      int buffering_percent,
-      int state,
-      ffi.Pointer<ffi.Char> message,
-      double fps,
-      int par_n,
-      int par_d,
-      int dar_n,
-      int dar_d,
-      bool interlaced,
-      ffi.Pointer<ffi.Char> color_matrix,
-      ffi.Pointer<ffi.Char> color_range,
-      ffi.Pointer<ffi.Char> hdr_format,
-      bool is_seekable,
-    );
+typedef GstpEventCallbackFunction = ffi.Void Function(
+  ffi.Pointer<ffi.Void> ctx,
+  ffi.Int32 kind,
+  ffi.Int64 position_ms,
+  ffi.Int64 duration_ms,
+  ffi.Int32 width,
+  ffi.Int32 height,
+  ffi.Int32 buffering_percent,
+  ffi.Int32 state,
+  ffi.Pointer<ffi.Char> message,
+  ffi.Double fps,
+  ffi.Int32 par_n,
+  ffi.Int32 par_d,
+  ffi.Int32 dar_n,
+  ffi.Int32 dar_d,
+  ffi.Bool interlaced,
+  ffi.Pointer<ffi.Char> color_matrix,
+  ffi.Pointer<ffi.Char> color_range,
+  ffi.Pointer<ffi.Char> hdr_format,
+  ffi.Bool is_seekable,
+);
+typedef DartGstpEventCallbackFunction = void Function(
+  ffi.Pointer<ffi.Void> ctx,
+  int kind,
+  int position_ms,
+  int duration_ms,
+  int width,
+  int height,
+  int buffering_percent,
+  int state,
+  ffi.Pointer<ffi.Char> message,
+  double fps,
+  int par_n,
+  int par_d,
+  int dar_n,
+  int dar_d,
+  bool interlaced,
+  ffi.Pointer<ffi.Char> color_matrix,
+  ffi.Pointer<ffi.Char> color_range,
+  ffi.Pointer<ffi.Char> hdr_format,
+  bool is_seekable,
+);
 
 /// Matches Dart [PlayerEventKind] ordinal order.
 enum GstpEventKind {
@@ -809,10 +945,14 @@ typedef DartGstpFrameReadyFnFunction = void Function(ffi.Pointer<ffi.Void> ctx);
 /// Called when [gstp_init_async] finishes; [code] is [GSTP_ERR_*].
 typedef GstpInitDoneFn =
     ffi.Pointer<ffi.NativeFunction<GstpInitDoneFnFunction>>;
-typedef GstpInitDoneFnFunction =
-    ffi.Void Function(ffi.Pointer<ffi.Void> ctx, ffi.Int32 code);
-typedef DartGstpInitDoneFnFunction =
-    void Function(ffi.Pointer<ffi.Void> ctx, int code);
+typedef GstpInitDoneFnFunction = ffi.Void Function(
+  ffi.Pointer<ffi.Void> ctx,
+  ffi.Int32 code,
+);
+typedef DartGstpInitDoneFnFunction = void Function(
+  ffi.Pointer<ffi.Void> ctx,
+  int code,
+);
 typedef GstpPlayerId = ffi.Int64;
 typedef DartGstpPlayerId = int;
 

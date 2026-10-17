@@ -25,7 +25,7 @@ if [[ -n "${GSTREAMER_FRAMEWORK_SRC:-}" ]]; then
       HOME="$(eval echo "~$(id -un)")"
     fi
   fi
-  _default_framework="${HOME}/Library/Caches/gstplayer/gstreamer/${GST_VER:-1.28.6}/GStreamer.framework"
+  _default_framework="${HOME}/Library/Caches/gstplayer/gstreamer/${GST_VER:-1.28.8}/GStreamer.framework"
   if [[ "${GSTREAMER_FRAMEWORK_SRC}" != "${_default_framework}" ]]; then
     USER_SET_FRAMEWORK_SRC="${GSTREAMER_FRAMEWORK_SRC}"
   fi
@@ -57,7 +57,8 @@ is_runtime_valid() {
 is_sdk_valid() {
   local root="$1"
   [[ -f "${root}/Versions/1.0/lib/libgstreamer-1.0.0.dylib" ]] \
-    && [[ -f "${root}/Headers/gst/gst.h" ]]
+    && [[ -f "${root}/Headers/gst/gst.h" ]] \
+    && gst_sdk_matches_version "${root}/Headers" "${GST_VER}"
 }
 
 clean_framework_root() {
@@ -122,6 +123,15 @@ if is_sdk_valid "${SDK_CACHE}" && is_runtime_valid "${RUNTIME_CACHE}"; then
   exit 0
 fi
 
+if [[ -n "${USER_SET_GSTREAMER_ROOT}" || -n "${USER_SET_FRAMEWORK_SRC}" ]]; then
+  echo "error: custom GStreamer path is incomplete" >&2
+  echo "  GSTPLAYER_GSTREAMER_ROOT=${USER_SET_GSTREAMER_ROOT:-<unset>}" >&2
+  echo "  GSTREAMER_FRAMEWORK_SRC=${USER_SET_FRAMEWORK_SRC:-<unset>}" >&2
+  echo "  Expected a full SDK with Headers/gst/gst.h and Versions/1.0/lib/libgstreamer-1.0.0.dylib" >&2
+  echo "  Unset those vars to auto-download into ~/Library/Caches/gstplayer/gstreamer/${GST_VER}/" >&2
+  exit 1
+fi
+
 # Incomplete dual-cache from older layouts: drop and rebuild.
 if [[ -d "${SDK_CACHE}" || -d "${RUNTIME_CACHE}" ]]; then
   echo "[gstplayer] Incomplete GStreamer cache; rebuilding ${GSTPLAYER_GSTREAMER_CACHE}..."
@@ -154,14 +164,7 @@ if is_sdk_valid "${SYSTEM_FRAMEWORK}"; then
   fi
 fi
 
-if [[ -n "${USER_SET_GSTREAMER_ROOT}" || -n "${USER_SET_FRAMEWORK_SRC}" ]]; then
-  echo "error: custom GStreamer path is incomplete" >&2
-  echo "  GSTPLAYER_GSTREAMER_ROOT=${USER_SET_GSTREAMER_ROOT:-<unset>}" >&2
-  echo "  GSTREAMER_FRAMEWORK_SRC=${USER_SET_FRAMEWORK_SRC:-<unset>}" >&2
-  echo "  Expected a full SDK with Headers/gst/gst.h and Versions/1.0/lib/libgstreamer-1.0.0.dylib" >&2
-  echo "  Unset those vars to auto-download into ~/Library/Caches/gstplayer/gstreamer/${GST_VER}/" >&2
-  exit 1
-fi
+
 
 echo "[gstplayer] =============================================="
 echo "[gstplayer] First-time GStreamer macOS ${GST_VER} setup"

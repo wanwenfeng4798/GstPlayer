@@ -1,4 +1,5 @@
 #include "gstp_internal.h"
+#include "pixel_copy.h"
 #include "http_source.h"
 
 #include <gst/app/gstappsink.h>
@@ -20,11 +21,47 @@
  *   cannot be mapped — see gst-plugins-base gstglmemory.c).
  */
 
+/* Cancellation is nonblocking and safe to call from the UI isolate. */
+static gint gstp_thumbnail_generation = 0;
+void gstp_thumbnail_cancel(void) {
+  g_atomic_int_inc(&gstp_thumbnail_generation);
+}
+
+static gboolean gstp_thumb_cancelled(gint generation) {
+  return g_atomic_int_get(&gstp_thumbnail_generation) != generation;
+}
+
+static GstStateChangeReturn gstp_thumb_wait_state(GstElement *pipeline,
+    GstClockTime timeout, gint generation) {
+  const gint64 deadline = g_get_monotonic_time() + timeout / GST_USECOND;
+  while (!gstp_thumb_cancelled(generation)) {
+    GstStateChangeReturn state = gst_element_get_state(
+        pipeline, NULL, NULL, 100 * GST_MSECOND);
+    if (state != GST_STATE_CHANGE_ASYNC) return state;
+    if (g_get_monotonic_time() >= deadline) break;
+  }
+  return GST_STATE_CHANGE_FAILURE;
+}
+
+static GstSample *gstp_thumb_pull(GstElement *sink, gboolean preroll,
+    GstClockTime timeout, gint generation) {
+  const gint64 deadline = g_get_monotonic_time() + timeout / GST_USECOND;
+  while (!gstp_thumb_cancelled(generation) && g_get_monotonic_time() < deadline) {
+    GstSample *sample = preroll
+        ? gst_app_sink_try_pull_preroll(GST_APP_SINK(sink), 100 * GST_MSECOND)
+        : gst_app_sink_try_pull_sample(GST_APP_SINK(sink), 100 * GST_MSECOND);
+    if (sample) return sample;
+    if (gst_app_sink_is_eos(GST_APP_SINK(sink))) break;
+  }
+  return NULL;
+}
+
 typedef struct {
   const char *uri;
   int64_t position_ms;
   int32_t max_width;
   GHashTable *http_headers;
+  bool verify_tls;
   uint8_t **out_bgra;
   uint32_t *out_len;
   int32_t *out_width;
@@ -33,16 +70,24 @@ typedef struct {
   int32_t result;
 } GstpThumbnailOp;
 
+typedef struct {
+  GHashTable *headers;
+  bool verify_tls;
+} GstpThumbnailHttp;
+
 static void gstp_thumb_on_source_setup(GstElement *bin, GstElement *source,
                                        gpointer user_data) {
   (void)bin;
-  gstp_configure_http_source(source, (GHashTable *)user_data);
+  GstpThumbnailHttp *http = user_data;
+  gstp_configure_http_source_with_tls(source, http->headers, http->verify_tls);
 }
 
-static void gstp_thumb_on_element_setup(GstElement *bin, GstElement *element,
-                                        gpointer user_data) {
+static void gstp_thumb_on_element_setup(GstBin *bin, GstBin *sub_bin,
+                                        GstElement *element, gpointer user_data) {
   (void)bin;
-  gstp_configure_http_source(element, (GHashTable *)user_data);
+  (void)sub_bin;
+  GstpThumbnailHttp *http = user_data;
+  gstp_configure_http_source_with_tls(element, http->headers, http->verify_tls);
 }
 
 /* decodebin/uridecodebin: return FALSE to stop autoplugging this stream. */
@@ -101,14 +146,14 @@ static gint gstp_thumb_autoplug_select(GstElement *bin, GstPad *pad,
 #endif
 
 static void gstp_thumb_connect_decodebin_signals(GstElement *src,
-                                                 GHashTable *headers) {
+                                                 GstpThumbnailHttp *http) {
   if (!src) {
     return;
   }
   g_signal_connect(src, "source-setup", G_CALLBACK(gstp_thumb_on_source_setup),
-                   headers);
-  g_signal_connect(src, "element-setup",
-                   G_CALLBACK(gstp_thumb_on_element_setup), headers);
+                   http);
+  g_signal_connect(src, "deep-element-added",
+                   G_CALLBACK(gstp_thumb_on_element_setup), http);
   g_signal_connect(src, "autoplug-continue",
                    G_CALLBACK(gstp_thumb_autoplug_continue), NULL);
 #if defined(__ANDROID__)
@@ -143,28 +188,27 @@ static int32_t gstp_thumb_copy_sample(GstSample *sample, uint8_t **out_bgra,
     return GSTP_ERR_FAIL;
   }
 
+  if (width > INT32_MAX / 4 ||
+      (uint64_t)width * 4 * (uint64_t)height > UINT32_MAX) {
+    gst_buffer_unmap(buffer, &map);
+    return GSTP_ERR_FAIL;
+  }
   const int dst_stride = width * 4;
-  const uint32_t needed = (uint32_t)(dst_stride * height);
+  const uint32_t needed = (uint32_t)((uint64_t)dst_stride * (uint64_t)height);
   int src_stride = dst_stride;
   GstVideoMeta *vmeta = gst_buffer_get_video_meta(buffer);
-  if (vmeta && vmeta->stride[0] > 0) {
+  if (vmeta) {
     src_stride = vmeta->stride[0];
   }
 
   uint8_t *dst = g_malloc(needed);
-  if (src_stride == dst_stride && map.size >= needed) {
-    memcpy(dst, map.data, needed);
-  } else {
-    const uint8_t *src = map.data;
-    for (int row = 0; row < height; row++) {
-      const gsize row_off = (gsize)row * (gsize)src_stride;
-      const gsize copy_n = (gsize)dst_stride;
-      if (row_off + copy_n > map.size) {
-        memset(dst + (gsize)row * (gsize)dst_stride, 0, copy_n);
-        continue;
-      }
-      memcpy(dst + (gsize)row * (gsize)dst_stride, src + row_off, copy_n);
-    }
+  const gsize offset = vmeta ? vmeta->offset[0] : 0;
+  if (offset > map.size ||
+      !gstp_copy_bgra_rows(dst, needed, map.data + offset,
+                           map.size - offset, width, height, src_stride)) {
+    g_free(dst);
+    gst_buffer_unmap(buffer, &map);
+    return GSTP_ERR_FAIL;
   }
   gst_buffer_unmap(buffer, &map);
 
@@ -183,7 +227,7 @@ static int32_t gstp_thumb_copy_sample(GstSample *sample, uint8_t **out_bgra,
 }
 
 static int32_t gstp_thumb_run(const char *uri, int64_t position_ms,
-                              int32_t max_width, GHashTable *http_headers,
+                              int32_t max_width, GHashTable *http_headers, bool verify_tls,
                               uint8_t **out_bgra, uint32_t *out_len,
                               int32_t *out_width, int32_t *out_height,
                               int32_t *out_stride) {
@@ -193,6 +237,7 @@ static int32_t gstp_thumb_run(const char *uri, int64_t position_ms,
   *out_bgra = NULL;
   *out_len = 0;
 
+  const gint generation = g_atomic_int_get(&gstp_thumbnail_generation);
   if (max_width <= 0) {
     max_width = 320;
   }
@@ -202,7 +247,7 @@ static int32_t gstp_thumb_run(const char *uri, int64_t position_ms,
       "uridecodebin name=src uri=\"%s\" ! videoconvert ! videoscale ! "
       "appsink name=sink caps=\"video/x-raw,format=BGRA,width=(int)[1,%d],"
       "pixel-aspect-ratio=1/1\"",
-      uri, max_width);
+      "", max_width);
   GError *error = NULL;
   GstElement *pipeline = gst_parse_launch(descr, &error);
   g_free(descr);
@@ -218,7 +263,9 @@ static int32_t gstp_thumb_run(const char *uri, int64_t position_ms,
   }
 
   GstElement *src = gst_bin_get_by_name(GST_BIN(pipeline), "src");
-  gstp_thumb_connect_decodebin_signals(src, http_headers);
+  if (src) g_object_set(src, "uri", uri, NULL);
+  GstpThumbnailHttp http = {.headers = http_headers, .verify_tls = verify_tls};
+  gstp_thumb_connect_decodebin_signals(src, &http);
   if (src) {
     gst_object_unref(src);
   }
@@ -249,7 +296,7 @@ static int32_t gstp_thumb_run(const char *uri, int64_t position_ms,
     break;
   }
 
-  ret = gst_element_get_state(pipeline, NULL, NULL, 15 * GST_SECOND);
+  ret = gstp_thumb_wait_state(pipeline, 15 * GST_SECOND, generation);
   if (ret == GST_STATE_CHANGE_FAILURE) {
     gst_object_unref(sink);
     gst_element_set_state(pipeline, GST_STATE_NULL);
@@ -279,17 +326,20 @@ static int32_t gstp_thumb_run(const char *uri, int64_t position_ms,
                               (GstSeekFlags)(GST_SEEK_FLAG_KEY_UNIT |
                                              GST_SEEK_FLAG_FLUSH),
                               seek_pos)) {
-    (void)gst_element_get_state(pipeline, NULL, NULL, 10 * GST_SECOND);
+    if (gstp_thumb_wait_state(pipeline, 10 * GST_SECOND, generation) ==
+        GST_STATE_CHANGE_FAILURE) {
+      gst_object_unref(sink);
+      gst_element_set_state(pipeline, GST_STATE_NULL);
+      gst_object_unref(pipeline);
+      return GSTP_ERR_FAIL;
+    }
   }
 
   /* Official: pull-preroll from appsink. */
   GstSample *sample = NULL;
-  g_signal_emit_by_name(sink, "pull-preroll", &sample, NULL);
+  sample = gstp_thumb_pull(sink, TRUE, 5 * GST_SECOND, generation);
   if (!sample) {
-    sample = gst_app_sink_try_pull_preroll(GST_APP_SINK(sink), 5 * GST_SECOND);
-  }
-  if (!sample) {
-    sample = gst_app_sink_try_pull_sample(GST_APP_SINK(sink), 2 * GST_SECOND);
+    sample = gstp_thumb_pull(sink, FALSE, 2 * GST_SECOND, generation);
   }
 
   int32_t rc = GSTP_ERR_FAIL;
@@ -308,17 +358,22 @@ static int32_t gstp_thumb_run(const char *uri, int64_t position_ms,
 static gpointer gstp_thumb_thread_main(gpointer data) {
   GstpThumbnailOp *op = data;
   op->result = gstp_thumb_run(op->uri, op->position_ms, op->max_width,
-                              op->http_headers, op->out_bgra, op->out_len,
+                              op->http_headers, op->verify_tls, op->out_bgra, op->out_len,
                               op->out_width, op->out_height, op->out_stride);
   return NULL;
 }
 
 int32_t gstp_thumbnail_capture(const char *uri, int64_t position_ms,
-                               int32_t max_width,
-                               const char *http_headers_json,
-                               uint8_t **out_bgra, uint32_t *out_len,
-                               int32_t *out_width, int32_t *out_height,
-                               int32_t *out_stride) {
+    int32_t max_width, const char *http_headers_json, uint8_t **out_bgra,
+    uint32_t *out_len, int32_t *out_width, int32_t *out_height, int32_t *out_stride) {
+  return gstp_thumbnail_capture_with_tls(uri, position_ms, max_width,
+      http_headers_json, true, out_bgra, out_len, out_width, out_height, out_stride);
+}
+
+int32_t gstp_thumbnail_capture_with_tls(const char *uri, int64_t position_ms,
+    int32_t max_width, const char *http_headers_json, bool verify_tls,
+    uint8_t **out_bgra, uint32_t *out_len, int32_t *out_width,
+    int32_t *out_height, int32_t *out_stride) {
   if (gstp_init() != GSTP_ERR_OK) {
     return GSTP_ERR_FAIL;
   }
@@ -335,6 +390,7 @@ int32_t gstp_thumbnail_capture(const char *uri, int64_t position_ms,
                         .position_ms = position_ms,
                         .max_width = max_width,
                         .http_headers = headers,
+                        .verify_tls = verify_tls,
                         .out_bgra = out_bgra,
                         .out_len = out_len,
                         .out_width = out_width,

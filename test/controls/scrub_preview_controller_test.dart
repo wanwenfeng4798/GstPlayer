@@ -17,8 +17,10 @@ assets/preview/sprite.jpg#xywh=0,0,160,90
       final frames = ScrubPreviewVttParser.parse(raw);
       expect(frames, hasLength(1));
       expect(frames[0].image, isA<AssetImage>());
-      expect((frames[0].image as AssetImage).assetName,
-          'assets/preview/sprite.jpg');
+      expect(
+        (frames[0].image as AssetImage).assetName,
+        'assets/preview/sprite.jpg',
+      );
     });
 
     test('parses cue with sprite xywh crop', () {
@@ -142,5 +144,12 @@ https://cdn.example.com/b.jpg
       expect(preview.visible, isFalse);
       preview.dispose();
     });
+  });
+  test('thumbnail VTT shares short timestamp and named cue support', () {
+    final frames = ScrubPreviewVttParser.parse(
+      'WEBVTT\n\npreview-a\n00:01.000 --> 00:02.000\nassets/preview.jpg#xywh=0,0,160,90\n',
+    );
+    expect(frames, hasLength(1));
+    expect(frames.single.start, const Duration(seconds: 1));
   });
 }

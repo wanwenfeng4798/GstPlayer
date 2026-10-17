@@ -101,8 +101,8 @@ Supported platforms: **Android, iOS, macOS, Windows, Linux**.
 | Windows | 10+ | x86_64 | Install once on the machine ([below](#windows--linux-host-sdk)) |
 | Linux | — | x86_64 | Install once on the machine ([below](#windows--linux-host-sdk)) |
 
-> Apple Silicon iOS **Simulator** is not supported (no arm64 simulator slice in the
-> official iOS SDK).
+> Apple Silicon iOS **Simulator** is not supported (the current plugin integration uses
+> only the arm64 device slice).
 
 ## When to use kinetic_player instead
 
@@ -122,7 +122,7 @@ itself is still auto-downloaded for Android / iOS / macOS on first build.
 ### All platforms
 
 - [Flutter](https://docs.flutter.dev/get-started/install) matching this plugin
-  (`sdk: ^3.12.2`, `flutter: ">=3.44.0"` in `pubspec.yaml`)
+  (`sdk: ^3.13.0`, `flutter: ">=3.47.0"` in `pubspec.yaml`)
 - Network access on the **first** Android / iOS / macOS build (GStreamer cache)
 
 ### Android
@@ -136,7 +136,7 @@ itself is still auto-downloaded for Android / iOS / macOS on first build.
 
 - macOS with [Xcode](https://developer.apple.com/xcode/) (Command Line Tools)
 - A **physical** iPhone / iPad (Simulator is not supported)
-- First build downloads the GStreamer iOS SDK automatically (~500MB)
+- First build downloads the GStreamer iOS SDK automatically (~1.1GB)
 
 ### macOS
 
@@ -155,7 +155,7 @@ Host GStreamer + `pkg-config` — see [Windows & Linux host SDK](#windows--linux
 
 ```yaml
 dependencies:
-  gstplayer: ^0.0.4
+  gstplayer: ^0.0.6
 ```
 
 ```bash
@@ -296,9 +296,8 @@ Local files and Flutter assets need no extra setup.
 | **macOS** | With App Sandbox, keep `com.apple.security.network.client` in Runner entitlements (Flutter templates usually already have it). |
 | **Windows / Linux** | No app permission; host GStreamer must be installed ([below](#windows--linux-host-sdk)). |
 
-> HTTPS note: for maximum compatibility the pipeline sets `ssl-strict = false` on
-> the HTTP source (skips server cert verification). Open an issue if you need
-> strict TLS made configurable.
+> HTTPS verifies server certificates by default. Invalid or untrusted certificates cause playback to fail.
+> For a source that explicitly requires unverified TLS, use `VideoSource.network(url, allowInsecureTls: true)`. The option applies to both playback and thumbnails.
 
 ## Windows & Linux host SDK
 
@@ -524,6 +523,19 @@ before build/publish:
 ./tool/native_core.sh verify
 ```
 
+`sync` also generates the native version header from `pubspec.yaml`; `verify` checks the version and full contents of both NativeCore copies.
+
+Regression checks:
+
+```bash
+flutter analyze
+flutter test
+python3 tool/test_gstreamer_scripts.py
+# Prepare the corresponding GStreamer SDK first.
+bash tool/test_native_macos.sh
+bash tool/test_native_ios.sh
+```
+
 ## Troubleshooting
 
 - **First build is slow / needs network (Android / iOS / macOS):** normal — the
@@ -540,7 +552,7 @@ before build/publish:
 - **iOS `Plug-in ended with non-zero exit code: 1`:** usually the
   `EnsureGStreamerIOS` SPM build plugin failed (first-time SDK download, or
   missing `ios/scripts`). Open the Xcode Report navigator for the real stderr.
-  Manual fix: `sh ios/scripts/ensure_gstreamer_ios.sh` (needs network, ~480MB),
+  Manual fix: `sh ios/scripts/ensure_gstreamer_ios.sh` (needs network, ~1.1GB),
   then rebuild. First Flutter SPM builds load the package via a `.packages`
   symlink — current plugin code resolves that path to find `ios/scripts`.
 - **iOS `'gst/app/gstappsink.h' file not found`:** the example uses Swift Package

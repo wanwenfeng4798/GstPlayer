@@ -474,12 +474,7 @@ static void gstp_clear_asset_temp(GstpPlayer *p) {
     g_unlink(p->asset_temp_path);
     p->asset_temp_path[0] = '\0';
   }
-  if (p->asset_bytes) {
-    g_free(p->asset_bytes);
-    p->asset_bytes = NULL;
-    p->asset_len = 0;
-    p->asset_offset = 0;
-  }
+
 }
 
 static int32_t gstp_pipeline_set_state_sync(GstpPlayer *p, GstState state);
@@ -487,7 +482,8 @@ static int32_t gstp_pipeline_set_state_sync(GstpPlayer *p, GstState state);
 void gstp_pipeline_destroy(GstpPlayer *p) {
   gstp_bus_detach(p);
   if (p->appsink) {
-    gst_app_sink_set_callbacks(GST_APP_SINK(p->appsink), NULL, NULL, NULL);
+    GstAppSinkCallbacks empty_callbacks = {0};
+    gst_app_sink_set_callbacks(GST_APP_SINK(p->appsink), &empty_callbacks, NULL, NULL);
   }
 #if defined(__ANDROID__)
   /* Keep ANativeWindow across reload; only unbind from the old pipeline. */
@@ -697,7 +693,7 @@ void gstp_configure_uri_child(GstpPlayer *p, GstElement *element) {
   if (!element || !p) {
     return;
   }
-  gstp_configure_http_source(element, p->http_headers);
+  gstp_configure_http_source_with_tls(element, p->http_headers, p->verify_tls);
 
   GstElementFactory *factory = gst_element_get_factory(element);
   if (!factory) {
@@ -846,13 +842,14 @@ static void gstp_finish_load_buffering(GstpPlayer *p) {
 }
 
 int32_t gstp_pipeline_load_uri(GstpPlayer *p, const char *uri, bool auto_play,
-                               const char *http_headers_json) {
+                               const char *http_headers_json, bool verify_tls) {
   if (!uri || !*uri) {
     return GSTP_ERR_FAIL;
   }
   gstp_pipeline_destroy(p);
   gstp_reset_media_fields(p);
   gstp_set_http_headers_json(p, http_headers_json);
+  p->verify_tls = verify_tls;
   /* Drop stale UI state so early apply_overlay does not play before PAUSED. */
   gstp_player_set_state(p, GSTP_STATE_IDLE);
   g_strlcpy(p->media_uri, uri, sizeof(p->media_uri));
@@ -980,7 +977,7 @@ int32_t gstp_pipeline_load_asset(GstpPlayer *p, const uint8_t *bytes,
     return GSTP_ERR_FAIL;
   }
 
-  int32_t rc = gstp_pipeline_load_uri(p, file_uri, auto_play, NULL);
+  int32_t rc = gstp_pipeline_load_uri(p, file_uri, auto_play, NULL, true);
   g_free(file_uri);
   if (rc != GSTP_ERR_OK) {
     /* If the pipeline was created and may still be reading the file, keep the

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Downloads and extracts the official GStreamer iOS SDK into the user cache.
-# No sudo / installer — uses pkgutil --expand-full.
+# Extracts the arm64 device library from the official XCFramework archive.
+# Preserves the GStreamer.framework layout used by the SPM and CocoaPods links.
 #
 # Cache layout:
 #   ~/Library/Caches/gstplayer/gstreamer/<ver>/ios/iPhone.sdk/GStreamer.framework
@@ -16,7 +17,9 @@ source "${ROOT}/tool/gstreamer_pkg_expand.sh"
 
 is_sdk_valid() {
   local root="$1"
-  [[ -f "${root}/GStreamer.framework/Headers/gst/gst.h" ]]
+  [[ -f "${root}/GStreamer.framework/Headers/gst/gst.h" &&
+     -f "${root}/GStreamer.framework/GStreamer" ]] \
+    && gst_sdk_matches_version "${root}/GStreamer.framework/Headers" "${GST_VER}"
 }
 
 write_stamp() {
@@ -60,7 +63,7 @@ fi
 
 echo "[gstplayer] =============================================="
 echo "[gstplayer] First-time GStreamer iOS ${GST_VER} setup"
-echo "[gstplayer] Download: ~480MB devel package (often 1–3 min)"
+echo "[gstplayer] Download: ~1.1GB XCFramework archive (often 1–3 min)"
 echo "[gstplayer] Extract:  typically ~1–2 min after download"
 echo "[gstplayer] Cache:    ${GSTPLAYER_GSTREAMER_IOS_ROOT}"
 echo "[gstplayer] Later builds reuse this cache (no re-download)."
@@ -71,25 +74,25 @@ cleanup() { rm -rf "${WORK_DIR}"; }
 trap cleanup EXIT
 
 PKG_FILE="${GSTPLAYER_GSTREAMER_IOS_PKG_DIR}/${GSTREAMER_IOS_PKG}"
-gst_pkg_download "${GSTREAMER_IOS_PKG_URL}" "${PKG_FILE}" "~480MB"
+gst_pkg_download "${GSTREAMER_IOS_PKG_URL}" "${PKG_FILE}" "~1.1GB"
 
 EXPAND="${WORK_DIR}/expand"
-echo "[gstplayer] Expanding ${GSTREAMER_IOS_PKG} (about 1–2 min)..."
-gst_pkg_expand_full "${PKG_FILE}" "${EXPAND}"
+echo "[gstplayer] Extracting arm64 iOS library from ${GSTREAMER_IOS_PKG}..."
+mkdir -p "${EXPAND}"
+tar -xJf "${PKG_FILE}" -C "${EXPAND}" GStreamer.xcframework/ios-arm64
 
-STAGE="${WORK_DIR}/stage"
-mkdir -p "${STAGE}"
-# iOS install-location is iPhone.sdk; Payload contains GStreamer.framework (+ Templates).
-for subpkg in "${EXPAND}"/*.pkg; do
-  [[ -d "${subpkg}/Payload" ]] || continue
-  ditto "${subpkg}/Payload/" "${STAGE}/"
-done
-
-if [[ ! -f "${STAGE}/GStreamer.framework/Headers/gst/gst.h" ]]; then
-  echo "error: GStreamer.framework missing after expanding ${GSTREAMER_IOS_PKG}" >&2
-  find "${EXPAND}" -maxdepth 3 -type d 2>/dev/null | head -40 >&2 || true
+DEVICE_LIB="${EXPAND}/GStreamer.xcframework/ios-arm64"
+if [[ ! -f "${DEVICE_LIB}/Headers/gst/gst.h" || ! -f "${DEVICE_LIB}/libGStreamer.a" ]]; then
+  echo "error: arm64 iOS library missing from ${GSTREAMER_IOS_PKG}" >&2
   exit 1
 fi
+
+# A static framework wrapper keeps existing -framework GStreamer consumers
+# working with the static-library layout of the official XCFramework.
+STAGE="${WORK_DIR}/stage"
+mkdir -p "${STAGE}/GStreamer.framework"
+ditto "${DEVICE_LIB}/Headers" "${STAGE}/GStreamer.framework/Headers"
+cp "${DEVICE_LIB}/libGStreamer.a" "${STAGE}/GStreamer.framework/GStreamer"
 
 mkdir -p "$(dirname "${GSTPLAYER_GSTREAMER_IOS_ROOT}")"
 rm -rf "${GSTPLAYER_GSTREAMER_IOS_ROOT}"

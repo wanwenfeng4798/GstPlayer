@@ -12,7 +12,7 @@ if [[ -z "${HOME:-}" ]]; then
   export HOME
 fi
 
-GST_VER="${GST_VER:-1.28.6}"
+GST_VER="${GST_VER:-1.28.8}"
 
 _default_cache_root="${HOME}/Library/Caches/gstplayer/gstreamer/${GST_VER}"
 
@@ -22,16 +22,12 @@ else
   GSTPLAYER_GSTREAMER_CACHE="${_default_cache_root}"
 fi
 
-# GSTREAMER_FRAMEWORK_SRC (full SDK): explicit > cache > legacy system install
+# GSTREAMER_FRAMEWORK_SRC (full SDK): explicit > versioned user cache
 if [[ -n "${GSTREAMER_FRAMEWORK_SRC:-}" ]]; then
   :
 elif [[ -d "${GSTPLAYER_GSTREAMER_CACHE}/GStreamer.framework" ]]; then
   GSTREAMER_FRAMEWORK_SRC="${GSTPLAYER_GSTREAMER_CACHE}/GStreamer.framework"
-elif [[ -d "/Library/Frameworks/GStreamer.framework" ]]; then
-  GSTREAMER_FRAMEWORK_SRC="/Library/Frameworks/GStreamer.framework"
-  if [[ -z "${GSTPLAYER_GSTREAMER_ROOT:-}" ]]; then
-    GSTPLAYER_GSTREAMER_CACHE="/Library/Frameworks"
-  fi
+
 else
   GSTREAMER_FRAMEWORK_SRC="${GSTPLAYER_GSTREAMER_CACHE}/GStreamer.framework"
 fi

@@ -1,3 +1,18 @@
+## 0.0.6
+
+- Fix native event ownership and drain callbacks before closing Dart listeners; synchronize texture callback teardown.
+- Verify HTTPS certificates by default, with an explicit per-source `allowInsecureTls` option; bound/cancel headless thumbnail capture and fix uridecodebin child-element signals.
+- Make player initialization/disposal idempotent; serialize source changes and ignore stale async results.
+- Fix paused/error loading overlays, short seeks, controller replacement, Windows file URIs, and preview image disposal.
+- Share SRT/WebVTT parsing (short timestamps, cue IDs, metadata) and native pixel-copy helpers; index active danmaku and stop hidden tickers.
+- Keep SDK caches under the user directory, validate SDK versions, compile CocoaPods for the requested SDK/architectures, and compare NativeCore contents.
+- Generate the native package version from pubspec.yaml and align Android/CocoaPods/README versions.
+- Add Dart, native, and SDK script regression tests.
+- Update material_ui to 1.7.0 and ffigen to 23.0.0; require Dart 3.13.0 and Flutter 3.47.0.
+- Update GStreamer SDK defaults to 1.28.8 across Android, iOS, and macOS.
+- Extract the iOS arm64 static library from the official XCFramework archive into the existing framework cache layout; link its C++ runtime in both SPM and CocoaPods.
+- Update Gradle to 9.8.1 (with distribution checksum), Kotlin to 2.4.21, and the example Android NDK to 30.0.16248370.
+
 ## 0.0.5
 
 - Bump Android Gradle Plugin to 9.4.1; enable `android.builtInKotlin=true`.

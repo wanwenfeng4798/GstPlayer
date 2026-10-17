@@ -36,9 +36,7 @@ void main() {
     });
 
     test('file source ignores http headers on VideoSource', () {
-      final dto = resolver.resolve(
-        VideoSource.file('/tmp/video.mp4'),
-      );
+      final dto = resolver.resolve(VideoSource.file('/tmp/video.mp4'));
       expect(dto, isA<MediaSourceDto_Uri>());
       expect((dto as MediaSourceDto_Uri).httpHeaders, isEmpty);
     });
@@ -97,5 +95,32 @@ void main() {
       expect(dto, isA<MediaSourceDto_Uri>());
       expect((dto as MediaSourceDto_Uri).field0, uri);
     });
+  });
+  test('Windows paths encode reserved characters and support UNC', () {
+    const resolver = MediaSourceResolver();
+    final dto = resolver.resolve(
+      const VideoSource.file(r'C:\video\a#b% c.mp4'),
+    ) as MediaSourceDto_Uri;
+    final uri = Uri.parse(dto.uri);
+    expect(uri.fragment, isEmpty);
+    expect(uri.toFilePath(windows: true), r'C:\video\a#b% c.mp4');
+    final unc = resolver.resolve(
+      const VideoSource.file(r'\\server\share\a#b.mp4'),
+    ) as MediaSourceDto_Uri;
+    expect(
+      Uri.parse(unc.uri).toFilePath(windows: true),
+      r'\\server\share\a#b.mp4',
+    );
+  });
+  test('resolver carries TLS policy separately from HTTP headers', () {
+    final dto = const MediaSourceResolver().resolve(
+      const VideoSource.network(
+        'https://example.com/video',
+        allowInsecureTls: true,
+        httpHeaders: {'X-Test': '1'},
+      ),
+    ) as MediaSourceDto_Uri;
+    expect(dto.allowInsecureTls, isTrue);
+    expect(dto.httpHeaders, {'X-Test': '1'});
   });
 }

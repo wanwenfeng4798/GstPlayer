@@ -7,9 +7,7 @@ import 'package:flutter/services.dart';
 import 'video_surface_handle.dart';
 
 /// 原生 Texture 注册 MethodChannel（各平台插件 `gstplayer/texture`）/ MethodChannel to the native texture registrar.
-const MethodChannel _textureChannel = MethodChannel(
-  'gstplayer/texture',
-);
+const MethodChannel _textureChannel = MethodChannel('gstplayer/texture');
 
 /// Releases the native Flutter texture for [playerId].
 ///
@@ -64,6 +62,7 @@ class TextureVideoSurface extends StatefulWidget {
 
 class _TextureVideoSurfaceState extends State<TextureVideoSurface> {
   int? _textureId;
+  int _creationGeneration = 0;
   int? _syncedPhysicalWidth;
   int? _syncedPhysicalHeight;
 
@@ -102,11 +101,16 @@ class _TextureVideoSurfaceState extends State<TextureVideoSurface> {
   }
 
   Future<void> _createTexture() async {
+    final generation = ++_creationGeneration;
+    final playerId = widget.handle.playerId;
     try {
       final id = await _textureChannel.invokeMethod<int>('createTexture', {
-        'playerId': widget.handle.playerId,
+        'playerId': playerId,
       });
-      if (mounted && id != null) {
+      if (mounted &&
+          generation == _creationGeneration &&
+          playerId == widget.handle.playerId &&
+          id != null) {
         setState(() => _textureId = id);
         if (defaultTargetPlatform == TargetPlatform.android) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -160,11 +164,19 @@ class _TextureVideoSurfaceState extends State<TextureVideoSurface> {
     }
     _syncedPhysicalWidth = physicalW;
     _syncedPhysicalHeight = physicalH;
-    _textureChannel.invokeMethod<void>('syncTextureSize', {
-      'playerId': widget.handle.playerId,
-      'width': physicalW,
-      'height': physicalH,
-    });
+    unawaited(
+      _textureChannel
+          .invokeMethod<void>('syncTextureSize', {
+            'playerId': widget.handle.playerId,
+            'width': physicalW,
+            'height': physicalH,
+          })
+          .catchError((Object error) {
+            _syncedPhysicalWidth = null;
+            _syncedPhysicalHeight = null;
+            debugPrint('gstplayer: syncTextureSize failed: $error');
+          }),
+    );
   }
 
   void _syncAndroidFromConstraints(BoxConstraints constraints) {
@@ -176,13 +188,6 @@ class _TextureVideoSurfaceState extends State<TextureVideoSurface> {
       return;
     }
     _syncAndroidTextureSize(constraints.maxWidth, constraints.maxHeight);
-  }
-
-  @override
-  void dispose() {
-    // Texture is owned by the player session — do not disposeTexture here.
-    // View remounts (Hero / ListenableBuilder) must keep the SurfaceProducer alive.
-    super.dispose();
   }
 
   @override

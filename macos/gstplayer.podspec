@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'gstplayer'
-  s.version          = '1.0.0'
+  s.version          = File.read(File.join(__dir__, '..', 'pubspec.yaml'))[/^version:\s*(\S+)/, 1].split('+').first
   s.summary          = 'Polished all-in-one Flutter video player (GStreamer).'
   s.description      = <<-DESC
 A polished, all-in-one Flutter video player with beautiful built-in controls and
@@ -28,7 +28,7 @@ broad format support for local and network video, powered by GStreamer
   # via vendored_frameworks + CocoaPods [CP] Embed Pods Frameworks.
   #
   # Set GSTPLAYER_ALLOW_HOMEBREW_GSTREAMER=1 for local Homebrew-only dev (not MAS).
-  gst_ver = ENV.fetch('GST_VER', '1.28.6')
+  gst_ver = ENV.fetch('GST_VER', '1.28.8')
   cache_root = File.expand_path("~/Library/Caches/gstplayer/gstreamer/#{gst_ver}")
   use_homebrew = ENV['GSTPLAYER_ALLOW_HOMEBREW_GSTREAMER'] == '1'
 
@@ -106,15 +106,9 @@ broad format support for local and network video, powered by GStreamer
       :name => 'Build C player library',
       :script => rust_build_script,
       :execution_position => :before_compile,
-      :input_files => [
-        '${PODS_TARGET_SRCROOT}/../native/include/gstp_player.h',
-        '${PODS_TARGET_SRCROOT}/../native/src/pipeline.c',
-        '${PODS_TARGET_SRCROOT}/../native/src/thumbnail.c',
-        '${PODS_TARGET_SRCROOT}/../native/src/bus.c',
-        '${PODS_TARGET_SRCROOT}/../native/src/gstp_player.c',
-        '${PODS_TARGET_SRCROOT}/../native/src/gstp_ffi_keep.c',
-      ],
-      :output_files => ['${PODS_CONFIGURATION_BUILD_DIR}/gstplayer/libgstplayer.a'],
+      :input_files => Dir.glob(File.join(__dir__, '..', 'native', '{include,src}', '**', '*.{c,h}')) +
+      [File.join(__dir__, '..', 'native', 'scripts', 'build_pod.sh')],
+    :output_files => ['${PODS_CONFIGURATION_BUILD_DIR}/gstplayer/libgstplayer.a'],
     },
   ]
 

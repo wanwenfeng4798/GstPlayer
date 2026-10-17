@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -67,6 +66,10 @@ class PlaybackSession extends ChangeNotifier
 
   StreamSubscription<PlayerEvent>? _sub;
   bool _disposed = false;
+  Future<void>? _initializing;
+  Future<void>? _disposing;
+  Future<void>? _openQueue;
+  Object? _openToken;
 
   /// Latest play/pause intent while transport ops are in flight / 传输进行中的最新播放意图.
   bool? _wantPlaying;
@@ -171,20 +174,30 @@ class PlaybackSession extends ChangeNotifier
   VideoSource? get mediaSource => _mediaSource;
 
   /// 创建原生 player 并订阅事件流 / Creates native player and subscribes to events.
-  Future<void> initialize() async {
-    if (_initialized) return;
-    await _port.create();
-    final id = _port.playerId;
-    if (id == null) {
-      throw StateError('PlayerCommandPort.create() did not assign playerId');
+  Future<void> initialize() {
+    if (_disposed) return Future.error(StateError('Player is disposed'));
+    if (_initialized) return Future<void>.value();
+    return _initializing ??= _initialize();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      await _port.create();
+      if (_disposed) return; // dispose() waits for create, then owns cleanup.
+      final id = _port.playerId;
+      if (id == null) {
+        throw StateError('PlayerCommandPort.create() did not assign playerId');
+      }
+      _playerId = id;
+      _initialized = true;
+      _sub = _port.events.listen(
+        _onEvent,
+        onError: (Object e) => _applyError(e.toString()),
+      );
+      notifyListeners();
+    } finally {
+      _initializing = null;
     }
-    _playerId = id;
-    _initialized = true;
-    notifyListeners();
-    _sub = _port.events.listen(
-      _onEvent,
-      onError: (Object e) => _applyError(e.toString()),
-    );
   }
 
   void _onEvent(PlayerEvent event) {
@@ -197,6 +210,7 @@ class PlaybackSession extends ChangeNotifier
   }
 
   Future<void> _guard(Future<void> Function() action) async {
+    if (_disposed) return;
     try {
       await action();
     } catch (e) {
@@ -209,19 +223,43 @@ class PlaybackSession extends ChangeNotifier
   /// 调用前 [_resetForOpen] 清空上一媒体状态，并 [setVideoRotation] 同步 native 为 0°；
   /// 加载后更新 pipeline 能力并刷新轨道。
   /// Clears prior media state via [_resetForOpen]; resets native rotation before load.
-  Future<void> open(VideoSource source, {bool autoPlay = false}) async {
-    _resetForOpen();
+  Future<void> open(VideoSource source, {bool autoPlay = false}) {
+    if (_disposed) return Future.error(StateError('Player is disposed'));
     _mediaSource = source;
-    await _guard(() async {
-      await _port.setVideoRotation(0);
-      await _port.loadSource(
-        _mediaSourceResolver.resolve(source),
-        autoPlay: autoPlay,
-      );
-      _setPipelineCapabilities(await _port.getPipelineCapabilities());
-      await _refreshTracksFromPort();
+    _resetForOpen();
+    final generation = _mediaGeneration;
+    final previous = _openQueue;
+    Future<void> run() async {
+      if (previous != null) await previous;
+      if (!_isCurrent(generation)) return;
+      try {
+        await _port.setVideoRotation(0);
+        if (!_isCurrent(generation)) return;
+        await _port.loadSource(
+          _mediaSourceResolver.resolve(source),
+          autoPlay: autoPlay,
+        );
+        if (!_isCurrent(generation)) return;
+        final caps = await _port.getPipelineCapabilities();
+        if (!_isCurrent(generation)) return;
+        _setPipelineCapabilities(caps);
+        await _refreshTracksFromPort(generation: generation);
+      } catch (e) {
+        if (_isCurrent(generation)) _applyError(e.toString());
+      }
+    }
+
+    final token = Object();
+    _openToken = token;
+    final result = run().whenComplete(() {
+      if (identical(_openToken, token)) _openQueue = null;
     });
+    _openQueue = result;
+    return result;
   }
+
+  bool _isCurrent(int generation) =>
+      !_disposed && generation == _mediaGeneration;
 
   /// 播放；EOS 后手动 replay 与 [open] 相同路径重新加载当前源 / Plays; after EOS, reloads current source like [open].
   Future<void> play() {
@@ -243,6 +281,7 @@ class PlaybackSession extends ChangeNotifier
   Future<void> stop() async {
     _clearTransportIntent();
     _state = PlayerState.stopped;
+    _loadingMedia = false;
     notifyListeners();
     // Wait for any in-flight play/pause before stop so native order stays sane.
     final inFlight = _transportFlush;
@@ -346,14 +385,16 @@ class PlaybackSession extends ChangeNotifier
     final ms = position.inMilliseconds;
     _seekPinMs = ms;
     _seekPinUntil = DateTime.now().add(const Duration(seconds: 5));
-    _previewSeek(position, showBuffering: false);
+    _previewSeek(position);
     try {
       await _port.seek(position);
+      if (_disposed) return;
       if (_lastSeekFailure != null) {
         _lastSeekFailure = null;
         notifyListeners();
       }
     } catch (e) {
+      if (_disposed) return;
       debugPrint('gstplayer: seek soft-fail: $e');
       _seekPinMs = null;
       _seekPinUntil = null;
@@ -458,26 +499,42 @@ class PlaybackSession extends ChangeNotifier
   /// Releases the native Flutter texture while [playerId] is still valid, then
   /// clears ids before awaiting port dispose so late events cannot race.
   @override
-  Future<void> dispose() async {
-    if (_disposed) return;
+  Future<void> dispose() {
+    if (_disposing case final pending?) return pending;
     _disposed = true;
-    final id = _playerId;
-    if (id != null) {
-      await disposeNativePlayerTexture(id);
-    }
-    _playerId = null;
-    _initialized = false;
-    await _sub?.cancel();
-    await _port.dispose();
+    _mediaGeneration++;
     super.dispose();
+    return _disposing = _dispose();
   }
 
-  Future<void> _refreshTracksFromPort() async {
+  Future<void> _dispose() async {
     try {
-      _tracks = await _port.getTracks();
+      try {
+        await _initializing;
+      } catch (_) {
+        /* Still release a partial create. */
+      }
+      final id = _playerId ?? _port.playerId;
+      _playerId = null;
+      _initialized = false;
+      await _sub?.cancel();
+      if (id != null) await disposeNativePlayerTexture(id);
+      await _openQueue;
+    } finally {
+      await _port.dispose();
+    }
+  }
+
+  Future<void> _refreshTracksFromPort({int? generation}) async {
+    final current = generation ?? _mediaGeneration;
+    if (!_isCurrent(current)) return;
+    try {
+      final tracks = await _port.getTracks();
+      if (!_isCurrent(current)) return;
+      _tracks = List<MediaTrack>.unmodifiable(tracks);
       notifyListeners();
     } catch (e) {
-      _applyError(e.toString());
+      if (_isCurrent(current)) _applyError(e.toString());
     }
   }
 
@@ -507,12 +564,22 @@ class PlaybackSession extends ChangeNotifier
     notifyListeners();
   }
 
-  /// Clears load gate once video size, buffering, and PLAYING are all ready.
+  /// Clears the load gate when a video frame is ready, including paused preroll.
   void _clearLoadingMediaIfReady() {
     if (!_loadingMedia) return;
+    if (_state == PlayerState.error ||
+        _state == PlayerState.stopped ||
+        _state == PlayerState.completed) {
+      _loadingMedia = false;
+      return;
+    }
     if (_videoSize.width <= 0 || _videoSize.height <= 0) return;
     if (_bufferingPercent < 100) return;
-    if (_state != PlayerState.playing) return;
+    if (_state != PlayerState.playing &&
+        _state != PlayerState.paused &&
+        _state != PlayerState.ready) {
+      return;
+    }
     _loadingMedia = false;
   }
 
@@ -564,10 +631,7 @@ class PlaybackSession extends ChangeNotifier
           if (DateTime.now().isBefore(_seekPinUntil!)) {
             final pin = _seekPinMs!;
             final delta = (eventMs - pin).abs();
-            final tol = math.max(
-              3000,
-              (_duration.inMilliseconds * 0.05).round(),
-            );
+            const tol = 1000;
             if (delta > tol) {
               break;
             }
@@ -661,6 +725,7 @@ class PlaybackSession extends ChangeNotifier
         _state = PlayerState.completed;
         _position = _duration;
       case PlayerEventKind.error:
+        _loadingMedia = false;
         _clearTransportIntent();
         _error = event.message;
         _state = PlayerState.error;
@@ -674,6 +739,7 @@ class PlaybackSession extends ChangeNotifier
   }
 
   void _applyError(String message) {
+    if (_disposed) return;
     _error = message;
     _state = PlayerState.error;
     _bufferingPercent = 100;
@@ -712,11 +778,8 @@ class PlaybackSession extends ChangeNotifier
     return Duration(milliseconds: ms);
   }
 
-  void _previewSeek(Duration position, {required bool showBuffering}) {
+  void _previewSeek(Duration position) {
     _position = _clampSeekPreview(position);
-    if (showBuffering) {
-      _state = PlayerState.buffering;
-    }
     notifyListeners();
   }
 

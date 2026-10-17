@@ -22,6 +22,7 @@ class MediaSourceResolver {
         return MediaSourceDto.uri(
           _resolveGstUri(source),
           httpHeaders: source.httpHeaders,
+          allowInsecureTls: source.allowInsecureTls,
         );
       case VideoSourceType.file:
         return MediaSourceDto.uri(_resolveGstUri(source));
@@ -49,12 +50,8 @@ class MediaSourceResolver {
   }
 
   static String _fileUriFromPath(String path) {
-    if (RegExp(r'^[A-Za-z]:[/\\]').hasMatch(path)) {
-      final normalized = path.replaceAll('\\', '/');
-      final withoutLeadingSlash = normalized.startsWith('/')
-          ? normalized.substring(1)
-          : normalized;
-      return 'file:///$withoutLeadingSlash';
+    if (RegExp(r'^[A-Za-z]:[/\\]').hasMatch(path) || path.startsWith(r'\\')) {
+      return Uri.file(path, windows: true).toString();
     }
     return Uri.file(path).toString();
   }

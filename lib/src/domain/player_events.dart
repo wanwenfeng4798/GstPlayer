@@ -23,6 +23,7 @@ sealed class MediaSourceDto {
   const factory MediaSourceDto.uri(
     String uri, {
     Map<String, String> httpHeaders,
+    bool allowInsecureTls,
   }) = MediaSourceDto_Uri;
 
   /// Flutter 资源键，如 `assets/sample.mp4`
@@ -31,9 +32,14 @@ sealed class MediaSourceDto {
 }
 
 final class MediaSourceDto_Uri extends MediaSourceDto {
-  const MediaSourceDto_Uri(this.uri, {this.httpHeaders = const {}});
+  const MediaSourceDto_Uri(
+    this.uri, {
+    this.httpHeaders = const {},
+    this.allowInsecureTls = false,
+  });
   final String uri;
   final Map<String, String> httpHeaders;
+  final bool allowInsecureTls;
 
   /// Back-compat alias used by existing call sites.
   String get field0 => uri;

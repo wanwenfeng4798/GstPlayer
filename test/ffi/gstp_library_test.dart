@@ -9,8 +9,7 @@ void main() {
         '${Directory.current.path}/native/build/host/libgstplayer.dylib';
     if (!File(path).existsSync()) {
       // Also accept .so on Linux CI.
-      final so =
-          '${Directory.current.path}/native/build/host/libgstplayer.so';
+      final so = '${Directory.current.path}/native/build/host/libgstplayer.so';
       if (!File(so).existsSync()) {
         // Skip when native host lib was not built in this environment.
         return;
@@ -19,7 +18,7 @@ void main() {
     } else {
       GstpLibrary.openPath(path);
     }
-    expect(GstpLibrary.instance.version(), isNotEmpty);
+    expect(GstpLibrary.instance.version(), '0.0.6');
     expect(GstpLibrary.instance.init(), 0);
   });
 }

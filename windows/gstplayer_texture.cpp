@@ -1,3 +1,4 @@
+#include "../native/src/pixel_copy.h"
 #include "gstplayer_texture.h"
 
 #include <algorithm>
@@ -30,23 +31,6 @@ void GstpTextureOnFrame(void* ctx) {
   static_cast<gstplayer::VideoTexture*>(ctx)->OnFrameAvailable();
 }
 
-void BgraToRgbaTight(const uint8_t* src,
-                     int32_t width,
-                     int32_t height,
-                     int32_t src_stride,
-                     uint8_t* dst) {
-  const int row_bytes = width * 4;
-  for (int32_t y = 0; y < height; ++y) {
-    const uint8_t* src_row = src + y * src_stride;
-    uint8_t* dst_row = dst + y * row_bytes;
-    for (int32_t x = 0; x < width; ++x) {
-      dst_row[x * 4 + 0] = src_row[x * 4 + 2];
-      dst_row[x * 4 + 1] = src_row[x * 4 + 1];
-      dst_row[x * 4 + 2] = src_row[x * 4 + 0];
-      dst_row[x * 4 + 3] = src_row[x * 4 + 3];
-    }
-  }
-}
 
 }  // namespace
 
@@ -69,6 +53,17 @@ VideoTexture::~VideoTexture() {
   if (registrar_ && texture_id_ >= 0) {
     registrar_->UnregisterTexture(texture_id_, []() {});
   }
+}
+
+void VideoTexture::Release(std::unique_ptr<VideoTexture> texture) {
+  if (!texture) return;
+  gstp_texture_unregister(texture->player_id_);
+  auto owner = std::shared_ptr<VideoTexture>(std::move(texture));
+  const auto id = owner->texture_id_;
+  owner->texture_id_ = -1;
+  if (!owner->registrar_ || id < 0) return;
+  // Flutter can still be reading the pixel buffer until unregistration finishes.
+  owner->registrar_->UnregisterTexture(id, [owner]() {});
 }
 
 void VideoTexture::OnFrameAvailable() {
@@ -113,7 +108,7 @@ const FlutterDesktopPixelBuffer* VideoTexture::CopyPixelBuffer(size_t width,
     rgba_.resize(rgba_bytes);
   }
 
-  BgraToRgbaTight(staging_bgra_.data(), copied_w, copied_h, copied_stride,
+  gstp_bgra_to_rgba(staging_bgra_.data(), copied_w, copied_h, copied_stride,
                   rgba_.data());
 
   frame_width_ = copied_w;
@@ -129,6 +124,10 @@ const FlutterDesktopPixelBuffer* VideoTexture::CopyPixelBuffer(size_t width,
 VideoTextureRegistry::VideoTextureRegistry(
     flutter::TextureRegistrar* registrar)
     : registrar_(registrar) {}
+
+VideoTextureRegistry::~VideoTextureRegistry() {
+  while (!textures_.empty()) Dispose(textures_.begin()->first);
+}
 
 int64_t VideoTextureRegistry::Create(int64_t player_id) {
   if (player_id == 0) {
@@ -147,7 +146,11 @@ int64_t VideoTextureRegistry::Create(int64_t player_id) {
 
 void VideoTextureRegistry::Dispose(int64_t player_id) {
   std::lock_guard<std::mutex> guard(lock_);
-  textures_.erase(player_id);
+  auto found = textures_.find(player_id);
+  if (found == textures_.end()) return;
+  auto texture = std::move(found->second);
+  textures_.erase(found);
+  VideoTexture::Release(std::move(texture));
 }
 
 }  // namespace gstplayer

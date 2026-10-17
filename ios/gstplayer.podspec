@@ -3,7 +3,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'gstplayer'
-  s.version          = '1.0.0'
+  s.version          = File.read(File.join(__dir__, '..', 'pubspec.yaml'))[/^version:\s*(\S+)/, 1].split('+').first
   s.summary          = 'Polished all-in-one Flutter video player (GStreamer).'
   s.description      = <<-DESC
 A polished, all-in-one Flutter video player with beautiful built-in controls and
@@ -20,7 +20,7 @@ broad format support for local and network video, powered by GStreamer
   s.platform = :ios, '13.0'
   s.swift_version = '5.0'
 
-  gst_ver = ENV.fetch('GST_VER', '1.28.6')
+  gst_ver = ENV.fetch('GST_VER', '1.28.8')
   cache_ios = File.expand_path("~/Library/Caches/gstplayer/gstreamer/#{gst_ver}/ios/iPhone.sdk")
 
   gst_root = ENV['GSTREAMER_ROOT_IOS']
@@ -49,14 +49,8 @@ broad format support for local and network video, powered by GStreamer
     :name => 'Build C player library',
     :script => 'export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; export GSTP_IOS=1; export GSTREAMER_FRAMEWORK_ROOT="' + gst_root + '"; export PLATFORM_NAME="${PLATFORM_NAME}"; sh "$PODS_TARGET_SRCROOT/../native/scripts/build_pod.sh"',
     :execution_position => :before_compile,
-    :input_files => [
-      '${PODS_TARGET_SRCROOT}/../native/include/gstp_player.h',
-      '${PODS_TARGET_SRCROOT}/../native/src/pipeline.c',
-      '${PODS_TARGET_SRCROOT}/../native/src/thumbnail.c',
-      '${PODS_TARGET_SRCROOT}/../native/src/bus.c',
-      '${PODS_TARGET_SRCROOT}/../native/src/gstp_player.c',
-      '${PODS_TARGET_SRCROOT}/../native/src/gstp_ffi_keep.c',
-    ],
+    :input_files => Dir.glob(File.join(__dir__, '..', 'native', '{include,src}', '**', '*.{c,h}')) +
+      [File.join(__dir__, '..', 'native', 'scripts', 'build_pod.sh')],
     :output_files => ["${PODS_CONFIGURATION_BUILD_DIR}/gstplayer/libgstplayer.a"],
   }
 
@@ -68,7 +62,7 @@ broad format support for local and network video, powered by GStreamer
     'ENABLE_BITCODE' => 'NO',
     'HEADER_SEARCH_PATHS' => '"' + gst_headers + '"',
     'FRAMEWORK_SEARCH_PATHS' => '"' + gst_framework_parent + '"',
-    'OTHER_LDFLAGS' => force_load + ' -framework GStreamer -liconv -lresolv -lz -lbz2 -framework UIKit -framework QuartzCore -framework CoreGraphics -framework IOSurface -framework Metal -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AVFoundation -framework AVFAudio -framework AssetsLibrary -framework AudioToolbox -framework VideoToolbox -framework OpenGLES -framework Foundation -framework Security',
+    'OTHER_LDFLAGS' => force_load + ' -framework GStreamer -lc++ -liconv -lresolv -lz -lbz2 -framework UIKit -framework QuartzCore -framework CoreGraphics -framework IOSurface -framework Metal -framework CoreFoundation -framework CoreMedia -framework CoreVideo -framework CoreAudio -framework AVFoundation -framework AVFAudio -framework AssetsLibrary -framework AudioToolbox -framework VideoToolbox -framework OpenGLES -framework Foundation -framework Security',
   }
   # Runner link + keep global symbols for Dart DynamicLibrary.process() / dlsym.
   s.user_target_xcconfig = {

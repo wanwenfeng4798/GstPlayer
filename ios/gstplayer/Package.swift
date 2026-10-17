@@ -4,7 +4,7 @@
 import Foundation
 import PackageDescription
 
-let gstVer = Context.environment["GST_VER"] ?? "1.28.6"
+let gstVer = Context.environment["GST_VER"] ?? "1.28.8"
 let home = Context.environment["HOME"] ?? NSHomeDirectory()
 let gstCache = "\(home)/Library/Caches/gstplayer/gstreamer/\(gstVer)/ios/iPhone.sdk"
 let gstLegacy = "\(home)/Library/Developer/GStreamer/iPhone.sdk"
@@ -131,6 +131,7 @@ let package = Package(
                 .linkedFramework("OpenGLES"),
                 .linkedFramework("Foundation"),
                 .linkedFramework("Security"),
+                .linkedLibrary("c++"),
                 .linkedLibrary("iconv"),
                 .linkedLibrary("resolv"),
                 .linkedLibrary("z"),

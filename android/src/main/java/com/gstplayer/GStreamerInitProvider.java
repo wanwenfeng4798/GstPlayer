@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Auto-initializes the GStreamer Android runtime before any Dart FFI code runs.
  *
  * <p>The {@code libgstreamer_android.so} umbrella library is built at compile time
- * (GStreamer 1.28.6 {@code gstreamer-1.0.mk}) and packaged into the plugin AAR.
+ * (GStreamer 1.28.8 {@code gstreamer-1.0.mk}) and packaged into the plugin AAR.
  * It must be loaded through {@link System#loadLibrary} here (not Dart FFI
  * {@code dlopen}) so the library's {@code JNI_OnLoad} runs, the JavaVM is
  * captured, and the {@code androidmedia} (MediaCodec) decoders register. Without

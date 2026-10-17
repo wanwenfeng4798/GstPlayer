@@ -71,24 +71,44 @@ void main() {
       expect(scrub.isScrubbing, isFalse);
     });
 
-    test('drag safety timeout commits seek when position is far from target', () async {
-      scrub.onSeekStart();
-      scrub.onSeekChanged(0.5, 100_000);
-      expect(model.seekCallCount, 0);
+    test(
+      'drag safety timeout commits seek when position is far from target',
+      () async {
+        scrub.onSeekStart();
+        scrub.onSeekChanged(0.5, 100_000);
+        expect(model.seekCallCount, 0);
 
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+        await Future<void>.delayed(const Duration(milliseconds: 350));
 
-      expect(model.seekCallCount, 1);
-      expect(model.lastSeek, const Duration(seconds: 50));
-      expect(scrub.isScrubbing, isTrue);
-    });
+        expect(model.seekCallCount, 1);
+        expect(model.lastSeek, const Duration(seconds: 50));
+        expect(scrub.isScrubbing, isTrue);
+      },
+    );
 
-    test('drag safety timeout clears when target is near current position', () async {
-      scrub.onSeekStart();
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+    test(
+      'drag safety timeout clears when target is near current position',
+      () async {
+        scrub.onSeekStart();
+        await Future<void>.delayed(const Duration(milliseconds: 350));
 
-      expect(model.seekCallCount, 0);
-      expect(scrub.isScrubbing, isFalse);
-    });
+        expect(model.seekCallCount, 0);
+        expect(scrub.isScrubbing, isFalse);
+      },
+    );
   });
+  test(
+    'long video allows a ten-second seek instead of ignoring five percent',
+    () {
+      final model = FakePlaybackControlsModel(
+        duration: const Duration(hours: 2),
+        initialPosition: const Duration(hours: 1),
+      );
+      final scrub = ScrubController(model: model, onInteract: () {});
+      scrub.onSeekEnd(3610 / 7200, 7200000);
+      expect(model.lastSeek, const Duration(seconds: 3610));
+      scrub.dispose();
+      model.dispose();
+    },
+  );
 }

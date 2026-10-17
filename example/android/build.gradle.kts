@@ -20,7 +20,7 @@ subprojects {
                     version = release(37)
                 }
                 buildToolsVersion = "37.0.0"
-                ndkVersion = "30.0.16138531" 
+                ndkVersion = "30.0.16248370"
                 if (namespace == null) {
                     namespace = project.group.toString()
                 }

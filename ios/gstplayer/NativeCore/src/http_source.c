@@ -1,15 +1,10 @@
 #include "http_source.h"
 
 #include <ctype.h>
+#include <gio/gio.h>
 #include <string.h>
 
 static void gstp_http_headers_destroy_value(gpointer data) { g_free(data); }
-
-void gstp_http_headers_clear(GHashTable *headers) {
-  if (headers) {
-    g_hash_table_remove_all(headers);
-  }
-}
 
 void gstp_http_headers_free(GHashTable *headers) {
   if (headers) {
@@ -158,15 +153,26 @@ static gboolean gstp_is_user_agent_header(const char *name) {
 }
 
 void gstp_configure_http_source(GstElement *element, GHashTable *headers) {
+  gstp_configure_http_source_with_tls(element, headers, TRUE);
+}
+
+void gstp_configure_http_source_with_tls(GstElement *element, GHashTable *headers,
+                                         gboolean verify_tls) {
   if (!element) {
     return;
   }
   GObjectClass *klass = G_OBJECT_GET_CLASS(element);
+  GstElementFactory *factory = gst_element_get_factory(element);
+  if (factory && g_strcmp0(gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory)),
+                          "souphttpsrc") == 0) {
+    /* Bound stalled network reads, including cancellation/NULL teardown. */
+    g_object_set(element, "timeout", 15u, NULL);
+  }
   if (g_object_class_find_property(klass, "ssl-strict")) {
-    g_object_set(element, "ssl-strict", FALSE, NULL);
+    g_object_set(element, "ssl-strict", verify_tls, NULL);
   }
   if (g_object_class_find_property(klass, "tls-validation-flags")) {
-    g_object_set(element, "tls-validation-flags", 0, NULL);
+    g_object_set(element, "tls-validation-flags", verify_tls ? G_TLS_CERTIFICATE_VALIDATE_ALL : 0, NULL);
   }
 
   const char *user_agent = gstp_http_header_lookup(headers, "User-Agent");

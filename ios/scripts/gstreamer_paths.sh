@@ -13,7 +13,7 @@ if [[ -z "${HOME:-}" ]]; then
   export HOME
 fi
 
-GST_VER="${GST_VER:-1.28.6}"
+GST_VER="${GST_VER:-1.28.8}"
 
 _default_cache_ios="${HOME}/Library/Caches/gstplayer/gstreamer/${GST_VER}/ios/iPhone.sdk"
 _legacy_ios="${HOME}/Library/Developer/GStreamer/iPhone.sdk"
@@ -26,7 +26,7 @@ else
   GSTPLAYER_GSTREAMER_IOS_ROOT="${_default_cache_ios}"
 fi
 
-GSTREAMER_IOS_PKG="gstreamer-1.0-devel-${GST_VER}-ios-universal.pkg"
+GSTREAMER_IOS_PKG="gstreamer-${GST_VER}-xcframework.tar.xz"
 GSTREAMER_IOS_PKG_URL="https://gstreamer.freedesktop.org/data/pkg/ios/${GST_VER}/${GSTREAMER_IOS_PKG}"
 GSTPLAYER_GSTREAMER_IOS_PKG_DIR="${HOME}/Library/Caches/gstplayer/gstreamer/${GST_VER}/pkgs"
 STAMP="${GSTPLAYER_GSTREAMER_IOS_ROOT}/.install_stamp"

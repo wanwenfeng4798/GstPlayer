@@ -60,6 +60,10 @@ enum GstpAspectRatioMode {
   GSTP_ASPECT_STRETCH = 2,
 };
 
+/** Event strings are an owned snapshot. Call gstp_event_free(message) once
+ * after consuming all strings. kind == -1 is the final detach marker (no data).
+ * Callbacks must not synchronously reenter callback registration/unregistration.
+ */
 typedef void (*GstpEventCallback)(void *ctx, int32_t kind, int64_t position_ms,
                                   int64_t duration_ms, int32_t width,
                                   int32_t height, int32_t buffering_percent,
@@ -99,9 +103,16 @@ GSTP_EXPORT void gstp_player_dispose(GstpPlayerId id);
 GSTP_EXPORT void gstp_player_set_event_callback(GstpPlayerId id, void *ctx,
                                                 GstpEventCallback cb);
 
+/** Detaches on the runtime thread. True means a final kind=-1 marker was sent. */
+GSTP_EXPORT bool gstp_player_detach_event_callback(GstpPlayerId id);
+GSTP_EXPORT void gstp_event_free(const char *message);
+
 GSTP_EXPORT int32_t gstp_player_load_uri(GstpPlayerId id, const char *uri,
                                          bool auto_play,
                                          const char *http_headers_json);
+/** Extended load; verify_tls defaults to true through gstp_player_load_uri. */
+GSTP_EXPORT int32_t gstp_player_load_uri_with_tls(GstpPlayerId id, const char *uri,
+    bool auto_play, const char *http_headers_json, bool verify_tls);
 GSTP_EXPORT int32_t gstp_player_load_asset(GstpPlayerId id,
                                            const char *asset_key,
                                            const char *package,
@@ -143,6 +154,7 @@ GSTP_EXPORT void gstp_player_clear_android_surface(GstpPlayerId id);
 
 GSTP_EXPORT void gstp_texture_register(int64_t player_id, void *ctx,
                                        GstpFrameReadyFn on_frame);
+/** Waits for any in-flight frame callback before returning. */
 GSTP_EXPORT void gstp_texture_unregister(int64_t player_id);
 GSTP_EXPORT bool gstp_texture_frame_info(int64_t player_id, int32_t *out_width,
                                          int32_t *out_height,
@@ -163,11 +175,19 @@ GSTP_EXPORT int32_t gstp_thumbnail_capture(
     const char *http_headers_json, uint8_t **out_bgra, uint32_t *out_len,
     int32_t *out_width, int32_t *out_height, int32_t *out_stride);
 
+/** Extended capture; verify_tls defaults to true through gstp_thumbnail_capture. */
+GSTP_EXPORT int32_t gstp_thumbnail_capture_with_tls(
+    const char *uri, int64_t position_ms, int32_t max_width,
+    const char *http_headers_json, bool verify_tls, uint8_t **out_bgra,
+    uint32_t *out_len, int32_t *out_width, int32_t *out_height, int32_t *out_stride);
+
 /** Copy the latest BGRA frame from an active player into a new buffer. */
 GSTP_EXPORT int32_t gstp_player_capture_frame(
     GstpPlayerId id, uint8_t **out_bgra, uint32_t *out_len, int32_t *out_width,
     int32_t *out_height, int32_t *out_stride);
 
+/** Cancels the active headless capture; queued newer captures can proceed. */
+GSTP_EXPORT void gstp_thumbnail_cancel(void);
 GSTP_EXPORT void gstp_thumbnail_free(uint8_t *data);
 
 /**

@@ -89,10 +89,20 @@ class FfiPlayerCommandPort implements PlayerCommandPort {
   }) async {
     try {
       switch (source) {
-        case MediaSourceDto_Uri(:final uri, :final httpHeaders):
+        case MediaSourceDto_Uri(
+          :final uri,
+          :final httpHeaders,
+          :final allowInsecureTls,
+        ):
           _check(
             await _native<int>(
-              FfiLoadUriRequest(_id, uri, autoPlay, httpHeaders),
+              FfiLoadUriRequest(
+                _id,
+                uri,
+                autoPlay,
+                httpHeaders,
+                allowInsecureTls: allowInsecureTls,
+              ),
             ),
             'load_uri($uri)',
           );

@@ -1,4 +1,5 @@
 #include "gstp_internal.h"
+#include "pixel_copy.h"
 
 #include <gst/video/video.h>
 #include <string.h>
@@ -54,11 +55,17 @@ GstFlowReturn gstp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
     return GST_FLOW_OK;
   }
 
+  if (width > INT32_MAX / 4 ||
+      (uint64_t)width * 4 * (uint64_t)height > UINT32_MAX) {
+    gst_buffer_unmap(buffer, &map);
+    gst_sample_unref(sample);
+    return GST_FLOW_ERROR;
+  }
   const int dst_stride = width * 4;
-  const uint32_t needed = (uint32_t)(dst_stride * height);
+  const uint32_t needed = (uint32_t)((uint64_t)dst_stride * (uint64_t)height);
   int src_stride = dst_stride;
   GstVideoMeta *vmeta = gst_buffer_get_video_meta(buffer);
-  if (vmeta && vmeta->stride[0] > 0) {
+  if (vmeta) {
     src_stride = vmeta->stride[0];
   }
 
@@ -69,19 +76,14 @@ GstFlowReturn gstp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
     fb->data = g_realloc(fb->data, needed);
     fb->capacity = needed;
   }
-  if (src_stride == dst_stride && map.size >= needed) {
-    memcpy(fb->data, map.data, needed);
-  } else {
-    const uint8_t *src = map.data;
-    for (int row = 0; row < height; row++) {
-      const gsize row_off = (gsize)row * (gsize)src_stride;
-      const gsize copy_n = (gsize)dst_stride;
-      if (row_off + copy_n > map.size) {
-        memset(fb->data + (gsize)row * (gsize)dst_stride, 0, copy_n);
-        continue;
-      }
-      memcpy(fb->data + (gsize)row * (gsize)dst_stride, src + row_off, copy_n);
-    }
+  const gsize offset = vmeta ? vmeta->offset[0] : 0;
+  if (offset > map.size ||
+      !gstp_copy_bgra_rows(fb->data, fb->capacity, map.data + offset,
+                           map.size - offset, width, height, src_stride)) {
+    g_mutex_unlock(&p->frame_mu);
+    gst_buffer_unmap(buffer, &map);
+    gst_sample_unref(sample);
+    return GST_FLOW_ERROR;
   }
   fb->size = needed;
   fb->width = width;
@@ -105,8 +107,6 @@ GstFlowReturn gstp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
     gstp_player_emit(p, GSTP_EVENT_METADATA_CHANGED, "");
   }
 
-  GstpFrameReadyFn cb = p->frame_cb;
-  void *ctx = p->frame_ctx;
   g_mutex_unlock(&p->frame_mu);
 
   gst_buffer_unmap(buffer, &map);
@@ -119,9 +119,12 @@ GstFlowReturn gstp_frame_on_new_sample(GstAppSink *sink, gpointer user_data) {
 
   gst_sample_unref(sample);
 
-  if (cb) {
-    cb(ctx);
+  /* Unregister waits until the last invocation has returned. */
+  g_mutex_lock(&p->callback_mu);
+  if (p->frame_cb) {
+    p->frame_cb(p->frame_ctx);
   }
+  g_mutex_unlock(&p->callback_mu);
   return GST_FLOW_OK;
 }
 

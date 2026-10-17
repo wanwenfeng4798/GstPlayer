@@ -31,4 +31,18 @@ One
     expect(cues, hasLength(1));
     expect(cues.first.text, 'One');
   });
+  test('VTT supports short timestamps, named cues, BOM and cue settings', () {
+    final cues = SubtitleParser.parse(
+      '\uFEFFWEBVTT\n\nintro\n00:01.250 --> 00:03.500 align:start\nHello\n',
+    );
+    expect(cues, hasLength(1));
+    expect(cues.single.start, const Duration(milliseconds: 1250));
+    expect(cues.single.end, const Duration(milliseconds: 3500));
+  });
+  test('VTT ignores NOTE blocks and invalid or reversed times', () {
+    final cues = SubtitleParser.parse(
+      'WEBVTT\n\nNOTE ignored\n00:01.000 --> 00:02.000\ncomment\n\nbad\n00:60.000 --> 01:05.000\ninvalid\n\n00:03.000 --> 00:02.000\nreversed\n',
+    );
+    expect(cues, isEmpty);
+  });
 }

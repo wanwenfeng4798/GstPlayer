@@ -11,10 +11,9 @@ void gstp_set_default_user_agent(const char *ua);
 
 const char *gstp_get_default_user_agent(void);
 
-void gstp_http_headers_clear(GHashTable *headers);
-
 void gstp_http_headers_free(GHashTable *headers);
 
 GHashTable *gstp_http_headers_from_json(const char *json);
 
 void gstp_configure_http_source(GstElement *element, GHashTable *headers);
+void gstp_configure_http_source_with_tls(GstElement *element, GHashTable *headers, gboolean verify_tls);

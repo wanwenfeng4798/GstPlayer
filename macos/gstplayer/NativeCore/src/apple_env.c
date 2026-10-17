@@ -22,6 +22,7 @@ static void gstp_setenv_copy(const char *key, const char *value) {
   setenv(key, value, 1);
 }
 
+#if !TARGET_OS_IPHONE
 static int gstp_file_exists(const char *path) {
   struct stat st;
   return path && stat(path, &st) == 0 && S_ISREG(st.st_mode);
@@ -50,6 +51,8 @@ static void gstp_copy_file_best_effort(const char *src, const char *dst) {
   fclose(out);
   fclose(in);
 }
+
+#endif
 
 static void gstp_setup_sandbox_writable_env(void) {
   const char *tmp = getenv("TMPDIR");

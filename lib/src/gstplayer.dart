@@ -71,6 +71,9 @@ class GstPlayer {
       GstpLibrary.instance;
       // Schedule ready work; do not await gst_init / worker spawn here.
       _ready ??= _readyOnce();
+      // Kickoff callers may intentionally defer ensureReady; keep errors observable
+      // through that Future without an unhandled background exception.
+      _ready!.ignore();
     } catch (_) {
       _kickoff = null;
       _ready = null;
@@ -85,6 +88,8 @@ class GstPlayer {
       GstpLibrary.instance;
       final workerFuture = FfiNativeWorker.ensureStarted();
       final userAgentFuture = configureDefaultHttpUserAgent();
+      workerFuture.ignore();
+      userAgentFuture.ignore();
 
       final code = await () async {
         final done = Completer<int>();
@@ -143,6 +148,7 @@ class GstPlayer {
           positionMs: at?.inMilliseconds ?? -1,
           maxWidth: maxWidth,
           httpHeaders: resolved.httpHeaders,
+          allowInsecureTls: source.allowInsecureTls,
         ),
       );
       return await CapturedBgraFrame.fromMap(map).toPng();
@@ -162,20 +168,14 @@ class GstPlayer {
     }
   }
 
-  static Future<
-      ({String uri, File? tempFile, Map<String, String> httpHeaders})>
-  _resolveThumbnailUri(
-    VideoSource source,
-  ) async {
+  static Future<({String uri, File? tempFile, Map<String, String> httpHeaders})>
+  _resolveThumbnailUri(VideoSource source) async {
     switch (source.type) {
       case VideoSourceType.network:
       case VideoSourceType.file:
         final dto = const MediaSourceResolver().resolve(source);
         return switch (dto) {
-          MediaSourceDto_Uri(
-            :final uri,
-            :final httpHeaders,
-          ) => (
+          MediaSourceDto_Uri(:final uri, :final httpHeaders) => (
             uri: uri,
             tempFile: null,
             httpHeaders: httpHeaders,

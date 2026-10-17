@@ -1,7 +1,9 @@
 #include "gstp_internal.h"
 #include "http_source.h"
+#include "gstp_version.h"
 
 #include <string.h>
+#include <stddef.h>
 
 #if defined(__ANDROID__)
 #include <android/native_window.h>
@@ -18,15 +20,22 @@ static void gstp_player_emit_impl(GstpPlayer *p, int32_t kind,
   if (!p || !p->event_cb) {
     return;
   }
-  /* Copy before callback: Dart NativeCallable.listener is async; stack
-   * buffers (e.g. GST_MESSAGE_ERROR) would be freed before Dart reads them. */
-  strncpy(p->event_message, message ? message : "",
-          sizeof(p->event_message) - 1);
-  p->event_message[sizeof(p->event_message) - 1] = '\0';
+  /* Ownership passes to the receiver, including async Dart listeners. */
+  typedef struct {
+    char message[512];
+    char matrix[64];
+    char range[64];
+    char hdr[64];
+  } EventStrings;
+  EventStrings *strings = g_new0(EventStrings, 1);
+  g_strlcpy(strings->message, message ? message : "", sizeof(strings->message));
+  g_strlcpy(strings->matrix, p->color_matrix, sizeof(strings->matrix));
+  g_strlcpy(strings->range, p->color_range, sizeof(strings->range));
+  g_strlcpy(strings->hdr, p->hdr_format, sizeof(strings->hdr));
   p->event_cb(p->event_ctx, kind, p->position_ms, p->duration_ms, p->width,
-              p->height, p->buffering_percent, p->player_state, p->event_message,
+              p->height, p->buffering_percent, p->player_state, strings->message,
               p->fps, p->par_n, p->par_d, p->dar_n, p->dar_d, p->interlaced,
-              p->color_matrix, p->color_range, p->hdr_format, p->seekable);
+              strings->matrix, strings->range, strings->hdr, p->seekable);
 }
 
 static gboolean gstp_emit_job_cb(gpointer data) {
@@ -40,7 +49,7 @@ static gboolean gstp_emit_job_cb(gpointer data) {
 }
 
 void gstp_player_emit(GstpPlayer *p, int32_t kind, const char *message) {
-  if (!p || !p->event_cb) {
+  if (!p) {
     return;
   }
   /* appsink and other GStreamer streaming threads must not call Dart FFI
@@ -68,7 +77,9 @@ void gstp_player_set_state(GstpPlayer *p, int32_t state) {
   gstp_player_emit(p, GSTP_EVENT_STATE_CHANGED, "");
 }
 
-const char *gstp_version(void) { return "0.0.4"; }
+const char *gstp_version(void) { return GSTP_PACKAGE_VERSION; }
+
+void gstp_event_free(const char *message) { g_free((void *)message); }
 
 int32_t gstp_init(void) { return gstp_runtime_start(); }
 
@@ -83,11 +94,10 @@ GstpPlayerId gstp_player_create(void) {
   for (int i = 0; i < GSTP_MAX_PLAYERS; i++) {
     if (!rt->players[i].in_use) {
       GstpPlayer *p = &rt->players[i];
-      GMutex frame_mu = p->frame_mu;
-      memset(p, 0, sizeof(*p));
-      p->frame_mu = frame_mu;
+      memset(p, 0, offsetof(GstpPlayer, frame_mu));
       p->in_use = true;
       p->id = rt->next_id++;
+      p->verify_tls = true;
       p->volume = 1.0;
       p->speed = 1.0;
       p->player_state = GSTP_STATE_IDLE;
@@ -119,6 +129,8 @@ static gboolean gstp_op_dispose(gpointer data) {
 #if defined(__ANDROID__)
   gstp_android_clear_overlay(p);
 #endif
+  gstp_texture_unregister(p->id);
+  gstp_player_set_event_callback(p->id, NULL, NULL);
   gstp_pipeline_destroy(p);
   gstp_http_headers_free(p->http_headers);
   p->http_headers = NULL;
@@ -138,14 +150,38 @@ void gstp_player_dispose(GstpPlayerId id) {
   gstp_runtime_invoke_sync(gstp_op_dispose, &op);
 }
 
+typedef struct {
+  GstpPlayerId id;
+  void *ctx;
+  GstpEventCallback cb;
+  bool detached;
+} GstpCallbackOp;
+
+static gboolean gstp_op_set_callback(gpointer data) {
+  GstpCallbackOp *op = data;
+  GstpPlayer *p = gstp_player_lookup(op->id);
+  if (!p) return G_SOURCE_REMOVE;
+  if (p->event_cb && p->event_cb != op->cb) {
+    /* Final FIFO message: no callbacks follow this marker on the old listener. */
+    p->event_cb(p->event_ctx, -1, 0, 0, 0, 0, 0, 0, NULL,
+                0, 0, 0, 0, 0, false, NULL, NULL, NULL, false);
+    op->detached = true;
+  }
+  p->event_ctx = op->ctx;
+  p->event_cb = op->cb;
+  return G_SOURCE_REMOVE;
+}
+
 void gstp_player_set_event_callback(GstpPlayerId id, void *ctx,
                                     GstpEventCallback cb) {
-  GstpPlayer *p = gstp_player_lookup(id);
-  if (!p) {
-    return;
-  }
-  p->event_ctx = ctx;
-  p->event_cb = cb;
+  GstpCallbackOp op = {.id = id, .ctx = ctx, .cb = cb};
+  gstp_runtime_invoke_sync(gstp_op_set_callback, &op);
+}
+
+bool gstp_player_detach_event_callback(GstpPlayerId id) {
+  GstpCallbackOp op = {.id = id};
+  gstp_runtime_invoke_sync(gstp_op_set_callback, &op);
+  return op.detached;
 }
 
 typedef struct {
@@ -153,6 +189,7 @@ typedef struct {
   char *uri;
   bool auto_play;
   char *http_headers_json;
+  bool verify_tls;
   int32_t result;
 } GstpLoadUriOp;
 
@@ -164,12 +201,17 @@ static gboolean gstp_op_load_uri(gpointer data) {
     return G_SOURCE_REMOVE;
   }
   op->result = gstp_pipeline_load_uri(p, op->uri, op->auto_play,
-                                      op->http_headers_json);
+                                      op->http_headers_json, op->verify_tls);
   return G_SOURCE_REMOVE;
 }
 
 int32_t gstp_player_load_uri(GstpPlayerId id, const char *uri, bool auto_play,
                              const char *http_headers_json) {
+  return gstp_player_load_uri_with_tls(id, uri, auto_play, http_headers_json, true);
+}
+
+int32_t gstp_player_load_uri_with_tls(GstpPlayerId id, const char *uri, bool auto_play,
+                             const char *http_headers_json, bool verify_tls) {
   if (!gstp_player_lookup(id)) {
     return GSTP_ERR_BAD_ID;
   }
@@ -177,6 +219,7 @@ int32_t gstp_player_load_uri(GstpPlayerId id, const char *uri, bool auto_play,
       .id = id,
       .uri = g_strdup(uri ? uri : ""),
       .auto_play = auto_play,
+      .verify_tls = verify_tls,
       .http_headers_json =
           (http_headers_json && *http_headers_json)
               ? g_strdup(http_headers_json)
@@ -575,8 +618,10 @@ void gstp_texture_register(int64_t player_id, void *ctx,
   if (!p) {
     return;
   }
+  g_mutex_lock(&p->callback_mu);
   p->frame_ctx = ctx;
   p->frame_cb = on_frame;
+  g_mutex_unlock(&p->callback_mu);
 }
 
 void gstp_texture_unregister(int64_t player_id) {
@@ -584,8 +629,10 @@ void gstp_texture_unregister(int64_t player_id) {
   if (!p) {
     return;
   }
+  g_mutex_lock(&p->callback_mu);
   p->frame_ctx = NULL;
   p->frame_cb = NULL;
+  g_mutex_unlock(&p->callback_mu);
 }
 
 bool gstp_texture_frame_info(int64_t player_id, int32_t *out_width,

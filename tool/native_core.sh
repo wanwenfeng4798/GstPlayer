@@ -8,6 +8,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_INCLUDE="${ROOT}/native/include"
 SRC_SRC="${ROOT}/native/src"
+PACKAGE_VERSION="$(sed -n 's/^version: *\([^ +]*\).*/\1/p' "${ROOT}/pubspec.yaml")"
 
 usage() {
   cat <<'EOF'
@@ -49,6 +50,7 @@ sync_platform() {
 
 run_sync() {
   ensure_native_sources
+  printf '// Generated from pubspec.yaml by tool/native_core.sh sync.\n#pragma once\n#define GSTP_PACKAGE_VERSION "%s"\n' "${PACKAGE_VERSION}" > "${SRC_INCLUDE}/gstp_version.h"
   sync_platform ios
   sync_platform macos
   echo "[gstplayer] NativeCore sync complete"
@@ -94,11 +96,23 @@ verify_platform() {
     echo "error: ${platform} NativeCore missing include/gstp_player.h" >&2
     ok=1
   fi
+  if ! diff -qr "${SRC_INCLUDE}" "${include}"; then
+    echo "error: ${platform} NativeCore headers differ; run ./tool/native_core.sh sync" >&2
+    ok=1
+  fi
+  if ! diff -qr "${SRC_SRC}" "${src}"; then
+    echo "error: ${platform} NativeCore sources differ; run ./tool/native_core.sh sync" >&2
+    ok=1
+  fi
   return "${ok}"
 }
 
 run_verify() {
   ensure_native_sources
+  if [[ "$(sed -n 's/^#define GSTP_PACKAGE_VERSION "\(.*\)"/\1/p' "${SRC_INCLUDE}/gstp_version.h")" != "${PACKAGE_VERSION}" ]]; then
+    echo "error: native version differs from pubspec.yaml; run ./tool/native_core.sh sync" >&2
+    exit 1
+  fi
   local failed=0
   verify_platform ios || failed=1
   verify_platform macos || failed=1

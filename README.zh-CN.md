@@ -93,7 +93,7 @@ Apple/桌面：`appsink` BGRA 帧）。
 | Windows | 10+ | x86_64 | 本机安装一次（[见下](#windows--linux-本机-sdk)） |
 | Linux | — | x86_64 | 本机安装一次（[见下](#windows--linux-本机-sdk)） |
 
-> 不支持 Apple Silicon 的 iOS **模拟器**（官方 iOS SDK 无 arm64 模拟器切片）。
+> 不支持 Apple Silicon 的 iOS **模拟器**（当前插件集成仅选择 arm64 真机切片）。
 
 ## 何时改用 kinetic_player
 
@@ -112,7 +112,7 @@ GStreamer SDK 会在首次构建时自动下载。
 ### 通用
 
 - [Flutter](https://docs.flutter.dev/get-started/install)（需满足本插件
-  `pubspec.yaml`：`sdk: ^3.12.2`，`flutter: ">=3.44.0"`）
+  `pubspec.yaml`：`sdk: ^3.13.0`，`flutter: ">=3.47.0"`）
 - Android / iOS / macOS **首次**构建需要联网（下载 GStreamer 缓存）
 
 ### Android
@@ -126,7 +126,7 @@ GStreamer SDK 会在首次构建时自动下载。
 
 - 带 [Xcode](https://developer.apple.com/xcode/) 的 macOS（含 Command Line Tools）
 - **真机** iPhone / iPad（不支持模拟器）
-- 首次构建会自动下载 GStreamer iOS SDK（约 500MB）
+- 首次构建会自动下载 GStreamer iOS SDK（约 1.1GB）
 
 ### macOS
 
@@ -144,7 +144,7 @@ GStreamer SDK 会在首次构建时自动下载。
 
 ```yaml
 dependencies:
-  gstplayer: ^0.0.4
+  gstplayer: ^0.0.6
 ```
 
 ```bash
@@ -280,8 +280,8 @@ await controller.open(const VideoSource.asset('assets/sample.mp4'));
 | **macOS** | 开启 App Sandbox 时，Runner entitlements 保留 `com.apple.security.network.client`（Flutter 模板一般已带）。 |
 | **Windows / Linux** | 无应用权限要求；需安装本机 GStreamer（[见下](#windows--linux-本机-sdk)）。 |
 
-> HTTPS 提示：为兼容更多主机，管线对 HTTP 源设置了 `ssl-strict = false`（跳过服务端证书校验）。
-> 若需要严格 TLS 可配置化，欢迎提 Issue。
+> HTTPS 默认验证服务端证书；证书无效或不受信任时播放会失败。
+> 对于明确需要兼容的自签名源，可显式传入 `VideoSource.network(url, allowInsecureTls: true)`；该设置同时作用于播放与缩略图。
 
 ## Windows / Linux 本机 SDK
 
@@ -490,6 +490,19 @@ dart run ffigen --config ffigen.yaml
 ./tool/native_core.sh verify
 ```
 
+`sync` 还会从 `pubspec.yaml` 生成原生版本头；`verify` 同时检查版本及两个 NativeCore 副本的完整内容。
+
+回归验证：
+
+```bash
+flutter analyze
+flutter test
+python3 tool/test_gstreamer_scripts.py
+# 需先准备对应平台 GStreamer SDK
+bash tool/test_native_macos.sh
+bash tool/test_native_ios.sh
+```
+
 ## 常见问题
 
 - **首次构建很慢 / 需要联网（Android / iOS / macOS）：** 正常。官方 GStreamer SDK
@@ -505,7 +518,7 @@ dart run ffigen --config ffigen.yaml
 - **iOS 报 `Plug-in ended with non-zero exit code: 1`：** 通常是 SPM 构建插件
   `EnsureGStreamerIOS` 失败（首次下载 SDK，或找不到 `ios/scripts`）。在 Xcode
   Report 导航查看真实 stderr。可手动执行 `sh ios/scripts/ensure_gstreamer_ios.sh`
-  （需联网，约 480MB）后重编。
+  （需联网，约 1.1GB）后重编。
 - **iOS 报 `'gst/app/gstappsink.h' file not found`：** 示例工程走 Swift Package Manager，
   不会执行 CocoaPods podspec。`Package.swift` / `EnsureGStreamerIOS` 构建插件会在
   resolve/编译前把 SDK 下载到 `~/Library/Caches/gstplayer/gstreamer/<ver>/ios/iPhone.sdk`。

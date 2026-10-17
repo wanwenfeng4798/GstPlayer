@@ -90,3 +90,17 @@ gst_pkg_download() {
   fi
   echo "[gstplayer] Downloaded $(basename "${file}")"
 }
+
+# Never relabel an older installed SDK as the requested dependency version.
+gst_sdk_matches_version() {
+  local header="$1/gst/gstversion.h"
+  [[ -f "${header}" ]] || return 1
+  local found
+  found="$(awk '/^#define[ \t]+GST_VERSION_(MAJOR|MINOR|MICRO)[ \t]+/ {
+    value=$3; gsub(/[()]/, "", value)
+    if ($2 == "GST_VERSION_MAJOR") major=value
+    if ($2 == "GST_VERSION_MINOR") minor=value
+    if ($2 == "GST_VERSION_MICRO") micro=value
+  } END {printf "%s.%s.%s", major, minor, micro}' "${header}")"
+  [[ "${found}" == "$2" ]]
+}

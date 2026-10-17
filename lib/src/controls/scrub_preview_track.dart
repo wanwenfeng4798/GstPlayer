@@ -1,5 +1,7 @@
 import 'package:flutter/painting.dart';
 
+import '../media/timed_text.dart';
+
 /// One scrub-preview frame (GSY-style WebVTT cue or sprite cell) /
 /// 进度条预览的一帧（WebVTT cue 或雪碧图格子）.
 class ScrubPreviewFrame {
@@ -114,12 +116,7 @@ final class ScrubPreviewTrackSprite extends ScrubPreviewTrack {
       start: start,
       end: end,
       image: image,
-      crop: Rect.fromLTWH(
-        col / columns,
-        row / rows,
-        1 / columns,
-        1 / rows,
-      ),
+      crop: Rect.fromLTWH(col / columns, row / rows, 1 / columns, 1 / rows),
     );
   }
 }
@@ -142,39 +139,14 @@ final class ScrubPreviewTrackVtt extends ScrubPreviewTrackFrames {
 abstract final class ScrubPreviewVttParser {
   /// Parses [raw] VTT into frames / 解析 VTT 为帧列表.
   static List<ScrubPreviewFrame> parse(String raw, {Uri? baseUri}) {
-    final normalized = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-    final body = normalized.trimLeft().startsWith('WEBVTT')
-        ? normalized.replaceFirst(RegExp(r'^WEBVTT[^\n]*\n'), '')
-        : normalized;
-
-    final blocks = body.split(RegExp(r'\n\s*\n'));
     final frames = <ScrubPreviewFrame>[];
-    final timeRe = RegExp(
-      r'(\d{1,2}:\d{2}:\d{2}(?:[,.]\d{1,3})?)\s*-->\s*'
-      r'(\d{1,2}:\d{2}:\d{2}(?:[,.]\d{1,3})?)',
-    );
     final xywhRe = RegExp(r'#xywh=([\d.]+),([\d.]+),([\d.]+),([\d.]+)$');
-
-    for (final block in blocks) {
-      final lines = block
-          .split('\n')
-          .map((l) => l.trim())
-          .where((l) => l.isNotEmpty)
-          .toList();
-      if (lines.length < 2) continue;
-      var idx = 0;
-      if (RegExp(r'^\d+$').hasMatch(lines[0])) idx = 1;
-      if (idx >= lines.length) continue;
-      final match = timeRe.firstMatch(lines[idx]);
-      if (match == null) continue;
-      final start = _parseTimestamp(match.group(1)!);
-      final end = _parseTimestamp(match.group(2)!);
-      if (idx + 1 >= lines.length) continue;
-      final payload = lines[idx + 1];
+    for (final cue in parseTimedText(raw)) {
+      final start = cue.start;
+      final end = cue.end;
+      final payload = cue.text.split('\n').first;
       final xywh = xywhRe.firstMatch(payload);
-      final urlPart = xywh != null
-          ? payload.substring(0, xywh.start)
-          : payload;
+      final urlPart = xywh != null ? payload.substring(0, xywh.start) : payload;
       final resolved = _resolveImageUri(urlPart.trim(), baseUri);
       if (resolved == null) continue;
       final image = resolved.image;
@@ -188,12 +160,7 @@ abstract final class ScrubPreviewVttParser {
         );
       }
       frames.add(
-        ScrubPreviewFrame(
-          start: start,
-          end: end,
-          image: image,
-          crop: crop,
-        ),
+        ScrubPreviewFrame(start: start, end: end, image: image, crop: crop),
       );
     }
     return frames;
@@ -217,32 +184,13 @@ abstract final class ScrubPreviewVttParser {
     }
     if (baseUri == null) {
       if (value.startsWith('/')) {
-        return _ResolvedPreviewImage.network(Uri.parse('file://$value').toString());
+        return _ResolvedPreviewImage.network(
+          Uri.parse('file://$value').toString(),
+        );
       }
       return _ResolvedPreviewImage.network(value);
     }
     return _ResolvedPreviewImage.network(baseUri.resolveUri(parsed).toString());
-  }
-
-  static Duration _parseTimestamp(String value) {
-    final cleaned = value.replaceAll(',', '.');
-    final parts = cleaned.split(':');
-    if (parts.length != 3) return Duration.zero;
-    final hours = int.tryParse(parts[0]) ?? 0;
-    final minutes = int.tryParse(parts[1]) ?? 0;
-    final secParts = parts[2].split('.');
-    final seconds = int.tryParse(secParts[0]) ?? 0;
-    var millis = 0;
-    if (secParts.length > 1) {
-      final frac = secParts[1].padRight(3, '0').substring(0, 3);
-      millis = int.tryParse(frac) ?? 0;
-    }
-    return Duration(
-      hours: hours,
-      minutes: minutes,
-      seconds: seconds,
-      milliseconds: millis,
-    );
   }
 }
 

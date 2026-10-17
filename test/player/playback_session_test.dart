@@ -72,6 +72,29 @@ void main() {
       );
     }
 
+    test(
+      'old position events cannot undo a short seek in a long video',
+      () async {
+        await session.initialize();
+        port.emit(
+          event(kind: PlayerEventKind.durationChanged, durationMs: 7200000),
+        );
+        port.emit(
+          event(kind: PlayerEventKind.stateChanged, state: PlayerState.playing),
+        );
+        port.emit(
+          event(kind: PlayerEventKind.positionChanged, positionMs: 3600000),
+        );
+        await Future<void>.delayed(Duration.zero);
+        await session.seek(const Duration(seconds: 3610));
+        port.emit(
+          event(kind: PlayerEventKind.positionChanged, positionMs: 3600000),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(session.position, const Duration(seconds: 3610));
+      },
+    );
+
     test('initialize wires playerId and event stream', () async {
       await session.initialize();
       expect(session.initialized, isTrue);

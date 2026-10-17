@@ -90,7 +90,9 @@ class _BubbleCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(8),
+              ),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: ColoredBox(
@@ -135,7 +137,11 @@ class _ScrubPreviewImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final crop = frame.crop;
     if (crop == null) {
-      return Image(image: frame.image, fit: BoxFit.cover, gaplessPlayback: true);
+      return Image(
+        image: frame.image,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      );
     }
     // Fractional crop (sprite sheet cells use 0..1 rects).
     if (crop.left >= 0 &&
@@ -154,7 +160,11 @@ class _ScrubPreviewImage extends StatelessWidget {
           ),
           widthFactor: 1 / columns,
           heightFactor: 1 / rows,
-          child: Image(image: frame.image, fit: BoxFit.fill, gaplessPlayback: true),
+          child: Image(
+            image: frame.image,
+            fit: BoxFit.fill,
+            gaplessPlayback: true,
+          ),
         ),
       );
     }
@@ -198,8 +208,13 @@ class _AbsoluteCropImageState extends State<_AbsoluteCropImage> {
     _unsubscribe();
     _stream = stream;
     _listener = ImageStreamListener((info, _) {
-      if (!mounted) return;
+      if (!mounted) {
+        info.dispose();
+        return;
+      }
+      final previous = _info;
       setState(() => _info = info);
+      previous?.dispose();
     });
     stream.addListener(_listener!);
   }
@@ -217,6 +232,8 @@ class _AbsoluteCropImageState extends State<_AbsoluteCropImage> {
   @override
   void dispose() {
     _unsubscribe();
+    _info?.dispose();
+    _info = null;
     super.dispose();
   }
 
@@ -241,12 +258,10 @@ class _CropPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final src = Rect.fromLTWH(
-      crop.left,
-      crop.top,
-      crop.width,
-      crop.height,
-    ).intersect(Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()));
+    final src = Rect.fromLTWH(crop.left, crop.top, crop.width, crop.height)
+        .intersect(
+          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        );
     if (src.isEmpty) return;
     final dst = Offset.zero & size;
     // Cover-fit the cropped source into [dst].

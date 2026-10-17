@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
+import '../media/timed_text.dart';
+
 /// Timed subtitle cue / 定时字幕条目.
 class SubtitleCue {
   /// Creates a subtitle cue / 创建字幕条目.
@@ -22,70 +24,17 @@ class SubtitleCue {
 class SubtitleParser {
   /// Parses SRT or WebVTT text into cues / 解析 SRT 或 WebVTT.
   static List<SubtitleCue> parse(String raw) {
-    final normalized = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-    if (normalized.trimLeft().startsWith('WEBVTT')) {
-      return _parseVtt(normalized);
-    }
-    return _parseSrt(normalized);
+    return parseTimedText(raw)
+        .map(
+          (cue) => SubtitleCue(start: cue.start, end: cue.end, text: cue.text),
+        )
+        .toList();
   }
 
   /// Loads and parses an asset subtitle file / 加载并解析 asset 字幕.
   static Future<List<SubtitleCue>> loadAsset(String assetKey) async {
     final raw = await rootBundle.loadString(assetKey);
     return parse(raw);
-  }
-
-  static List<SubtitleCue> _parseSrt(String raw) {
-    final blocks = raw.split(RegExp(r'\n\s*\n'));
-    final cues = <SubtitleCue>[];
-    for (final block in blocks) {
-      final lines = block
-          .split('\n')
-          .map((l) => l.trim())
-          .where((l) => l.isNotEmpty)
-          .toList();
-      if (lines.length < 2) continue;
-      var idx = 0;
-      if (RegExp(r'^\d+$').hasMatch(lines[0])) idx = 1;
-      if (idx >= lines.length) continue;
-      final times = lines[idx];
-      final match = RegExp(
-        r'(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})',
-      ).firstMatch(times);
-      if (match == null) continue;
-      final start = _parseTimestamp(match.group(1)!);
-      final end = _parseTimestamp(match.group(2)!);
-      final text = lines.sublist(idx + 1).join('\n');
-      if (text.isEmpty) continue;
-      cues.add(SubtitleCue(start: start, end: end, text: text));
-    }
-    return cues;
-  }
-
-  static List<SubtitleCue> _parseVtt(String raw) {
-    final body = raw.replaceFirst(RegExp(r'^WEBVTT[^\n]*\n'), '');
-    return _parseSrt(body);
-  }
-
-  static Duration _parseTimestamp(String value) {
-    final cleaned = value.replaceAll(',', '.');
-    final parts = cleaned.split(':');
-    if (parts.length != 3) return Duration.zero;
-    final hours = int.tryParse(parts[0]) ?? 0;
-    final minutes = int.tryParse(parts[1]) ?? 0;
-    final secParts = parts[2].split('.');
-    final seconds = int.tryParse(secParts[0]) ?? 0;
-    var millis = 0;
-    if (secParts.length > 1) {
-      final frac = secParts[1].padRight(3, '0').substring(0, 3);
-      millis = int.tryParse(frac) ?? 0;
-    }
-    return Duration(
-      hours: hours,
-      minutes: minutes,
-      seconds: seconds,
-      milliseconds: millis,
-    );
   }
 }
 

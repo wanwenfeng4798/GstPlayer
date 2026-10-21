@@ -45,11 +45,16 @@ VideoTexture::VideoTexture(int64_t player_id,
             return CopyPixelBuffer(width, height);
           }));
   texture_id_ = registrar_->RegisterTexture(texture_variant_.get());
-  gstp_texture_register(player_id_, this, GstpTextureOnFrame);
+  if (texture_id_ >= 0) {
+    gstp_texture_register(player_id_, this, GstpTextureOnFrame);
+    frame_callback_registered_ = true;
+  }
 }
 
 VideoTexture::~VideoTexture() {
-  gstp_texture_unregister(player_id_);
+  if (frame_callback_registered_) {
+    gstp_texture_unregister(player_id_);
+  }
   if (registrar_ && texture_id_ >= 0) {
     registrar_->UnregisterTexture(texture_id_, []() {});
   }
@@ -57,7 +62,11 @@ VideoTexture::~VideoTexture() {
 
 void VideoTexture::Release(std::unique_ptr<VideoTexture> texture) {
   if (!texture) return;
-  gstp_texture_unregister(texture->player_id_);
+  if (texture->frame_callback_registered_) {
+    gstp_texture_unregister(texture->player_id_);
+    // The delayed destructor must not unregister a replacement texture.
+    texture->frame_callback_registered_ = false;
+  }
   auto owner = std::shared_ptr<VideoTexture>(std::move(texture));
   const auto id = owner->texture_id_;
   owner->texture_id_ = -1;
@@ -140,6 +149,7 @@ int64_t VideoTextureRegistry::Create(int64_t player_id) {
   }
   auto texture = std::make_unique<VideoTexture>(player_id, registrar_);
   const int64_t texture_id = texture->texture_id();
+  if (texture_id < 0) return texture_id;
   textures_.emplace(player_id, std::move(texture));
   return texture_id;
 }

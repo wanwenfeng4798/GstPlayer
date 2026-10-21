@@ -1,7 +1,9 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.13)
 
 set(PROJECT_NAME "gstplayer")
 project(${PROJECT_NAME} LANGUAGES C CXX)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED
@@ -9,9 +11,9 @@ pkg_check_modules(GST REQUIRED
   gstreamer-app-1.0
   gstreamer-video-1.0
 )
-pkg_check_modules(GTK REQUIRED gtk+-3.0)
+pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
 
-set(PLUGIN_NAME "gst_player_plugin")
+set(PLUGIN_NAME "gstplayer_plugin")
 set(NATIVE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../native")
 
 add_library(${PLUGIN_NAME} SHARED

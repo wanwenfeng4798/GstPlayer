@@ -1,7 +1,9 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.21)
 
 set(PROJECT_NAME "gstplayer")
 project(${PROJECT_NAME} LANGUAGES C CXX)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 if(DEFINED ENV{GSTREAMER_1_0_ROOT_MSVC_X86_64})
   file(TO_CMAKE_PATH "$ENV{GSTREAMER_1_0_ROOT_MSVC_X86_64}" GSTREAMER_ROOT)
@@ -19,7 +21,7 @@ set(ENV{PKG_CONFIG_PATH} "${GSTREAMER_ROOT}/lib/pkgconfig")
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
 
-set(PLUGIN_NAME "gst_player_plugin")
+set(PLUGIN_NAME "gstplayer_plugin")
 set(NATIVE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../native")
 
 add_library(${PLUGIN_NAME} SHARED
@@ -64,6 +66,20 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
 target_link_libraries(${PLUGIN_NAME} PRIVATE ${GST_LIBRARIES} urlmon)
 
 file(GLOB GSTREAMER_RUNTIME_DLLS "${GSTREAMER_ROOT}/bin/*.dll")
+
+# Flutter copies bundled_libraries as flat files next to the executable. Keep
+# loadable plugins and GIO backends in separate directories for runtime discovery.
+if(NOT IS_DIRECTORY "${GSTREAMER_ROOT}/lib/gstreamer-1.0")
+  message(FATAL_ERROR "GStreamer runtime plugins are missing from '${GSTREAMER_ROOT}'.")
+endif()
+install(DIRECTORY "${GSTREAMER_ROOT}/lib/gstreamer-1.0"
+  DESTINATION "gstplayer/lib" COMPONENT Runtime
+  FILES_MATCHING PATTERN "*.dll")
+if(IS_DIRECTORY "${GSTREAMER_ROOT}/lib/gio/modules")
+  install(DIRECTORY "${GSTREAMER_ROOT}/lib/gio/modules"
+    DESTINATION "gstplayer/lib/gio" COMPONENT Runtime
+    FILES_MATCHING PATTERN "*.dll")
+endif()
 
 set(gstplayer_bundled_libraries
   $<TARGET_FILE:${PLUGIN_NAME}>

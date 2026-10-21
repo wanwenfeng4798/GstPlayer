@@ -92,8 +92,9 @@ static void texture_method_call_cb(FlMethodChannel* channel,
   if (g_strcmp0(method, "getDefaultUserAgent") == 0) {
     const char* ua = gstp_get_default_user_agent();
     if (ua && *ua) {
+      g_autoptr(FlValue) value = fl_value_new_string(ua);
       response = FL_METHOD_RESPONSE(
-          fl_method_success_response_new(fl_value_new_string(ua)));
+          fl_method_success_response_new(value));
     } else {
       response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
     }
@@ -106,8 +107,9 @@ static void texture_method_call_cb(FlMethodChannel* channel,
         response = FL_METHOD_RESPONSE(fl_method_error_response_new(
             "create_failed", "Failed to create texture", nullptr));
       } else {
+        g_autoptr(FlValue) value = fl_value_new_int(texture_id);
         response = FL_METHOD_RESPONSE(
-            fl_method_success_response_new(fl_value_new_int(texture_id)));
+            fl_method_success_response_new(value));
       }
     } else if (g_strcmp0(method, "disposeTexture") == 0) {
       DisposeTexture(self, player_id);

@@ -155,7 +155,7 @@ Host GStreamer + `pkg-config` — see [Windows & Linux host SDK](#windows--linux
 
 ```yaml
 dependencies:
-  gstplayer: ^0.0.6
+  gstplayer: ^0.0.7
 ```
 
 ```bash
@@ -294,7 +294,7 @@ Local files and Flutter assets need no extra setup.
 | **Android** | Ensure `INTERNET` in `AndroidManifest.xml` (Flutter templates usually already have it). Optional: `android:usesCleartextTraffic="true"` for plain `http://`. |
 | **iOS** | Nothing. GStreamer does not use ATS / `NSURLSession`. Device only. |
 | **macOS** | With App Sandbox, keep `com.apple.security.network.client` in Runner entitlements (Flutter templates usually already have it). |
-| **Windows / Linux** | No app permission; host GStreamer must be installed ([below](#windows--linux-host-sdk)). |
+| **Windows / Linux** | No app permission. Install GStreamer on the development machine; Windows bundles include its runtime, while Linux target machines need runtime plugins ([below](#windows--linux-host-sdk)). |
 
 > HTTPS verifies server certificates by default. Invalid or untrusted certificates cause playback to fail.
 > For a source that explicitly requires unverified TLS, use `VideoSource.network(url, allowInsecureTls: true)`. The option applies to both playback and thumbnails.
@@ -312,6 +312,16 @@ do **not**.
 2. Put `pkg-config` on `PATH` (e.g. `choco install pkgconfiglite`).
 3. GUI install sets `GSTREAMER_1_0_ROOT_MSVC_X86_64`; set it yourself for silent installs.
 
+Builds require CMake 3.21+ and a C11-capable MSVC (Visual Studio 2019 16.8+).
+Install the complete runtime, including playback, decoder and network plugins
+and GIO/TLS backends. Flutter's install step copies `bin/*.dll` beside the
+executable and installs plugins/modules into `gstplayer/lib/gstreamer-1.0/`
+and `gstplayer/lib/gio/modules/`. Distribute the entire build output directory,
+including those subdirectories; end users do not need the SDK installed.
+Runtime discovery prefers the bundled directories, then falls back to the host
+SDK. Explicit `GST_PLUGIN_SYSTEM_PATH` (including its `_1_0` variant),
+`GIO_MODULE_DIR`, and `GST_REGISTRY` (including its `_1_0` variant) are preserved.
+
 ### Linux
 
 ```bash
@@ -320,8 +330,12 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   libgtk-3-dev
 ```
 
-On first run the plugin caches the GStreamer registry under `~/.cache/gstplayer/`
-to speed up subsequent launches. Runtime behavior (HTTP headers, User-Agent,
+Linux target machines also need the runtime plugins above; development headers
+are only required to build. Plugin and GIO module discovery uses the system
+GStreamer/GLib defaults and host environment settings without hardcoded distro
+paths. The registry is cached under `$XDG_CACHE_HOME/gstplayer/` (default
+`~/.cache/gstplayer/`), preserving explicit `GST_REGISTRY`, `GST_REGISTRY_1_0`,
+and `GST_REGISTRY_FORK` settings. Runtime behavior (HTTP headers, User-Agent,
 duration, screenshot) matches macOS once the plugins above are installed.
 
 ## API reference
@@ -531,10 +545,21 @@ Regression checks:
 flutter analyze
 flutter test
 python3 tool/test_gstreamer_scripts.py
+python3 tool/test_desktop_build.py
 # Prepare the corresponding GStreamer SDK first.
 bash tool/test_native_macos.sh
 bash tool/test_native_ios.sh
 ```
+
+`test_desktop_build.py` uses dependency fixtures to check desktop CMake targets,
+C11 settings and the Windows runtime install layout, and compiles the Windows
+texture lifecycle regression when wrapper headers are available. It does not
+replace full Linux/Windows builds and playback tests. Use `CMAKE`, `CXX` and
+`FLUTTER_ROOT` to select local tools.
+On a macOS/Linux host, set `GSTP_TEST_GLIB_LIBRARY` to the absolute path of a
+host GLib shared library and run `python3 tool/test_desktop_runtime.py` to check
+environment preservation, Unicode bundled paths, SDK fallback and URLMON buffer
+contracts. Win32 calls use test doubles; GLib calls use the real host library.
 
 ## Troubleshooting
 

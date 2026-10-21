@@ -32,6 +32,7 @@ class VideoTexture {
   int64_t player_id_;
   flutter::TextureRegistrar* registrar_;
   int64_t texture_id_ = -1;
+  bool frame_callback_registered_ = false;
   std::unique_ptr<flutter::TextureVariant> texture_variant_;
 
   std::mutex lock_;

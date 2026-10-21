@@ -1,3 +1,11 @@
+## 0.0.7
+
+- Align Linux/Windows CMake targets and output library names with Flutter and Dart FFI; require C11 and include desktop environment implementations in standalone native builds.
+- Fix the Windows URLMON User-Agent call and preserve replacement texture callbacks during asynchronous texture disposal; allow retry after failed texture registration.
+- Bundle Windows GStreamer plugins and GIO/TLS modules and discover them relative to the executable, including Unicode paths.
+- Preserve host runtime environment settings, use the platform user cache directory for registries, and retain Linux's configured system plugin discovery.
+- Release Linux method response values and add desktop build, deployment, and texture lifecycle regression checks.
+
 ## 0.0.6
 
 - Fix native event ownership and drain callbacks before closing Dart listeners; synchronize texture callback teardown.

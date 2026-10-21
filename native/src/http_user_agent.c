@@ -11,8 +11,8 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <urlmon.h>
 #include <windows.h>
+#include <urlmon.h>
 #elif defined(__APPLE__)
 #include <TargetConditionals.h>
 #include <sys/sysctl.h>
@@ -116,21 +116,16 @@ static gboolean gstp_linux_probe_browser_ua(char *ua, size_t ua_len) {
 #elif defined(_WIN32)
 
 static gboolean gstp_windows_probe_browser_ua(char *ua, size_t ua_len) {
-  WCHAR wua[GSTP_UA_MAX];
-  DWORD wlen = (DWORD)(sizeof(wua) / sizeof(wua[0]));
-  if (FAILED(ObtainUserAgentString(URLMON_OPTION_USER_AGENT, wua, &wlen)) ||
-      wlen == 0) {
+  char browser_ua[GSTP_UA_MAX] = {0};
+  DWORD bytes = (DWORD)sizeof(browser_ua);
+  /* This URLMON API always writes ANSI bytes, including in Unicode builds. */
+  if (!ua || ua_len == 0 ||
+      FAILED(ObtainUserAgentString(0, browser_ua, &bytes)) || bytes == 0) {
     return (gboolean)0;
   }
-  int needed =
-      WideCharToMultiByte(CP_UTF8, 0, wua, -1, NULL, 0, NULL, NULL);
-  if (needed <= 0 || (size_t)needed > ua_len) {
-    return (gboolean)0;
-  }
-  if (WideCharToMultiByte(CP_UTF8, 0, wua, -1, ua, ua_len, NULL, NULL) <= 0) {
-    return (gboolean)0;
-  }
-  return ua[0] != '\0';
+  browser_ua[sizeof(browser_ua) - 1] = '\0';
+  return browser_ua[0] != '\0' &&
+         g_strlcpy(ua, browser_ua, ua_len) < ua_len;
 }
 
 #endif
@@ -174,17 +169,12 @@ static void gstp_http_user_agent_init_platform_once(void) {
   }
 #elif defined(_WIN32)
   if (!gstp_windows_probe_browser_ua(g_platform_ua, sizeof(g_platform_ua))) {
-    OSVERSIONINFOEXW ver;
-    memset(&ver, 0, sizeof(ver));
-    ver.dwOSVersionInfoSize = sizeof(ver);
-    if (GetVersionExW((OSVERSIONINFOW *)&ver)) {
-      g_snprintf(g_platform_ua, sizeof(g_platform_ua),
-                 "Mozilla/5.0 (Windows NT %lu.%lu; Win64; x64) "
-                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 "
-                 "Safari/537.36",
-                 (unsigned long)ver.dwMajorVersion,
-                 (unsigned long)ver.dwMinorVersion);
-    }
+    /* Windows 10 is the minimum supported version. Avoid deprecated,
+     * manifest-dependent GetVersionExW (also rejected by Flutter's /WX). */
+    g_strlcpy(g_platform_ua,
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+              "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 "
+              "Safari/537.36", sizeof(g_platform_ua));
   }
 #elif defined(__ANDROID__)
   g_snprintf(g_platform_ua, sizeof(g_platform_ua),

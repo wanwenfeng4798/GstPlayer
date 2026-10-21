@@ -18,7 +18,7 @@ void main() {
     } else {
       GstpLibrary.openPath(path);
     }
-    expect(GstpLibrary.instance.version(), '0.0.6');
+    expect(GstpLibrary.instance.version(), '0.0.7');
     expect(GstpLibrary.instance.init(), 0);
   });
 }

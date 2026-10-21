@@ -132,7 +132,7 @@ int main(int argc, char **argv) {
   /* Optional SDK plugins may log missing external Python modules at discovery. */
   g_assert_cmpint(gstp_init(), ==, 0);
   g_test_init(&argc, &argv, NULL);
-  g_assert_cmpstr(gstp_version(), ==, "0.0.6");
+  g_assert_cmpstr(gstp_version(), ==, "0.0.7");
   g_test_add_func("/native/event-snapshots-and-detach", test_event_snapshots);
   g_test_add_func("/native/frame-detach-and-slot-reuse", test_frame_detach);
   g_test_add_func("/native/pixel-copy-bounds", test_pixels);

@@ -1,7 +1,8 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.13)
 project(gstplayer_native C)
 
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_compile_definitions(GSTP_BUILDING)
@@ -20,9 +21,24 @@ set(GSTP_SOURCES
 
 if(APPLE)
   list(APPEND GSTP_SOURCES src/apple_env.c)
+elseif(WIN32)
+  list(APPEND GSTP_SOURCES src/windows_env.c)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT ANDROID)
+  list(APPEND GSTP_SOURCES src/linux_env.c)
 endif()
 
 add_library(gstplayer SHARED ${GSTP_SOURCES})
+if(WIN32)
+  # MSVC C11 mode requires CMake 3.21+ and VS 2019 16.8+.
+  if(CMAKE_VERSION VERSION_LESS 3.21)
+    message(FATAL_ERROR "Windows native builds require CMake 3.21 or newer.")
+  endif()
+  target_link_libraries(gstplayer PRIVATE urlmon)
+  target_compile_definitions(gstplayer PRIVATE _CRT_SECURE_NO_WARNINGS)
+  if(MSVC)
+    target_compile_options(gstplayer PRIVATE /utf-8)
+  endif()
+endif()
 target_include_directories(gstplayer
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include

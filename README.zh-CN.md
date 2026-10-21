@@ -144,7 +144,7 @@ GStreamer SDK 会在首次构建时自动下载。
 
 ```yaml
 dependencies:
-  gstplayer: ^0.0.6
+  gstplayer: ^0.0.7
 ```
 
 ```bash
@@ -278,7 +278,7 @@ await controller.open(const VideoSource.asset('assets/sample.mp4'));
 | **Android** | `AndroidManifest.xml` 需有 `INTERNET`（Flutter 模板一般已带）。明文 `http://` 可再加 `android:usesCleartextTraffic="true"`。 |
 | **iOS** | 无需配置。不走 ATS / `NSURLSession`。仅真机。 |
 | **macOS** | 开启 App Sandbox 时，Runner entitlements 保留 `com.apple.security.network.client`（Flutter 模板一般已带）。 |
-| **Windows / Linux** | 无应用权限要求；需安装本机 GStreamer（[见下](#windows--linux-本机-sdk)）。 |
+| **Windows / Linux** | 无应用权限要求；开发机需安装 GStreamer。Windows 发布包会携带运行时，Linux 目标机需安装运行时插件（[见下](#windows--linux-本机-sdk)）。 |
 
 > HTTPS 默认验证服务端证书；证书无效或不受信任时播放会失败。
 > 对于明确需要兼容的自签名源，可显式传入 `VideoSource.network(url, allowInsecureTls: true)`；该设置同时作用于播放与缩略图。
@@ -294,6 +294,15 @@ await controller.open(const VideoSource.asset('assets/sample.mp4'));
 2. 确保 `pkg-config` 在 `PATH` 上（例如 `choco install pkgconfiglite`）。
 3. GUI 安装会设置 `GSTREAMER_1_0_ROOT_MSVC_X86_64`；静默安装时请自行设置。
 
+构建需要 CMake 3.21+ 和支持 C11 的 MSVC（Visual Studio 2019 16.8+）。
+使用包含播放、解码、网络插件及 GIO/TLS 后端的完整 runtime 安装。
+Flutter 的安装步骤会将 `bin/*.dll` 复制到可执行文件旁，并将插件和 GIO
+模块复制到 `gstplayer/lib/gstreamer-1.0/`、`gstplayer/lib/gio/modules/`。
+发布时分发整个构建输出目录，保留这些子目录；目标机无需再安装 SDK。
+运行时优先使用随应用携带的目录，找不到时回退到本机 SDK。
+显式设置的 `GST_PLUGIN_SYSTEM_PATH`（及 `_1_0` 版本）、`GIO_MODULE_DIR`
+和 `GST_REGISTRY`（及 `_1_0` 版本）会保留。
+
 ### Linux
 
 ```bash
@@ -302,7 +311,11 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   libgtk-3-dev
 ```
 
-首次运行会将 GStreamer registry 缓存到 `~/.cache/gstplayer/` 以加快后续启动。
+Linux 目标机也需要安装上述运行时插件；开发头文件仅构建时需要。
+插件和 GIO 模块路径由系统 GStreamer/GLib 与宿主环境配置决定，不会强制
+替换为某个发行版的固定目录。首次运行会将 GStreamer registry 缓存到
+`$XDG_CACHE_HOME/gstplayer/`（默认 `~/.cache/gstplayer/`）；已设置的
+`GST_REGISTRY` / `GST_REGISTRY_1_0` 和 `GST_REGISTRY_FORK` 会保留。
 安装上述插件后，HTTP 头、User-Agent、时长与截图等行为与 macOS 一致。
 
 ## API 说明
@@ -498,10 +511,18 @@ dart run ffigen --config ffigen.yaml
 flutter analyze
 flutter test
 python3 tool/test_gstreamer_scripts.py
+python3 tool/test_desktop_build.py
 # 需先准备对应平台 GStreamer SDK
 bash tool/test_native_macos.sh
 bash tool/test_native_ios.sh
 ```
+
+`test_desktop_build.py` 使用依赖夹具验证桌面 CMake、C11、Windows 运行时安装目录，
+并在可用时编译 Windows 纹理生命周期回归测试。它不替代真实 Linux/Windows
+构建和播放验证；可通过 `CMAKE`、`CXX`、`FLUTTER_ROOT` 指定本机工具。
+在 macOS/Linux 主机上还可设置 `GSTP_TEST_GLIB_LIBRARY` 为本机 GLib 动态库
+绝对路径，运行 `python3 tool/test_desktop_runtime.py`，验证环境变量保留、
+Unicode 随包目录、SDK 回退及 URLMON 缓冲区契约（Windows API 使用测试替身）。
 
 ## 常见问题
 
